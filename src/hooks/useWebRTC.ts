@@ -185,15 +185,36 @@ export const useWebRTC = () => {
     
     // Log ICE connection state changes
     conn.peerConnection?.addEventListener('iceconnectionstatechange', () => {
-      console.log('ICE connection state:', conn.peerConnection?.iceConnectionState);
+      const state = conn.peerConnection?.iceConnectionState;
+      console.log('🧊 ICE connection state:', state);
+      if (state === 'failed' || state === 'disconnected') {
+        console.error('❌ ICE connection failed - TURN server may not be working');
+      }
     });
     
     conn.peerConnection?.addEventListener('icegatheringstatechange', () => {
-      console.log('ICE gathering state:', conn.peerConnection?.iceGatheringState);
+      console.log('🧊 ICE gathering state:', conn.peerConnection?.iceGatheringState);
     });
     
     conn.peerConnection?.addEventListener('connectionstatechange', () => {
-      console.log('Connection state:', conn.peerConnection?.connectionState);
+      console.log('🔌 Connection state:', conn.peerConnection?.connectionState);
+    });
+    
+    // Log ICE candidates
+    conn.peerConnection?.addEventListener('icecandidate', (event) => {
+      if (event.candidate) {
+        const candidate = event.candidate;
+        console.log('🧊 ICE candidate:', {
+          type: candidate.type,
+          protocol: candidate.protocol,
+          address: candidate.address,
+          port: candidate.port,
+          relatedAddress: candidate.relatedAddress,
+          relatedPort: candidate.relatedPort
+        });
+      } else {
+        console.log('🧊 ICE gathering complete');
+      }
     });
 
     handleConnection(conn);

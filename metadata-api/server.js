@@ -47,6 +47,53 @@ redisClient.on('connect', () => console.log('✅ Redis connected'));
 })();
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+const generateShareHTML = (metadata) => {
+  const title = `Download: ${metadata.fileName}`;
+  const description = `File size: ${formatFileSize(metadata.fileSize)} • Link expires in 24h • Secure P2P transfer`;
+  const url = `https://p2p.red/#${metadata.shortKey}`;
+  
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <meta name="description" content="${description}">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${url}">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${description}">
+  <meta property="og:site_name" content="p2p.red">
+  
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary">
+  <meta property="twitter:url" content="${url}">
+  <meta property="twitter:title" content="${title}">
+  <meta property="twitter:description" content="${description}">
+  
+  <meta http-equiv="refresh" content="0;url=${url}">
+</head>
+<body>
+  <p>Redirecting to download page...</p>
+  <p>If not redirected, <a href="${url}">click here</a>.</p>
+</body>
+</html>`;
+};
+
+// ============================================================================
 // Middleware
 // ============================================================================
 
@@ -398,6 +445,73 @@ app.get('/api/metadata/:key', async (req, res) => {
     console.error('Error retrieving metadata:', error);
     res.status(500).json({
       error: 'Failed to retrieve metadata',
+    });
+  }
+});
+
+// Share link preview endpoint (for social media crawlers)
+app.get('/share/:key', async (req, res) => {
+  const { key } = req.params;
+  
+  try {
+    const cacheKey = `link:${key}`;
+    const cached = await redisClient.get(cacheKey);
+    
+    let metadata;
+    if (cached) {
+      metadata = JSON.parse(cached);
+    } else {
+      const result = await pool.query(
+        'SELECT * FROM short_links WHERE short_key = $1 AND expires_at > NOW()',
+        [key]
+      );
+      
+      if (result.rows.length === 0) {
+        return res.status(404).send('Link not found or expired');
+      }
+      
+      const link = result.rows[0];
+      metadata = {
+        peerId: link.peer_id,
+        fileName: link.file_name,
+        fileSize: parseInt(link.file_size),
+        fileType: link.file_type,
+        hasPin: !!link.pin_hash,
+      };
+    }
+    
+    metadata.shortKey = key;
+    const html = generateShareHTML(metadata);
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+    
+  } catch (error) {
+    console.error('Error generating share preview:', error);
+    res.status(500).send('Error loading share link');
+  }
+});
+
+// Health check endpoint
+app.get('/api/health', async (req, res) => {
+  try {
+    // Check database connection
+    await pool.query('SELECT 1');
+    // Check redis connection
+    await redisClient.ping();
+    
+    res.json({ 
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: 'up',
+        cache: 'up'
+      }
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(503).json({ 
+      status: 'unhealthy',
+      error: error.message 
     });
   }
 });

@@ -63,7 +63,10 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
 
   const handleSocialShare = (platform: string) => {
     const text = encodeURIComponent('Check out this file I shared with you');
-    const url = encodeURIComponent(shareLink);
+    // Extract short key from hash and create /share/ URL for better previews
+    const shortKey = shareLink.split('#')[1];
+    const previewUrl = `https://p2p.red/share/${shortKey}`;
+    const url = encodeURIComponent(previewUrl);
     
     const shareUrls: Record<string, string> = {
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${url}`,

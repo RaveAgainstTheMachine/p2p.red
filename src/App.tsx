@@ -12,7 +12,6 @@ import { createShortLink, getMetadata } from './services/metadataApi';
 import { PinToggle } from './components/PinToggle';
 import { PinVerification } from './components/PinVerification';
 import { FileTypeWarning } from './components/FileTypeWarning';
-import { TrustBadges } from './components/TrustBadges';
 import { CookieBanner } from './components/CookieBanner';
 import { Monitoring } from './components/Monitoring';
 import { Legal } from './pages/Legal';
@@ -384,7 +383,7 @@ function App() {
     // Use incoming file info from metadata API
     const fileName = incomingFileInfo?.name || 'download';
     
-    // ALWAYS prompt for File System Access - never use RAM
+    // Try File System Access API first (Chrome, Edge)
     if ('showSaveFilePicker' in window) {
       try {
         const handle = await (window as any).showSaveFilePicker({
@@ -403,17 +402,19 @@ function App() {
       } catch (err) {
         console.error('User cancelled save dialog - cannot proceed without save location:', err);
         setStatus('error');
-        // Do NOT continue without file handle
       }
     } else {
-      console.error('File System Access API not supported - cannot receive files');
-      setStatus('error');
+      // Fallback for Firefox, Safari - use traditional download
+      console.log('File System Access API not supported - using traditional download method');
+      setPendingReceive(false);
+      handleReceive(null); // null handle triggers fallback download
     }
   };
 
   const handleReceive = async (handle?: any) => {
     // Use passed handle or fall back to state
-    const activeHandle = handle || fileHandle;
+    // null handle is OK - will use traditional download method
+    const activeHandle = handle !== undefined ? handle : fileHandle;
     
     // senderPeerId already set by metadata API
     if (!senderPeerId) {
@@ -422,13 +423,7 @@ function App() {
       return;
     }
     
-    if (!activeHandle) {
-      console.error('No file handle available');
-      setStatus('error');
-      return;
-    }
-    
-    console.log('Connecting to sender:', senderPeerId);
+    console.log('Connecting to sender:', senderPeerId, 'with handle:', !!activeHandle);
     setStatus('connecting');
     
     try {
@@ -850,19 +845,14 @@ function App() {
       {/* Footer */}
       <footer className="relative z-10 mt-auto py-3 border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-sm">
-            <div className="flex items-center gap-3">
-              <TrustBadges />
-            </div>
-            <div className="flex items-center gap-3">
-              <a href="https://buymeacoffee.com/p2p.red" target="_blank" rel="noopener noreferrer" className="text-yellow-400 hover:text-yellow-300 transition-colors">Support</a>
-              <span className="text-white/40">•</span>
-              <button onClick={() => setCurrentPage('info')} className="text-white/60 hover:text-white transition-colors">How It Works</button>
-              <span className="text-white/40">•</span>
-              <button onClick={() => setCurrentPage('legal')} className="text-white/60 hover:text-white transition-colors">Legal</button>
-              <span className="text-white/40">•</span>
-              <span className="text-white/60">© 2026 p2p.red</span>
-            </div>
+          <div className="flex items-center justify-center gap-3 text-sm">
+            <a href="https://buymeacoffee.com/p2p.red" target="_blank" rel="noopener noreferrer" className="text-yellow-400 hover:text-yellow-300 transition-colors">Support</a>
+            <span className="text-white/40">•</span>
+            <button onClick={() => setCurrentPage('info')} className="text-white/60 hover:text-white transition-colors">How It Works</button>
+            <span className="text-white/40">•</span>
+            <button onClick={() => setCurrentPage('legal')} className="text-white/60 hover:text-white transition-colors">Legal</button>
+            <span className="text-white/40">•</span>
+            <span className="text-white/60">© 2026 p2p.red</span>
           </div>
         </div>
       </footer>

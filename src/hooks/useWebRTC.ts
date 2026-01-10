@@ -11,57 +11,38 @@ export const useWebRTC = () => {
   const peerRef = useRef<Peer | null>(null);
 
   const initializePeer = useCallback(() => {
-    // Generate TURN credentials (time-limited HMAC-SHA1)
-    const turnSecret = 'p2p-secret-key-123456789';
-    const turnTTL = 86400; // 24 hours
-    const turnTimestamp = Math.floor(Date.now() / 1000) + turnTTL;
-    const turnUsername = `${turnTimestamp}:p2puser`;
-    
-    // Generate HMAC-SHA1 credential for TURN authentication
-    const generateTurnCredential = async (username: string, secret: string): Promise<string> => {
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(secret),
-        { name: 'HMAC', hash: 'SHA-1' },
-        false,
-        ['sign']
-      );
-      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(username));
-      return btoa(String.fromCharCode(...new Uint8Array(signature)));
-    };
+    // Simple static TURN credentials
+    const turnUsername = 'p2puser';
+    const turnCredential = 'p2ppass123';
 
-    // Initialize peer with credentials
-    const initWithCredentials = async () => {
-      const turnCredential = await generateTurnCredential(turnUsername, turnSecret);
-      const newPeer = new Peer({
-        host: 'p2p.red',
-        port: 443,
-        path: '/peerjs',
-        secure: true,
-        config: {
-          iceServers: [
-            // Public STUN servers for NAT discovery
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            // Self-hosted TURN server with time-limited credentials
-            { 
-              urls: 'turn:p2p.red:3478',
-              username: turnUsername,
-              credential: turnCredential
-            },
-            {
-              urls: 'turn:p2p.red:3478?transport=tcp',
-              username: turnUsername,
-              credential: turnCredential
-            }
-          ],
-          iceCandidatePoolSize: 10,
-          iceTransportPolicy: 'all',
-          bundlePolicy: 'max-bundle',
-          rtcpMuxPolicy: 'require'
-        }
-      });
+    const newPeer = new Peer({
+      host: 'p2p.red',
+      port: 443,
+      path: '/peerjs',
+      secure: true,
+      config: {
+        iceServers: [
+          // Public STUN servers for NAT discovery
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          // Self-hosted TURN server with static credentials
+          { 
+            urls: 'turn:p2p.red:3478',
+            username: turnUsername,
+            credential: turnCredential
+          },
+          {
+            urls: 'turn:p2p.red:3478?transport=tcp',
+            username: turnUsername,
+            credential: turnCredential
+          }
+        ],
+        iceCandidatePoolSize: 10,
+        iceTransportPolicy: 'all',
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require'
+      }
+    });
 
       newPeer.on('open', (id) => {
         console.log('✅ Peer connected with ID:', id);
@@ -129,9 +110,6 @@ export const useWebRTC = () => {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
       };
-    };
-
-    initWithCredentials();
   }, []);
 
   const handleConnection = useCallback((conn: DataConnection) => {

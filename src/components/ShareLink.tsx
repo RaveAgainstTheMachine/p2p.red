@@ -22,23 +22,44 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto">
-      <h2 className="text-xl font-bold text-white text-center mb-4">
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
+      <h2 className="text-xl font-bold text-white">
         Share this link:
       </h2>
       
-      <div className="relative group">
-        <div className="glass-card p-4 pr-12">
-          <code className="text-white/90 text-base whitespace-nowrap block overflow-hidden text-ellipsis">
-            {shareLink}
-          </code>
-        </div>
+      <div 
+        style={{ 
+          position: 'relative',
+          width: 'fit-content',
+          background: 'rgba(255, 255, 255, 0.05)',
+          backdropFilter: 'blur(4px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '0.75rem',
+          padding: '1rem',
+          paddingRight: '3.5rem'
+        }}
+      >
+        <code style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: '1rem', whiteSpace: 'nowrap' }}>
+          {shareLink}
+        </code>
         
         <button
           onClick={handleCopy}
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg
-                     bg-white/10 hover:bg-white/20 transition-all duration-200
-                     text-white/80 hover:text-white"
+          style={{
+            position: 'absolute',
+            right: '0.5rem',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            padding: '0.5rem',
+            borderRadius: '0.5rem',
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'rgba(255, 255, 255, 0.9)',
+            transition: 'background 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
           title="Copy link"
         >
           {copied ? (
@@ -49,22 +70,18 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
         </button>
       </div>
       
-      <div className="flex justify-center mt-6">
-        <button
-          onClick={handleCopy}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Share2 size={20} />
-          {copied ? 'Copied!' : 'Copy Link'}
-        </button>
-      </div>
+      <button
+        onClick={handleCopy}
+        className="btn-primary flex items-center gap-2"
+      >
+        <Share2 size={20} />
+        {copied ? 'Copied!' : 'Copy Link'}
+      </button>
       
       {copied && (
-        <div className="text-center mt-4">
-          <p className="text-green-400 text-sm">
-            Link copied to clipboard!
-          </p>
-        </div>
+        <p className="text-green-400 text-sm">
+          Link copied to clipboard!
+        </p>
       )}
     </div>
   );

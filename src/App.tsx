@@ -8,7 +8,7 @@ import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ResumeButton } from './components/ResumeButton';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
-import { Download, Share2, Shield } from 'lucide-react';
+import { Download, Share2, Shield, CheckCircle } from 'lucide-react';
 import { createStreamingZip } from './utils/streamingZip';
 import { createShortLink, getMetadata } from './services/metadataApi';
 
@@ -267,7 +267,7 @@ function App() {
         
         // Start receive only after file handle is obtained
         setPendingReceive(false);
-        handleReceive();
+        handleReceive(handle);
       } catch (err) {
         console.error('User cancelled save dialog - cannot proceed without save location:', err);
         setStatus('error');
@@ -279,10 +279,19 @@ function App() {
     }
   };
 
-  const handleReceive = async () => {
+  const handleReceive = async (handle?: any) => {
+    // Use passed handle or fall back to state
+    const activeHandle = handle || fileHandle;
+    
     // senderPeerId already set by metadata API
     if (!senderPeerId) {
       console.error('No sender peer ID available');
+      setStatus('error');
+      return;
+    }
+    
+    if (!activeHandle) {
+      console.error('No file handle available');
       setStatus('error');
       return;
     }
@@ -326,11 +335,11 @@ function App() {
       
       setStatus('transferring');
       console.log('Starting file receive...');
-      const received = await receiveFile(conn, new Set(), fileHandle);
+      const received = await receiveFile(conn, new Set(), activeHandle);
       console.log('File received:', received.name, received.size);
       
       // For streaming writes, file is already on disk
-      if (fileHandle && received.data.size === 0) {
+      if (activeHandle && received.data.size === 0) {
         console.log('File already written to disk via streaming');
         setStatus('complete');
       } else {
@@ -389,7 +398,7 @@ function App() {
       <div className="fixed inset-0 bg-black/20" />
       <div className="fixed inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-pink-600/20 animate-gradient-shift" />
       
-      <div className="relative z-10 container mx-auto px-4 py-6 max-w-6xl">
+      <div className="relative z-10 mx-auto px-4 py-6 max-w-7xl">
         {/* Header */}
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
@@ -450,50 +459,50 @@ function App() {
         />
 
         {/* Main Content */}
-        <div className="glass-card p-8">
-          {mode === 'share' ? (
-            <div>
-              {shareLink ? (
-                <div>
-                  <ShareLink shareLink={shareLink} />
-                  
-                  {status === 'waiting' && (
-                    <div className="text-center mt-8">
-                      <div className="inline-flex items-center gap-2 text-white/60">
-                        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                        <span>Waiting for recipient to connect...</span>
-                      </div>
+        {mode === 'share' ? (
+          <div className="glass-card p-8" style={{ minHeight: '200px' }}>
+            {!shareLink ? (
+              <DropZone 
+                onFileSelect={handleFileSelect} 
+                isProcessing={isEncrypting || status === 'encrypting'}
+              />
+            ) : (
+              <div className="flex flex-col gap-6">
+                <ShareLink shareLink={shareLink} />
+                
+                {status === 'waiting' && (
+                  <div className="text-center">
+                    <div className="inline-flex items-center gap-2 text-white/60">
+                      <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                      <span>Waiting for recipient to connect...</span>
                     </div>
-                  )}
-                  
-                  {status === 'transferring' && (
-                    <div className="mt-8 max-w-5xl mx-auto">
-                      <EnhancedProgressBar 
-                        progress={transferProgress} 
-                        label="Transferring file" 
-                        showETA={true}
-                        showSpeed={true}
-                      />
-                    </div>
-                  )}
-                  
-                  {status === 'complete' && (
-                    <div className="text-center mt-8">
-                      <div className="text-6xl mb-4">✅</div>
-                      <h3 className="text-xl font-semibold text-white">
-                        File transferred successfully!
-                      </h3>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <DropZone 
-                  onFileSelect={handleFileSelect} 
-                  isProcessing={isEncrypting || status === 'encrypting'}
-                />
-              )}
-            </div>
-          ) : (
+                  </div>
+                )}
+                
+                {status === 'transferring' && (
+                  <div className="w-full">
+                    <EnhancedProgressBar 
+                      progress={transferProgress} 
+                      label="Transferring file" 
+                      showETA={true}
+                      showSpeed={true}
+                    />
+                  </div>
+                )}
+                
+                {status === 'complete' && (
+                  <div className="text-center">
+                    <CheckCircle size={64} className="text-green-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-white">
+                      File transferred successfully!
+                    </h3>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="glass-card p-8">
             <div>
               {status === 'connecting' && (
                 <div className="text-center py-12">
@@ -604,8 +613,8 @@ function App() {
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Features */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">

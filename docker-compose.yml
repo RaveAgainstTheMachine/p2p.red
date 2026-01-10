@@ -111,8 +111,22 @@ services:
     container_name: p2p-turn
     restart: unless-stopped
     network_mode: "host"
-    volumes:
-      - /tmp/p2p-config/turnserver.conf:/etc/coturn/turnserver.conf
+    command:
+      - "-n"
+      - "--log-file=stdout"
+      - "--listening-port=3478"
+      - "--listening-ip=0.0.0.0"
+      - "--relay-ip=149.56.131.26"
+      - "--external-ip=149.56.131.26"
+      - "--realm=p2p.red"
+      - "--lt-cred-mech"
+      - "--user=p2puser:p2ppass123"
+      - "--no-tls"
+      - "--no-dtls"
+      - "--fingerprint"
+      - "--min-port=49152"
+      - "--max-port=65535"
+      - "-v"
 
   # Nginx reverse proxy
   nginx:

@@ -28,6 +28,7 @@ function App() {
   const [senderPeerId, setSenderPeerId] = useState<string>('');
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
+  const [readyToReceive, setReadyToReceive] = useState<boolean>(false);
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string} | null>(null);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
@@ -393,17 +394,14 @@ function App() {
       try {
         const handle = await (window as any).showSaveFilePicker({
           suggestedName: fileName,
-          types: [{
-            description: 'Files',
-            accept: { '*/*': [] }
-          }]
         });
-        setFileHandle(handle);
-        console.log('File save location chosen, starting receive...');
+        
+        console.log('✅ File save location chosen:', handle.name);
         
         // Start receive only after file handle is obtained
         setPendingReceive(false);
-        handleReceive(handle);
+        await handleReceive(handle);
+        await startFileReceive();
       } catch (err) {
         console.error('User cancelled save dialog - cannot proceed without save location:', err);
         setStatus('error');
@@ -412,7 +410,8 @@ function App() {
       // Fallback for Firefox, Safari - use traditional download
       console.log('File System Access API not supported - using traditional download method');
       setPendingReceive(false);
-      handleReceive(null); // null handle triggers fallback download
+      await handleReceive(null); // null handle triggers fallback download
+      await startFileReceive();
     }
   };
 
@@ -421,23 +420,26 @@ function App() {
     // null handle is OK - will use traditional download method
     const activeHandle = handle !== undefined ? handle : fileHandle;
     
-    // senderPeerId already set by metadata API
     if (!senderPeerId) {
-      console.error('No sender peer ID available');
+      console.error('❌ No sender peer ID available');
       setStatus('error');
       return;
     }
     
-    console.log('Connecting to sender:', senderPeerId, 'with handle:', !!activeHandle);
-    setStatus('connecting');
+    // Store the handle and mark as ready, but don't start transfer yet
+    setFileHandle(activeHandle);
+    setReadyToReceive(true);
+    console.log('📁 Ready to receive file, waiting for user to start download');
+  };
+
+  const startFileReceive = async () => {
+    if (!readyToReceive || !senderPeerId) {
+      console.error('❌ Not ready to receive or no sender peer ID');
+      return;
+    }
     
     try {
-      if (!peer) {
-        console.error('Peer not initialized yet');
-        return;
-      }
-      
-      console.log('Connecting to remote peer:', senderPeerId);
+      console.log('Connecting to sender:', senderPeerId, 'with handle:', !!fileHandle);
       const conn = connectToPeer(senderPeerId);
       if (!conn) {
         console.error('Failed to create connection');
@@ -467,23 +469,16 @@ function App() {
       
       setStatus('transferring');
       console.log('Starting file receive...');
-      const received = await receiveFile(conn, new Set(), activeHandle);
+      const received = await receiveFile(conn, new Set(), fileHandle);
       console.log('File received:', received.name, received.size);
       
       // For streaming writes, file is already on disk
-      if (activeHandle && received.data.size === 0) {
-        console.log('File already written to disk via streaming');
+      if (fileHandle) {
         setStatus('complete');
+        console.log('✅ File saved successfully');
       } else {
-        // Download file from memory
-        console.log('Downloading file from memory...');
-        const blob = received.data;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = incomingFileInfo?.name || 'download';
-        a.click();
-        URL.revokeObjectURL(url);
+        // Traditional download - file is already handled in receiveFile
+        setStatus('complete');
       }
       
       setStatus('complete');

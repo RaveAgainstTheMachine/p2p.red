@@ -315,15 +315,12 @@ export const useFileTransfer = () => {
     return new Promise(async (resolve, reject) => {
       setIsTransferring(true);
       startTimeRef.current = Date.now();
-      lastChunkTimeRef.current = Date.now();
       
-      let metadata: any;
-      let bytesTransferred = 0;
+      let metadata: any = null;
+      let currentTransferId: string | null = null;
       let totalBytes = 0;
-      let currentTransferId = '';
+      let bytesTransferred = 0;
       let writable: any = null;
-      
-      // Monitor for stalled transfers
       const stallCheckInterval = setInterval(() => {
         const timeSinceLastChunk = Date.now() - lastChunkTimeRef.current;
         if (timeSinceLastChunk > CHUNK_TIMEOUT && isTransferring) {
@@ -337,7 +334,7 @@ export const useFileTransfer = () => {
         const speed = bytesTransferred / elapsed;
         const timeRemaining = speed > 0 ? (totalBytes - bytesTransferred) / speed : 0;
         const percentage = totalBytes > 0 ? (bytesTransferred / totalBytes) * 100 : 0;
-
+        
         setTransferProgress({
           bytesTransferred,
           totalBytes,
@@ -352,7 +349,7 @@ export const useFileTransfer = () => {
           metadata = data;
           currentTransferId = data.transferId;
           totalBytes = metadata.size;
-          setTransferId(currentTransferId);
+          setTransferId(currentTransferId || '');
           
           console.log('📦 Received metadata:', {
             name: metadata.name,

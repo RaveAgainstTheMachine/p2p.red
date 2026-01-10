@@ -1,10 +1,84 @@
 version: '3.8'
 
 services:
+  # PostgreSQL - Metadata storage
+  postgres:
+    image: postgres:16-alpine
+    container_name: p2p-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: p2p_metadata
+      POSTGRES_USER: p2p_api_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-P2P_Secure_Pass_2024!}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U p2p_api_user -d p2p_metadata"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - p2p-network
+
+  # Redis - Metadata cache
+  redis:
+    image: redis:7-alpine
+    container_name: p2p-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - p2p-network
+
+  # Metadata API - Short link generation
+  metadata-api:
+    build:
+      context: ./metadata-api
+      dockerfile: Dockerfile
+    container_name: p2p-metadata-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: p2p_metadata
+      POSTGRES_USER: p2p_api_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-P2P_Secure_Pass_2024!}
+      POSTGRES_MAX_CONNECTIONS: 20
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      LINK_EXPIRY_HOURS: 24
+      CLEANUP_INTERVAL_MINUTES: 60
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX_REQUESTS: 100
+      CORS_ORIGIN: https://p2p.red
+    networks:
+      - p2p-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend app (React)
   app:
     build: .
-    ports:
-      - "3000:3000"
+    container_name: p2p-app
+    restart: unless-stopped
     environment:
       - NODE_ENV=production
       - PEERJS_HOST=p2p.red
@@ -12,37 +86,59 @@ services:
       - PEERJS_PATH=/peerjs
       - VITE_HOST=0.0.0.0
       - HOST_CHECK_DISABLED=true
-    restart: unless-stopped
     depends_on:
       - peerjs-server
-      - turnserver
+      - metadata-api
+    networks:
+      - p2p-network
 
+  # PeerJS signaling server
   peerjs-server:
     build:
       context: .
       dockerfile: Dockerfile.peerjs
-    ports:
-      - "9000:9000"
+    container_name: p2p-peerjs
+    restart: unless-stopped
     environment:
       - PEERJS_PORT=9000
       - PEERJS_HOST=p2p.red
-    restart: unless-stopped
+    networks:
+      - p2p-network
 
+  # TURN server (NAT traversal)
   turnserver:
     image: coturn/coturn:latest
+    container_name: p2p-turn
+    restart: unless-stopped
     network_mode: "host"
     volumes:
       - /tmp/p2p-config/turnserver.conf:/etc/coturn/turnserver.conf
-    restart: unless-stopped
 
+  # Nginx reverse proxy
   nginx:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: p2p-nginx
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - /tmp/p2p-config/nginx.conf:/etc/nginx/nginx.conf
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - app
-    restart: unless-stopped
+      - peerjs-server
+      - metadata-api
+    networks:
+      - p2p-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  p2p-network:
+    driver: bridge

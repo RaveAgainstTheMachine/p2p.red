@@ -49,6 +49,9 @@ redisClient.on('connect', () => console.log('✅ Redis connected'));
 // Middleware
 // ============================================================================
 
+// Trust proxy - we're behind Nginx
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(compression());
 app.use(cors({

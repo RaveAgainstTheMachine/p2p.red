@@ -189,7 +189,11 @@ NONE OF YOUR FUCKING BUSINESS
 ## Performance Metrics
 
 - P2P connection setup: < 3 seconds
-- File transfer speed: Native WebRTC (typically 10-50 Mbps)
+- File transfer speed: Limited by network bandwidth (not protocol)
+  - LAN: 100-900 Mbps (hardware dependent)
+  - WAN: 80-90% of slowest connection (e.g., 400 Mbps on 500 Mbps link)
+  - No artificial rate limiting
+  - WebRTC has no inherent speed cap
 - UI animations: 60fps target
 - Page load: < 2 seconds
 - Memory usage: < 100MB idle

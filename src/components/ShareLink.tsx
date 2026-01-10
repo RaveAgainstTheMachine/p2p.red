@@ -30,7 +30,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
       `Click the link below to download:\n${shareLink}\n\n` +
       `Note: Keep this page open until the transfer completes.`
     );
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
   };
 
   const handleSocialShare = (platform: string) => {

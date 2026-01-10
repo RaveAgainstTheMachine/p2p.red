@@ -256,13 +256,58 @@ app.get('/api/metadata/:key', async (req, res) => {
       });
     }
     
-    // Try cache first
+    // Try cache first - but still need to check PIN from database
     const cacheKey = getCacheKey(key);
     const cached = await redisClient.get(cacheKey);
     
     if (cached) {
       console.log(`📦 Cache hit for key: ${key}`);
       const data = JSON.parse(cached);
+      
+      // If cache indicates PIN required, we must verify it
+      if (data.hasPin) {
+        // Need to query database for pin_hash to verify
+        const result = await pool.query(
+          `SELECT pin_hash FROM short_links WHERE short_key = $1`,
+          [key]
+        );
+        
+        if (result.rows.length === 0) {
+          return res.status(404).json({
+            error: 'Link not found or expired',
+          });
+        }
+        
+        const link = result.rows[0];
+        
+        if (!pin) {
+          return res.status(401).json({
+            error: 'PIN required',
+            requiresPin: true,
+          });
+        }
+        
+        const pinValid = await bcrypt.compare(pin, link.pin_hash);
+        if (!pinValid) {
+          // Increment failed attempts
+          const currentAttempts = parseInt(attempts || '0') + 1;
+          await redisClient.setEx(rateLimitKey, lockoutMinutes * 60, currentAttempts.toString());
+          
+          const remainingAttempts = maxAttempts - currentAttempts;
+          return res.status(403).json({
+            error: 'Invalid PIN',
+            remainingAttempts: Math.max(0, remainingAttempts),
+            message: remainingAttempts > 0 
+              ? `Invalid PIN. ${remainingAttempts} attempts remaining.`
+              : `Too many failed attempts. Try again in ${lockoutMinutes} minutes.`,
+          });
+        }
+        
+        // Clear rate limit on successful PIN
+        await redisClient.del(rateLimitKey);
+      }
+      
+      // Return cached data (PIN verified or not required)
       return res.json(data);
     }
     

@@ -1,21 +1,27 @@
 # 🚀 P2P File Share
 
-A privacy-first, browser-to-browser file sharing service using WebRTC DataChannels. Deployed on OVH VPS with full infrastructure control.
+A privacy-first, browser-to-browser file sharing service using WebRTC DataChannels. True peer-to-peer transfers with short, shareable links. Deployed on OVH VPS with full infrastructure control.
+
+**Current Status:** Single VPS deployment (testing phase). Designed for thousands of concurrent users with multi-VPS scaling path.
 
 ## ✨ **Features**
 
 - 🔒 **End-to-end encrypted** - Files encrypted in your browser before transfer
 - 🌐 **True P2P** - Direct browser-to-browser transfers, no server relay
+- 🔗 **Short links** - 16-character shareable links (e.g., `p2p.red#aB3xK9mP12345678`)
+- 💾 **Streaming to disk** - Files written directly to disk via File System Access API (no RAM limits)
 - 🎨 **Beautiful UI** - Glassmorphism design with 11 themes
 - 📱 **Mobile friendly** - Works on all modern browsers and devices
 - 🖥️ **Self-hosted** - Complete control over infrastructure
-- 🚀 **Production ready** - Proper monitoring, logging, and security
+- ⚡ **High performance** - Redis caching, PostgreSQL persistence, sub-10ms metadata retrieval
 
 ## 🛠️ **Technology Stack**
 
 - **Frontend**: React + TypeScript + Vite
 - **P2P Transport**: WebRTC DataChannels via PeerJS
 - **Encryption**: Browser-native AES-GCM
+- **Metadata Storage**: PostgreSQL + Redis caching
+- **Short Links**: Node.js/Express API with Base62 encoding
 - **Deployment**: OVH VPS + Docker + Nginx
 - **Signaling**: Self-hosted PeerJS server
 - **NAT Traversal**: coturn TURN server
@@ -27,9 +33,12 @@ A privacy-first, browser-to-browser file sharing service using WebRTC DataChanne
 
 1. Open [p2p.red](https://p2p.red)
 2. Drag and drop a file to share
-3. Copy the generated share link
+3. Copy the short share link (e.g., `https://p2p.red#aB3xK9mP12345678`)
 4. Send the link to anyone
-5. They open the link to download directly from your browser
+5. They open the link and choose save location
+6. File transfers directly from your browser to theirs (P2P)
+
+**Note:** Both sender and receiver must keep their browsers open during transfer.
 
 ### For Developers
 
@@ -80,13 +89,36 @@ npm run dev
 
 ## 🏗️ **Architecture**
 
+### Current (Single VPS)
 ```
-Browser A ←── Direct WebRTC P2P Connection ──→ Browser B
-     ↓                                           ↓
-Signaling Server (coordination only, no file data)
-     ↓
-OVH VPS (p2p.red) - Docker + Nginx + PeerJS + TURN
+Sender Browser                                    Receiver Browser
+      │                                                  │
+      │ 1. Create short link                           │
+      ├──────────────────────────────────────────────► │
+      │    POST /api/metadata                           │
+      │    (peerId, fileName, fileSize)                 │
+      │                                                  │
+      │ 2. Share link: p2p.red#aB3xK9mP12345678        │
+      │ ──────────────────────────────────────────────► │
+      │                                                  │
+      │                                                  │ 3. Retrieve metadata
+      │                                                  ├──────────────────►
+      │                                                  │ GET /api/metadata/:key
+      │                                                  │
+      │ 4. Direct P2P WebRTC Connection (file data)    │
+      │ ◄═══════════════════════════════════════════► │
+      │         (No server relay - true P2P)            │
+      ▼                                                  ▼
+      
+      Metadata API (PostgreSQL + Redis)
+           │
+           ├─ Short link generation (Base62)
+           ├─ Metadata storage (24h expiry)
+           └─ Redis caching (<10ms reads)
 ```
+
+### Production Target (Multi-VPS)
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed scaling plan to thousands of concurrent users.
 
 ## 📁 **Project Structure**
 
@@ -100,13 +132,23 @@ src/
 ├── hooks/              # Custom React hooks
 │   ├── useWebRTC.ts    # WebRTC connection logic
 │   ├── useEncryption.ts # File encryption/decryption
-│   └── useFileTransfer.ts # Enhanced file transfer
+│   └── useFileTransfer.ts # Streaming file transfer
+├── services/           # API clients
+│   └── metadataApi.ts  # Short link API client
 ├── config/             # Environment configuration
 │   └── environments.ts # Dev/prod settings
 ├── utils/              # Utility functions
 │   ├── encryption.ts   # Crypto operations
+│   ├── streamingZip.ts # Folder compression
 │   └── themes.ts       # UI theme definitions
 └── styles/             # CSS and themes
+
+metadata-api/           # Short link backend
+├── server.js           # Express API server
+├── db/
+│   └── init.sql        # PostgreSQL schema
+├── package.json        # Dependencies
+└── Dockerfile          # Container image
 ```
 
 ## 🚀 **Deployment**
@@ -139,11 +181,25 @@ sudo ufw enable
 ### Application Deployment
 
 ```bash
-# Make deploy script executable
-chmod +x deploy.sh
+# Deploy metadata API stack (PostgreSQL + Redis + API)
+./deploy-metadata-api.sh
 
-# Deploy to VPS
-./deploy.sh
+# Deploy frontend and main services
+./quick-update.sh
+```
+
+### Full Stack Deployment
+
+```bash
+# 1. Deploy metadata services
+docker-compose -f docker-compose.metadata.yml up -d
+
+# 2. Initialize database
+docker exec -i p2p-postgres psql -U p2p_api_user -d p2p_metadata < metadata-api/db/init.sql
+
+# 3. Build and deploy frontend
+npm run build
+./quick-update.sh
 ```
 
 ### Manual Deployment
@@ -163,15 +219,35 @@ ssh ubuntu@p2p.red "cd /opt/p2p-file-share && sudo docker-compose restart"
 
 ### Application Monitoring
 ```bash
-# View logs
-ssh ubuntu@p2p.red "sudo docker-compose logs -f"
+# View all logs
+docker-compose logs -f
+docker-compose -f docker-compose.metadata.yml logs -f
 
 # Check service status
-ssh ubuntu@p2p.red "sudo docker-compose ps"
+docker-compose ps
+docker-compose -f docker-compose.metadata.yml ps
+
+# Test metadata API
+curl http://localhost:3001/health
 
 # System monitoring
-ssh ubuntu@p2p.red "htop"
-ssh ubuntu@p2p.red "df -h"
+htop
+df -h
+```
+
+### Metadata API Monitoring
+```bash
+# Check API health
+curl http://localhost:3001/health | jq
+
+# View statistics
+curl http://localhost:3001/api/stats | jq
+
+# Database queries
+docker exec -it p2p-postgres psql -U p2p_api_user -d p2p_metadata
+
+# Redis cache stats
+docker exec -it p2p-redis redis-cli INFO stats
 ```
 
 ### Log Management
@@ -179,14 +255,27 @@ ssh ubuntu@p2p.red "df -h"
 - **Nginx logs**: Web server access/error logs
 - **TURN logs**: Connection and relay logs
 - **Application logs**: WebRTC connection events
+- **Metadata API logs**: Short link creation/retrieval
+- **PostgreSQL logs**: Database queries and errors
+- **Redis logs**: Cache operations
 
 ## 💰 **Cost Management**
 
-### VPS Costs
-- **OVH VPS**: $5-15/month (depending on specs)
+### Current Costs (Single VPS)
+- **OVH VPS**: $15/month (2 vCPU, 4GB RAM)
 - **Domain**: $10-15/year
 - **SSL**: Free (Let's Encrypt)
-- **Total**: $70-180/year
+- **Total**: ~$200/year
+
+### Production Costs (Multi-VPS for 3K+ users)
+- **Load Balancer**: $5-10/month
+- **Web VPS x3**: $30-45/month
+- **Database VPS**: $20-30/month
+- **TURN VPS**: $10-20/month
+- **Monitoring VPS**: $10-15/month
+- **Total**: $75-120/month (~$900-1,440/year)
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed scaling costs.
 
 ### Benefits
 - **Full control**: Complete server administration
@@ -196,11 +285,14 @@ ssh ubuntu@p2p.red "df -h"
 
 ## 🔧 **Configuration Files**
 
-- `docker-compose.yml` - Multi-service orchestration
+- `docker-compose.yml` - Main services (frontend, PeerJS, TURN)
+- `docker-compose.metadata.yml` - Metadata stack (PostgreSQL, Redis, API)
 - `Dockerfile` - Application container
 - `nginx.conf` - Reverse proxy configuration
 - `turnserver.conf` - TURN server settings
-- `deploy.sh` - Automated deployment script
+- `metadata-api/.env` - API configuration
+- `deploy-metadata-api.sh` - Metadata stack deployment
+- `quick-update.sh` - Frontend deployment script
 
 ## 🤝 **Contributing**
 

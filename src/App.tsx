@@ -28,7 +28,6 @@ function App() {
   const [senderPeerId, setSenderPeerId] = useState<string>('');
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
-  const [readyToReceive, setReadyToReceive] = useState<boolean>(false);
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string} | null>(null);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
@@ -428,13 +427,12 @@ function App() {
     
     // Store the handle and mark as ready, but don't start transfer yet
     setFileHandle(activeHandle);
-    setReadyToReceive(true);
     console.log('📁 Ready to receive file, waiting for user to start download');
   };
 
   const startFileReceive = async () => {
-    if (!readyToReceive || !senderPeerId) {
-      console.error('❌ Not ready to receive or no sender peer ID');
+    if (!senderPeerId) {
+      console.error('❌ No sender peer ID');
       return;
     }
     

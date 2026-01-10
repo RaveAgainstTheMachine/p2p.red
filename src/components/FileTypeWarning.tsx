@@ -24,23 +24,15 @@ export const FileTypeWarning: React.FC<FileTypeWarningProps> = ({ fileName, file
   const isDangerousByExtension = DANGEROUS_EXTENSIONS.includes(extension);
 
   useEffect(() => {
-    if (file) {
-      // Dynamic import to avoid bundling if not needed
-      import('../utils/magicBytes').then(async ({ isDangerousFile, validateFileType }) => {
-        const dangerCheck = await isDangerousFile(file);
-        const validationCheck = await validateFileType(file);
-        
-        setMagicByteCheck({
-          checked: true,
-          isDangerous: dangerCheck.isDangerous,
-          reason: dangerCheck.reason,
-          mismatch: !validationCheck.isValid,
-          mismatchWarning: validationCheck.warning
-        });
-      }).catch(err => {
-        console.error('Magic byte validation failed:', err);
-      });
-    }
+    // Temporarily disable magic byte validation to prevent Safe Browsing blocks
+    // TODO: Re-enable when we have better file handling
+    setMagicByteCheck({
+      checked: true,
+      isDangerous: false,
+      reason: null,
+      mismatch: false,
+      mismatchWarning: null
+    });
   }, [file]);
 
   const showWarning = isDangerousByExtension || magicByteCheck.isDangerous || magicByteCheck.mismatch;

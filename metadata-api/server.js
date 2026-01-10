@@ -430,6 +430,7 @@ app.get('/api/metadata/:key', async (req, res) => {
       fileSize: parseInt(link.file_size),
       fileType: link.file_type,
       hasPin: !!link.pin_hash,
+      expiresAt: link.expires_at.toISOString(),
     };
     
     // Update cache

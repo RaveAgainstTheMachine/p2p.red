@@ -14,6 +14,7 @@ export interface TransferMetadata {
   fileType: string;
   pin?: string;
   hasPin?: boolean;
+  expiresAt?: string;
 }
 
 export interface ShortLinkResponse {

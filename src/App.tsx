@@ -9,6 +9,7 @@ import { ResumeButton } from './components/ResumeButton';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { Download, Share2, Shield, CheckCircle, File } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
+import { formatExpirationTime } from './utils/timeFormat';
 import { PinToggle } from './components/PinToggle';
 import { PinVerification } from './components/PinVerification';
 import { FileTypeWarning } from './components/FileTypeWarning';
@@ -27,7 +28,7 @@ function App() {
   const [senderPeerId, setSenderPeerId] = useState<string>('');
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
-  const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number} | null>(null);
+  const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string} | null>(null);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [pin, setPin] = useState<string>('');
@@ -55,7 +56,11 @@ function App() {
   useEffect(() => {
     if (mode === 'receive' && incomingFileInfo) {
       const title = `Download: ${incomingFileInfo.name}`;
-      const description = `File size: ${formatFileSize(incomingFileInfo.size)} • ${senderPeerId ? 'Sender online' : 'Waiting for sender'} • Link expires in 24h`;
+      const expirationText = incomingFileInfo.expiresAt ? 
+        formatExpirationTime(incomingFileInfo.expiresAt) :
+        'Link expires in 24h';
+      
+      const description = `File size: ${formatFileSize(incomingFileInfo.size)} • ${senderPeerId ? 'Sender online' : 'Waiting for sender'} • ${expirationText}`;
       
       document.title = title;
       
@@ -101,7 +106,7 @@ function App() {
         .then(metadata => {
           console.log('📦 Retrieved metadata:', metadata);
           setSenderPeerId(metadata.peerId);
-          setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize });
+          setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize, expiresAt: metadata.expiresAt });
           setPendingReceive(true);
         })
         .catch((error: any) => {
@@ -138,7 +143,7 @@ function App() {
       const metadata = await getMetadata(shortKey, enteredPin);
       console.log('📦 Retrieved metadata with PIN:', metadata);
       setSenderPeerId(metadata.peerId);
-      setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize });
+      setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize, expiresAt: metadata.expiresAt });
       setRequiresPin(false);
       setPendingReceive(true);
     } catch (error: any) {
@@ -755,6 +760,11 @@ function App() {
                         <p className="text-white/60 text-sm mt-1">
                           {(incomingFileInfo.size / (1024 * 1024)).toFixed(2)} MB
                         </p>
+                        {incomingFileInfo.expiresAt && (
+                          <p className="text-white/60 text-sm mt-1">
+                            {formatExpirationTime(incomingFileInfo.expiresAt)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -98,7 +98,8 @@ export async function getMetadata(key: string, pin?: string): Promise<TransferMe
     return metadata;
   } catch (error) {
     console.error('Failed to retrieve metadata:', error);
-    throw new Error(`Failed to retrieve metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Re-throw the original error to preserve requiresPin and remainingAttempts properties
+    throw error;
   }
 }
 

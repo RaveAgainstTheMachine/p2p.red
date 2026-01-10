@@ -443,7 +443,7 @@ function App() {
         {/* Header */}
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
-            P2P File Share
+            SHARE FILES QUICKLY & SECURELY
           </h1>
           <p className="text-white/80 text-base">
             Privacy-first file sharing with true peer-to-peer transfer
@@ -619,7 +619,7 @@ function App() {
               
               {status === 'complete' && (
                 <div className="text-center mt-8">
-                  <div className="text-6xl mb-4">✅</div>
+                  <CheckCircle size={64} className="text-green-400 mx-auto mb-4" />
                   <h3 className="text-xl font-semibold text-white">
                     File downloaded successfully!
                   </h3>

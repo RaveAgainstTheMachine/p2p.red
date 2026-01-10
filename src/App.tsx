@@ -8,7 +8,6 @@ import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { ResumeButton } from './components/ResumeButton';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { Download, Share2, Shield, CheckCircle, File } from 'lucide-react';
-import { createStreamingZip } from './utils/streamingZip';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { PinToggle } from './components/PinToggle';
 import { PinVerification } from './components/PinVerification';
@@ -36,6 +35,7 @@ function App() {
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<'home' | 'legal' | 'info'>('home');
+  const [enableZip, setEnableZip] = useState<boolean>(true);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
@@ -150,7 +150,10 @@ function App() {
         (files.length === 1 && files[0].webkitRelativePath && files[0].webkitRelativePath.includes('/')) ||
         (files.length === 1 && files[0].size === 0 && files[0].name && !files[0].type);
       
-      if (isFolderSelection) {
+      // Use streaming ZIP for all files if enabled (default), unless single file and ZIP disabled
+      const shouldZip = enableZip && (isFolderSelection || files.length > 0);
+      
+      if (shouldZip && isFolderSelection) {
         console.log('Detected folder/multiple files');
         
         // If it's a single 0-byte file (likely a folder), we need to handle it differently
@@ -165,8 +168,8 @@ function App() {
           totalSize += files[i].size;
         }
         
-        // For large folders (>100MB), use streaming ZIP to avoid memory issues
-        if (totalSize > 100 * 1024 * 1024) {
+        // Always use streaming ZIP for folders/multiple files when enabled
+        if (true) {
           console.log('Large folder detected, using streaming ZIP...');
           
           // Get folder name from first file's path
@@ -233,14 +236,63 @@ function App() {
             });
           }
           return; // Exit early, don't use normal file transfer flow
-        } else {
-          console.log('Creating ZIP for folder...');
-          fileToTransfer = await createStreamingZip(files);
-          console.log('Created ZIP file:', fileToTransfer.name, formatFileSize(fileToTransfer.size));
         }
+      } else if (shouldZip && files.length === 1) {
+        // Single file with ZIP enabled - create streaming ZIP
+        console.log('Single file with ZIP enabled, creating streaming ZIP...');
+        const file = files[0];
+        const { makeZip } = await import('client-zip');
+        const zipStream = makeZip([{
+          name: file.name,
+          lastModified: file.lastModified,
+          input: file
+        }]);
+        const zipFileName = `${file.name}.zip`;
+        
+        console.log('Created ZIP stream for single file:', zipFileName);
+        
+        // Create short link via metadata API
+        try {
+          const pinToSend = pin && pin.length === 4 ? pin : undefined;
+          console.log('📤 Creating short link with PIN:', { hasPin: !!pinToSend, pinLength: pinToSend?.length });
+          const shortKey = await createShortLink({
+            peerId: peerId!,
+            fileName: zipFileName,
+            fileSize: file.size,
+            fileType: 'application/zip'
+          }, pinToSend);
+          const shareLink = `${window.location.origin}${window.location.pathname}#${shortKey}`;
+          setShareLink(shareLink);
+          setStatus('waiting');
+        } catch (error) {
+          console.error('Failed to create short link:', error);
+          setStatus('error');
+          return;
+        }
+        
+        // Wait for receiver connection
+        if (peer) {
+          peer.on('connection', async (conn) => {
+            console.log('Sender: Incoming connection from receiver:', conn.peer);
+            conn.on('open', async () => {
+              console.log('Sender: Connection open, starting stream transfer');
+              setShowEncryptionIndicator(true);
+              setIsEncryptedConnection(true);
+              setStatus('transferring');
+              try {
+                await sendStream(conn, zipStream, zipFileName, file.size);
+                setStatus('complete');
+              } catch (error) {
+                console.error('Stream transfer failed:', error);
+                setStatus('error');
+              }
+            });
+          });
+        }
+        return;
       } else {
-        // Single file
-        console.log('Single file detected, using directly');
+        // Single file without ZIP
+        console.log('Single file without ZIP, using directly');
         fileToTransfer = files[0];
         console.log('Single file details:', {
           name: fileToTransfer.name,
@@ -461,7 +513,7 @@ function App() {
         {/* Header */}
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
-            SHARE FILES QUICKLY & SECURELY
+            SHARE FILES SECURELY
           </h1>
           <p className="text-white/80 text-base">
             Privacy-first file sharing with true peer-to-peer transfer
@@ -541,6 +593,24 @@ function App() {
                           {selectedFiles.length > 1 && ` • ${selectedFiles.length} files`}
                         </p>
                       </div>
+                    </div>
+
+                    {/* ZIP Toggle */}
+                    <div className="flex items-center justify-center gap-2 text-white/80">
+                      <button
+                        type="button"
+                        onClick={() => setEnableZip(!enableZip)}
+                        className="flex items-center gap-2 text-sm hover:text-white transition-colors"
+                      >
+                        <div className={`w-10 h-6 rounded-full transition-colors ${
+                          enableZip ? 'bg-blue-500' : 'bg-white/20'
+                        } relative`}>
+                          <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                            enableZip ? 'translate-x-5' : 'translate-x-1'
+                          }`} />
+                        </div>
+                        <span>Compress as ZIP</span>
+                      </button>
                     </div>
 
                     {/* PIN Toggle */}
@@ -751,7 +821,7 @@ function App() {
       <footer className="relative z-10 border-t border-white/10 mt-12">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-white/60 text-sm">
-            <p>© 2026 P2P File Share. Privacy-first file sharing.</p>
+            <p>© 2026 p2p.red</p>
             <div className="flex gap-6">
               <button
                 onClick={() => setCurrentPage('info')}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Share2, Copy, Check, QrCode } from 'lucide-react';
+import { Share2, Copy, Check, QrCode, Mail } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface ShareLinkProps {
@@ -21,6 +21,16 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
     } catch (err) {
       console.error('Failed to copy:', err);
     }
+  };
+
+  const handleEmailShare = () => {
+    const subject = encodeURIComponent('File shared with you');
+    const body = encodeURIComponent(
+      `I've shared a file with you using p2p.red\n\n` +
+      `Click the link below to download:\n${shareLink}\n\n` +
+      `Note: Keep this page open until the transfer completes.`
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
   return (
@@ -79,6 +89,15 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
         >
           <Share2 size={20} />
           {copied ? 'Copied!' : 'Copy Link'}
+        </button>
+        
+        <button
+          onClick={handleEmailShare}
+          className="btn-secondary flex items-center gap-2"
+          title="Share via Email"
+        >
+          <Mail size={20} />
+          Email
         </button>
         
         <button

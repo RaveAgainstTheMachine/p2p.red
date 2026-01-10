@@ -471,25 +471,21 @@ function App() {
         {mode === 'share' ? (
           <div className="glass-card p-8" style={{ minHeight: '200px' }}>
             {!shareLink ? (
-              <div className="flex flex-col gap-6">
-                {!selectedFiles ? (
-                  <DropZone 
-                    onFileSelect={handleFileSelect} 
-                    isProcessing={isEncrypting || status === 'encrypting'}
-                  />
-                ) : (
-                  <>
-                    <div className="text-center text-white/80">
-                      <p className="mb-4">File selected. Optionally add a PIN for extra security.</p>
-                    </div>
+              <>
+                <DropZone 
+                  onFileSelect={handleFileSelect} 
+                  isProcessing={isEncrypting || status === 'encrypting'}
+                />
+                {selectedFiles && (
+                  <div className="flex flex-col gap-4 mt-6">
                     <PinInput 
                       onPinChange={setPin}
-                      label="Optional 4-digit PIN"
+                      label="Optional 4-digit PIN for extra security"
                       placeholder="Enter PIN (optional)"
                     />
                     <div className="flex gap-3 justify-center">
                       <button
-                        onClick={() => setSelectedFiles(null)}
+                        onClick={() => { setSelectedFiles(null); setPin(''); }}
                         className="btn-secondary"
                       >
                         Cancel
@@ -502,9 +498,9 @@ function App() {
                         {status === 'encrypting' ? 'Processing...' : 'Create Share Link'}
                       </button>
                     </div>
-                  </>
+                  </div>
                 )}
-              </div>
+              </>
             ) : (
               <div className="flex flex-col gap-6">
                 <ShareLink shareLink={shareLink} />

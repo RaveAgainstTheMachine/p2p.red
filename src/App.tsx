@@ -11,6 +11,7 @@ import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { Download, Share2, Shield, CheckCircle } from 'lucide-react';
 import { createStreamingZip } from './utils/streamingZip';
 import { createShortLink, getMetadata } from './services/metadataApi';
+import { PinInput } from './components/PinInput';
 
 function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
@@ -25,6 +26,7 @@ function App() {
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number} | null>(null);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
+  const [pin, setPin] = useState<string>('');
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
@@ -155,7 +157,7 @@ function App() {
               fileName: zipFileName,
               fileSize: totalSize,
               fileType: 'application/zip'
-            });
+            }, pin || undefined);
             const shareLink = `${window.location.origin}${window.location.pathname}#${shortKey}`;
             setShareLink(shareLink);
             setStatus('waiting');
@@ -218,7 +220,7 @@ function App() {
           fileName: fileToTransfer.name,
           fileSize: fileToTransfer.size,
           fileType: fileToTransfer.type
-        });
+        }, pin || undefined);
         const link = `${window.location.origin}${window.location.pathname}#${shortKey}`;
         setShareLink(link);
         setStatus('waiting');
@@ -462,10 +464,19 @@ function App() {
         {mode === 'share' ? (
           <div className="glass-card p-8" style={{ minHeight: '200px' }}>
             {!shareLink ? (
-              <DropZone 
-                onFileSelect={handleFileSelect} 
-                isProcessing={isEncrypting || status === 'encrypting'}
-              />
+              <div className="flex flex-col gap-6">
+                <DropZone 
+                  onFileSelect={handleFileSelect} 
+                  isProcessing={isEncrypting || status === 'encrypting'}
+                />
+                {status === 'encrypting' && (
+                  <PinInput 
+                    onPinChange={setPin}
+                    label="Optional 4-digit PIN"
+                    placeholder="Enter PIN (optional)"
+                  />
+                )}
+              </div>
             ) : (
               <div className="flex flex-col gap-6">
                 <ShareLink shareLink={shareLink} />

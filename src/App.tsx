@@ -8,10 +8,10 @@ import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ResumeButton } from './components/ResumeButton';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
-import { Download, Share2, Shield, CheckCircle } from 'lucide-react';
+import { Download, Share2, Shield, CheckCircle, File } from 'lucide-react';
 import { createStreamingZip } from './utils/streamingZip';
 import { createShortLink, getMetadata } from './services/metadataApi';
-import { PinInput } from './components/PinInput';
+import { PinToggle } from './components/PinToggle';
 
 function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
@@ -477,12 +477,26 @@ function App() {
                   isProcessing={isEncrypting || status === 'encrypting'}
                 />
                 {selectedFiles && (
-                  <div className="flex flex-col gap-4 mt-6">
-                    <PinInput 
-                      onPinChange={setPin}
-                      label="Optional 4-digit PIN for extra security"
-                      placeholder="Enter PIN (optional)"
-                    />
+                  <div className="flex flex-col gap-6 mt-6">
+                    {/* File Details */}
+                    <div className="flex items-center justify-center gap-3 text-white/80">
+                      <File size={20} className="text-blue-400" />
+                      <div className="text-center">
+                        <p className="font-medium">{selectedFiles[0].name}</p>
+                        <p className="text-sm text-white/60">
+                          {formatFileSize(selectedFiles.length > 1 
+                            ? Array.from(selectedFiles).reduce((sum, f) => sum + f.size, 0)
+                            : selectedFiles[0].size
+                          )}
+                          {selectedFiles.length > 1 && ` • ${selectedFiles.length} files`}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* PIN Toggle */}
+                    <PinToggle onPinChange={setPin} />
+
+                    {/* Action Buttons */}
                     <div className="flex gap-3 justify-center">
                       <button
                         onClick={() => { setSelectedFiles(null); setPin(''); }}

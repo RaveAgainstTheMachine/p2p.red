@@ -7,7 +7,7 @@ import { ShareLink } from './components/ShareLink';
 import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { ResumeButton } from './components/ResumeButton';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
-import { Download, Share2, Shield, CheckCircle, File } from 'lucide-react';
+import { Download, Share2, Shield, CheckCircle, File, Check } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { PinToggle } from './components/PinToggle';
@@ -39,6 +39,7 @@ function App() {
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<'home' | 'legal' | 'info'>('home');
   const [enableZip, setEnableZip] = useState<boolean>(true);
+  const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
@@ -46,6 +47,17 @@ function App() {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const copyShareLinkToClipboard = async (link: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setShowClipboardNotification(true);
+      setTimeout(() => setShowClipboardNotification(false), 3000);
+      console.log('✅ Share link copied to clipboard automatically');
+    } catch (err) {
+      console.error('Failed to copy share link:', err);
+    }
   };
 
   useEffect(() => {
@@ -243,6 +255,7 @@ function App() {
             }, pinToSend);
             const shareLink = `${window.location.origin}${window.location.pathname}#${shortKey}`;
             setShareLink(shareLink);
+            await copyShareLinkToClipboard(shareLink);
             setStatus('waiting');
           } catch (error) {
             console.error('Failed to create short link:', error);
@@ -297,6 +310,7 @@ function App() {
           }, pinToSend);
           const shareLink = `${window.location.origin}${window.location.pathname}#${shortKey}`;
           setShareLink(shareLink);
+          await copyShareLinkToClipboard(shareLink);
           setStatus('waiting');
         } catch (error) {
           console.error('Failed to create short link:', error);
@@ -361,6 +375,7 @@ function App() {
           }, pinToSend);
           const shareLink = `${window.location.origin}${window.location.pathname}#${shortKey}`;
           setShareLink(shareLink);
+          await copyShareLinkToClipboard(shareLink);
           setStatus('waiting');
         } catch (error) {
           console.error('Failed to create short link:', error);
@@ -427,6 +442,7 @@ function App() {
         }, pinToSend);
         const link = `${window.location.origin}${window.location.pathname}#${shortKey}`;
         setShareLink(link);
+        await copyShareLinkToClipboard(link);
         setStatus('waiting');
       } catch (error) {
         console.error('Failed to create short link:', error);
@@ -1005,6 +1021,16 @@ function App() {
       
       {/* Monitoring */}
       <Monitoring />
+      
+      {/* Clipboard Notification */}
+      {showClipboardNotification && (
+        <div className="fixed bottom-8 right-8 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out z-50">
+          <div className="flex items-center gap-3">
+            <Check size={20} />
+            <span className="font-medium">Share link copied to clipboard!</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -827,7 +827,7 @@ function App() {
             <TrustBadges />
             
             <a
-              href="https://www.buymeacoffee.com/p2pred"
+              href="https://buymeacoffee.com/p2p.red"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg transition-colors shadow-lg"

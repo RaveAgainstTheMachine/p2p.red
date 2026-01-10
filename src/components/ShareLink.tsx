@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Share2, Copy, Check, QrCode, Mail } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Share2, Copy, Check, QrCode, Mail, Smartphone } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface ShareLinkProps {
@@ -10,6 +10,13 @@ interface ShareLinkProps {
 export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [canShare, setCanShare] = useState(false);
+  const qrRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Check if Web Share API is available (mobile browsers)
+    setCanShare(!!navigator.share);
+  }, []);
 
   const handleCopy = async () => {
     try {
@@ -23,14 +30,35 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
     }
   };
 
-  const handleEmailShare = () => {
+  const handleEmailShare = async () => {
     const subject = encodeURIComponent('File shared with you');
     const body = encodeURIComponent(
       `I've shared a file with you using p2p.red\n\n` +
-      `Click the link below to download:\n${shareLink}\n\n` +
-      `Note: Keep this page open until the transfer completes.`
+      `Download Link:\n${shareLink}\n\n` +
+      `Or scan this QR code:\n${shareLink.replace('#', '%23')}\n\n` +
+      `Note: The sender must keep their page open until the transfer completes.\n\n` +
+      `---\n` +
+      `Secure P2P file sharing with end-to-end encryption\n` +
+      `https://p2p.red`
     );
     window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+  };
+
+  const handleNativeShare = async () => {
+    if (!navigator.share) return;
+    
+    try {
+      await navigator.share({
+        title: 'File shared with you',
+        text: `Download this file using p2p.red`,
+        url: shareLink
+      });
+    } catch (err) {
+      // User cancelled or share failed
+      if ((err as Error).name !== 'AbortError') {
+        console.error('Share failed:', err);
+      }
+    }
   };
 
   const handleSocialShare = (platform: string) => {
@@ -102,7 +130,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
       </div>
       
       <div className="flex flex-col gap-3 items-center">
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap justify-center">
           <button
             onClick={handleCopy}
             className="btn-primary flex items-center gap-2"
@@ -119,6 +147,17 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
             <QrCode size={20} />
             QR Code
           </button>
+          
+          {canShare && (
+            <button
+              onClick={handleNativeShare}
+              className="btn-secondary flex items-center gap-2"
+              title="Share via AirDrop, Nearby Share, etc."
+            >
+              <Smartphone size={20} />
+              <span className="hidden sm:inline">Share</span>
+            </button>
+          )}
         </div>
         
         <div className="flex gap-2 flex-wrap justify-center">
@@ -178,8 +217,9 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
       </div>
       
       {showQR && (
-        <div className="bg-white p-4 rounded-lg">
+        <div ref={qrRef} className="bg-white p-4 rounded-lg">
           <QRCodeSVG value={shareLink} size={200} level="H" />
+          <p className="text-gray-600 text-xs text-center mt-2">Scan to download</p>
         </div>
       )}
       

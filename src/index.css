@@ -2,6 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile Optimizations */
+@media (max-width: 640px) {
+  /* Larger touch targets for mobile */
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Better text sizing on mobile */
+  html {
+    font-size: 16px;
+  }
+  
+  /* Prevent zoom on input focus */
+  input, select, textarea {
+    font-size: 16px;
+  }
+  
+  /* Better spacing on mobile */
+  .btn-primary, .btn-secondary {
+    padding: 0.75rem 1.25rem;
+  }
+  
+  /* Responsive QR code */
+  canvas {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* Improve tap highlighting */
+* {
+  -webkit-tap-highlight-color: rgba(59, 130, 246, 0.3);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
 @layer components {
   .glass-card {
     @apply bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl;

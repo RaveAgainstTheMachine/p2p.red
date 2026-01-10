@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PEERJS_HOST=p2p.red
+      - PEERJS_PORT=443
+      - PEERJS_PATH=/peerjs
+      - VITE_HOST=0.0.0.0
+      - HOST_CHECK_DISABLED=true
+    restart: unless-stopped
+    depends_on:
+      - peerjs-server
+      - turnserver
+
+  peerjs-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.peerjs
+    ports:
+      - "9000:9000"
+    environment:
+      - PEERJS_PORT=9000
+      - PEERJS_HOST=p2p.red
+    restart: unless-stopped
+
+  turnserver:
+    image: coturn/coturn:latest
+    network_mode: "host"
+    volumes:
+      - /tmp/p2p-config/turnserver.conf:/etc/coturn/turnserver.conf
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /tmp/p2p-config/nginx.conf:/etc/nginx/nginx.conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - app
+    restart: unless-stopped

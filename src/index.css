@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .glass-card {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl;
+  }
+  
+  .btn-primary {
+    @apply bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold
+           px-6 py-3 rounded-xl transition-all duration-200
+           hover:from-blue-600 hover:to-purple-600
+           hover:shadow-lg hover:shadow-blue-500/25
+           active:scale-95;
+  }
+  
+  .btn-secondary {
+    @apply bg-white/10 text-white font-semibold
+           px-6 py-3 rounded-xl transition-all duration-200
+           hover:bg-white/20 hover:shadow-lg;
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes shine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-gradient-shift {
+  animation: gradient-shift 8s ease infinite;
+  background-size: 200% 200%;
+}
+
+.animate-shine {
+  animation: shine 2s ease-in-out infinite;
+}

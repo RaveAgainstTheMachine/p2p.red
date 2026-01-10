@@ -10,6 +10,7 @@ import { ResumeButton } from './components/ResumeButton';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { Download, Share2, Shield } from 'lucide-react';
 import { createStreamingZip } from './utils/streamingZip';
+import { createShortLink, getMetadata } from './services/metadataApi';
 
 function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
@@ -49,32 +50,24 @@ function App() {
     
     // Auto-detect mode: receive if hash present, otherwise share
     if (window.location.hash && peer && isConnected) {
-      console.log('📥 Hash detected and peer ready, parsing share link...');
+      console.log('📥 Hash detected and peer ready, fetching metadata...');
       setMode('receive');
       
-      // Parse file info from hash: peerId:::fileName:fileSize:fileType
-      const hash = window.location.hash.substring(1);
-      console.log('Raw hash:', hash);
+      const shortKey = window.location.hash.substring(1);
+      console.log('Short key:', shortKey);
       
-      // Split by ::: first to separate peerId from file info
-      const [peerId, fileInfo] = hash.split(':::');
-      console.log('Parsed peerId:', peerId);
-      console.log('File info string:', fileInfo);
-      
-      if (fileInfo) {
-        // Now split file info by : to get fileName:fileSize:fileType
-        const parts = fileInfo.split(':');
-        const fileName = parts[0] ? decodeURIComponent(parts[0]) : 'Unknown file';
-        const fileSize = parts[1] ? parseInt(parts[1]) : 0;
-        const fileType = parts[2] ? decodeURIComponent(parts[2]) : '';
-        
-        console.log('📦 Incoming file info:', { fileName, fileSize, fileType });
-        setSenderPeerId(peerId);
-        setIncomingFileInfo({ name: fileName, size: fileSize });
-        setPendingReceive(true);
-      } else {
-        console.error('❌ Invalid share link format');
-      }
+      // Fetch metadata from API
+      getMetadata(shortKey)
+        .then(metadata => {
+          console.log('📦 Retrieved metadata:', metadata);
+          setSenderPeerId(metadata.peerId);
+          setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize });
+          setPendingReceive(true);
+        })
+        .catch(error => {
+          console.error('❌ Failed to retrieve metadata:', error);
+          setStatus('error');
+        });
     } else if (!window.location.hash) {
       console.log('No hash present, setting share mode');
       setMode('share');
@@ -155,10 +148,22 @@ function App() {
           
           console.log('Created ZIP stream for:', zipFileName, formatFileSize(totalSize));
           
-          // Create share link with format: peerId:::fileName:fileSize:fileType
-          const shareLink = `${window.location.origin}${window.location.pathname}#${peerId}:::${encodeURIComponent(zipFileName)}:${totalSize}:application/zip`;
-          setShareLink(shareLink);
-          setStatus('waiting');
+          // Create short link via metadata API
+          try {
+            const shortKey = await createShortLink({
+              peerId: peerId!,
+              fileName: zipFileName,
+              fileSize: totalSize,
+              fileType: 'application/zip'
+            });
+            const shareLink = `${window.location.origin}${window.location.pathname}#${shortKey}`;
+            setShareLink(shareLink);
+            setStatus('waiting');
+          } catch (error) {
+            console.error('Failed to create short link:', error);
+            setStatus('error');
+            return;
+          }
           
           // Wait for receiver connection
           if (peer) {
@@ -206,10 +211,22 @@ function App() {
         throw new Error(`Invalid file: ${fileToTransfer.name} (0 bytes)`);
       }
       
-      // Create share link
-      const link = `${window.location.origin}${window.location.pathname}#${peerId}:::${encodeURIComponent(fileToTransfer.name)}:${fileToTransfer.size}:${encodeURIComponent(fileToTransfer.type)}`;
-      setShareLink(link);
-      setStatus('waiting');
+      // Create short link via metadata API
+      try {
+        const shortKey = await createShortLink({
+          peerId: peerId!,
+          fileName: fileToTransfer.name,
+          fileSize: fileToTransfer.size,
+          fileType: fileToTransfer.type
+        });
+        const link = `${window.location.origin}${window.location.pathname}#${shortKey}`;
+        setShareLink(link);
+        setStatus('waiting');
+      } catch (error) {
+        console.error('Failed to create short link:', error);
+        setStatus('error');
+        return;
+      }
       
       // Listen for incoming connection
       if (peer) {
@@ -232,11 +249,8 @@ function App() {
   };
 
   const handleChooseSaveLocation = async () => {
-    // Parse file info from hash to suggest filename
-    const hash = window.location.hash.substring(1);
-    const [, fileInfo] = hash.split(':::');
-    const parts = fileInfo ? fileInfo.split(':') : [];
-    const fileName = parts[0] ? decodeURIComponent(parts[0]) : 'download';
+    // Use incoming file info from metadata API
+    const fileName = incomingFileInfo?.name || 'download';
     
     // ALWAYS prompt for File System Access - never use RAM
     if ('showSaveFilePicker' in window) {
@@ -266,21 +280,14 @@ function App() {
   };
 
   const handleReceive = async () => {
-    const hash = window.location.hash.slice(1);
-    const [remotePeerId, fileInfo] = hash.split(':::');
-    
-    if (!fileInfo) {
+    // senderPeerId already set by metadata API
+    if (!senderPeerId) {
+      console.error('No sender peer ID available');
       setStatus('error');
       return;
     }
-
-    const parts = fileInfo.split(':');
-    const fileName = parts[0] ? decodeURIComponent(parts[0]) : 'download';
     
-    // Store sender's peer ID for resume functionality
-    setSenderPeerId(remotePeerId);
-    console.log('Connecting to sender:', remotePeerId);
-    
+    console.log('Connecting to sender:', senderPeerId);
     setStatus('connecting');
     
     try {
@@ -289,8 +296,8 @@ function App() {
         return;
       }
       
-      console.log('Connecting to remote peer:', remotePeerId);
-      const conn = connectToPeer(remotePeerId);
+      console.log('Connecting to remote peer:', senderPeerId);
+      const conn = connectToPeer(senderPeerId);
       if (!conn) {
         console.error('Failed to create connection');
         return;
@@ -333,7 +340,7 @@ function App() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = fileName;
+        a.download = incomingFileInfo?.name || 'download';
         a.click();
         URL.revokeObjectURL(url);
       }

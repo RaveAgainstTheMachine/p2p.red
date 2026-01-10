@@ -27,6 +27,7 @@ function App() {
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [pin, setPin] = useState<string>('');
+  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
@@ -82,8 +83,14 @@ function App() {
     }
   }, [peer, isConnected, connectionState]);
 
-  const handleFileSelect = async (files: FileList) => {
+  const handleFileSelect = (files: FileList) => {
+    setSelectedFiles(files);
+  };
+
+  const handleProceedWithTransfer = async () => {
+    if (!selectedFiles) return;
     setStatus('encrypting');
+    const files = selectedFiles;
     
     try {
       // Debug: Log all files received
@@ -465,16 +472,37 @@ function App() {
           <div className="glass-card p-8" style={{ minHeight: '200px' }}>
             {!shareLink ? (
               <div className="flex flex-col gap-6">
-                <DropZone 
-                  onFileSelect={handleFileSelect} 
-                  isProcessing={isEncrypting || status === 'encrypting'}
-                />
-                {status === 'encrypting' && (
-                  <PinInput 
-                    onPinChange={setPin}
-                    label="Optional 4-digit PIN"
-                    placeholder="Enter PIN (optional)"
+                {!selectedFiles ? (
+                  <DropZone 
+                    onFileSelect={handleFileSelect} 
+                    isProcessing={isEncrypting || status === 'encrypting'}
                   />
+                ) : (
+                  <>
+                    <div className="text-center text-white/80">
+                      <p className="mb-4">File selected. Optionally add a PIN for extra security.</p>
+                    </div>
+                    <PinInput 
+                      onPinChange={setPin}
+                      label="Optional 4-digit PIN"
+                      placeholder="Enter PIN (optional)"
+                    />
+                    <div className="flex gap-3 justify-center">
+                      <button
+                        onClick={() => setSelectedFiles(null)}
+                        className="btn-secondary"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleProceedWithTransfer}
+                        className="btn-primary"
+                        disabled={status === 'encrypting'}
+                      >
+                        {status === 'encrypting' ? 'Processing...' : 'Create Share Link'}
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             ) : (

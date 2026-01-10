@@ -121,6 +121,7 @@ function App() {
 
   const handleProceedWithTransfer = async () => {
     if (!selectedFiles) return;
+    console.log('🔐 PIN state before transfer:', { pin, hasPin: !!pin, pinLength: pin?.length });
     setStatus('encrypting');
     const files = selectedFiles;
     
@@ -191,12 +192,14 @@ function App() {
           
           // Create short link via metadata API
           try {
+            const pinToSend = pin && pin.length === 4 ? pin : undefined;
+            console.log('📤 Creating short link with PIN:', { hasPin: !!pinToSend, pinLength: pinToSend?.length });
             const shortKey = await createShortLink({
               peerId: peerId!,
               fileName: zipFileName,
               fileSize: totalSize,
               fileType: 'application/zip'
-            }, pin || undefined);
+            }, pinToSend);
             const shareLink = `${window.location.origin}${window.location.pathname}#${shortKey}`;
             setShareLink(shareLink);
             setStatus('waiting');
@@ -254,12 +257,14 @@ function App() {
       
       // Create short link via metadata API
       try {
+        const pinToSend = pin && pin.length === 4 ? pin : undefined;
+        console.log('📤 Creating short link with PIN:', { hasPin: !!pinToSend, pinLength: pinToSend?.length });
         const shortKey = await createShortLink({
           peerId: peerId!,
           fileName: fileToTransfer.name,
           fileSize: fileToTransfer.size,
           fileType: fileToTransfer.type
-        }, pin || undefined);
+        }, pinToSend);
         const link = `${window.location.origin}${window.location.pathname}#${shortKey}`;
         setShareLink(link);
         setStatus('waiting');

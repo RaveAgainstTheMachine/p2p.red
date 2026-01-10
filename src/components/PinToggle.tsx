@@ -18,8 +18,11 @@ export const PinToggle: React.FC<PinToggleProps> = ({ onPinChange }) => {
   useEffect(() => {
     if (enabled) {
       const pin = digits.join('');
-      onPinChange(pin.length === 4 ? pin : '');
+      const finalPin = pin.length === 4 ? pin : '';
+      console.log('🔢 PinToggle: PIN changed', { digits, pin, finalPin, enabled });
+      onPinChange(finalPin);
     } else {
+      console.log('🔢 PinToggle: PIN disabled');
       onPinChange('');
     }
   }, [digits, enabled, onPinChange]);

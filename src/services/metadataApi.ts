@@ -31,6 +31,12 @@ export async function createShortLink(metadata: TransferMetadata, pin?: string):
       payload.pin = pin;
     }
     
+    console.log('📡 createShortLink payload:', { 
+      ...payload, 
+      pin: payload.pin ? '****' : undefined,
+      hasPin: !!payload.pin 
+    });
+    
     const response = await fetch(`${API_BASE_URL}/metadata`, {
       method: 'POST',
       headers: {

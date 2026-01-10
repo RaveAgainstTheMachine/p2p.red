@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Share2, Copy, Check } from 'lucide-react';
+import { Share2, Copy, Check, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface ShareLinkProps {
   shareLink: string;
@@ -8,6 +9,7 @@ interface ShareLinkProps {
 
 export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   const handleCopy = async () => {
     try {
@@ -70,13 +72,30 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
         </button>
       </div>
       
-      <button
-        onClick={handleCopy}
-        className="btn-primary flex items-center gap-2"
-      >
-        <Share2 size={20} />
-        {copied ? 'Copied!' : 'Copy Link'}
-      </button>
+      <div className="flex gap-3">
+        <button
+          onClick={handleCopy}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Share2 size={20} />
+          {copied ? 'Copied!' : 'Copy Link'}
+        </button>
+        
+        <button
+          onClick={() => setShowQR(!showQR)}
+          className="btn-secondary flex items-center gap-2"
+          title="Show QR Code"
+        >
+          <QrCode size={20} />
+          QR Code
+        </button>
+      </div>
+      
+      {showQR && (
+        <div className="bg-white p-4 rounded-lg">
+          <QRCodeSVG value={shareLink} size={200} level="H" />
+        </div>
+      )}
       
       {copied && (
         <p className="text-green-400 text-sm">

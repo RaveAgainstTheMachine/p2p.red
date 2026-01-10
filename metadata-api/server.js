@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
 const redis = require('redis');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
@@ -130,7 +131,7 @@ app.post('/api/metadata', async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const { peerId, fileName, fileSize, fileType } = req.body;
+    const { peerId, fileName, fileSize, fileType, pin } = req.body;
     
     // Validation
     if (!peerId || !fileName || fileSize === undefined) {
@@ -176,12 +177,23 @@ app.post('/api/metadata', async (req, res) => {
     const expiryHours = parseInt(process.env.LINK_EXPIRY_HOURS) || 24;
     const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
     
+    // Hash PIN if provided (4 digits)
+    let pinHash = null;
+    if (pin) {
+      if (!/^\d{4}$/.test(pin)) {
+        return res.status(400).json({
+          error: 'PIN must be exactly 4 digits',
+        });
+      }
+      pinHash = await bcrypt.hash(pin, 10);
+    }
+    
     // Insert into database
     await client.query(
       `INSERT INTO short_links 
-       (short_key, peer_id, file_name, file_size, file_type, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [shortKey, peerId, fileName, fileSize, fileType || 'application/octet-stream', expiresAt]
+       (short_key, peer_id, file_name, file_size, file_type, pin_hash, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [shortKey, peerId, fileName, fileSize, fileType || 'application/octet-stream', pinHash, expiresAt]
     );
     
     // Cache in Redis with TTL
@@ -190,6 +202,7 @@ app.post('/api/metadata', async (req, res) => {
       fileName,
       fileSize,
       fileType: fileType || 'application/octet-stream',
+      hasPin: !!pinHash,
     });
     
     await redisClient.setEx(
@@ -215,10 +228,11 @@ app.post('/api/metadata', async (req, res) => {
   }
 });
 
-// Retrieve metadata (GET /api/metadata/:key)
+// Retrieve metadata (GET /api/metadata/:key?pin=1234)
 app.get('/api/metadata/:key', async (req, res) => {
   try {
     const { key } = req.params;
+    const { pin } = req.query;
     
     // Validation
     if (!key || key.length !== 16 || !/^[a-zA-Z0-9]{16}$/.test(key)) {
@@ -240,7 +254,7 @@ app.get('/api/metadata/:key', async (req, res) => {
     // Cache miss - query database
     console.log(`💾 Cache miss for key: ${key}, querying database`);
     const result = await pool.query(
-      `SELECT peer_id, file_name, file_size, file_type, expires_at
+      `SELECT peer_id, file_name, file_size, file_type, pin_hash, expires_at
        FROM short_links
        WHERE short_key = $1`,
       [key]
@@ -253,6 +267,23 @@ app.get('/api/metadata/:key', async (req, res) => {
     }
     
     const link = result.rows[0];
+    
+    // Check PIN if required
+    if (link.pin_hash) {
+      if (!pin) {
+        return res.status(401).json({
+          error: 'PIN required',
+          requiresPin: true,
+        });
+      }
+      
+      const pinValid = await bcrypt.compare(pin, link.pin_hash);
+      if (!pinValid) {
+        return res.status(403).json({
+          error: 'Invalid PIN',
+        });
+      }
+    }
     
     // Check expiration
     if (new Date(link.expires_at) < new Date()) {
@@ -277,6 +308,7 @@ app.get('/api/metadata/:key', async (req, res) => {
       fileName: link.file_name,
       fileSize: parseInt(link.file_size),
       fileType: link.file_type,
+      hasPin: !!link.pin_hash,
     };
     
     // Update cache

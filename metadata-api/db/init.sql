@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS short_links (
     file_name VARCHAR(500) NOT NULL,
     file_size BIGINT NOT NULL,
     file_type VARCHAR(100) DEFAULT 'application/octet-stream',
+    pin_hash VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     access_count INTEGER DEFAULT 0,

@@ -12,6 +12,8 @@ export interface TransferMetadata {
   fileName: string;
   fileSize: number;
   fileType: string;
+  pin?: string;
+  hasPin?: boolean;
 }
 
 export interface ShortLinkResponse {
@@ -22,14 +24,19 @@ export interface ShortLinkResponse {
 /**
  * Store transfer metadata and get short link key
  */
-export async function createShortLink(metadata: TransferMetadata): Promise<string> {
+export async function createShortLink(metadata: TransferMetadata, pin?: string): Promise<string> {
   try {
+    const payload = { ...metadata };
+    if (pin) {
+      payload.pin = pin;
+    }
+    
     const response = await fetch(`${API_BASE_URL}/metadata`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(metadata),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -49,13 +56,17 @@ export async function createShortLink(metadata: TransferMetadata): Promise<strin
 /**
  * Retrieve transfer metadata using short link key
  */
-export async function getMetadata(key: string): Promise<TransferMetadata> {
+export async function getMetadata(key: string, pin?: string): Promise<TransferMetadata> {
   try {
     if (!key || key.length !== 16 || !/^[a-zA-Z0-9]{16}$/.test(key)) {
       throw new Error('Invalid short link key format');
     }
 
-    const response = await fetch(`${API_BASE_URL}/metadata/${key}`);
+    const url = pin 
+      ? `${API_BASE_URL}/metadata/${key}?pin=${encodeURIComponent(pin)}`
+      : `${API_BASE_URL}/metadata/${key}`;
+    
+    const response = await fetch(url);
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -63,6 +74,15 @@ export async function getMetadata(key: string): Promise<TransferMetadata> {
       }
       if (response.status === 410) {
         throw new Error('Link has expired');
+      }
+      if (response.status === 401) {
+        const error = await response.json();
+        if (error.requiresPin) {
+          throw new Error('PIN_REQUIRED');
+        }
+      }
+      if (response.status === 403) {
+        throw new Error('Invalid PIN');
       }
       const error = await response.json();
       throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);

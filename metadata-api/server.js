@@ -133,14 +133,7 @@ app.post('/api/metadata', async (req, res) => {
   try {
     const { peerId, fileName, fileSize, fileType, pin } = req.body;
     
-    console.log('📥 Received metadata creation request:', {
-      peerId,
-      fileName,
-      fileSize,
-      fileType,
-      hasPin: !!pin,
-      pin: pin ? '****' : undefined
-    });
+    // Metadata creation - no user-identifiable logging
     
     // Validation
     if (!peerId || !fileName || fileSize === undefined) {
@@ -220,7 +213,7 @@ app.post('/api/metadata', async (req, res) => {
       cacheData
     );
     
-    console.log(`✅ Created short link: ${shortKey} for ${fileName} (${fileSize} bytes)`);
+    // Link created successfully - no user-identifiable logging
     
     res.status(201).json({
       key: shortKey,

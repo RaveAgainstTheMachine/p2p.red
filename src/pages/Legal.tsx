@@ -70,16 +70,20 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-3">Privacy & Data</h2>
+              <h2 className="text-xl font-semibold text-white mb-3">Privacy & Data (GDPR & Canada/Quebec Compliant)</h2>
               <p className="leading-relaxed mb-3">
-                We respect your privacy:
+                We are committed to privacy and comply with GDPR (EU), PIPEDA (Canada), and Law 25 (Quebec):
               </p>
               <ul className="list-disc list-inside space-y-2 ml-4">
-                <li>Files are transferred directly between peers (P2P)</li>
-                <li>We do not store, access, or monitor file contents</li>
-                <li>Metadata (filename, size, peer IDs) is temporarily stored for 24 hours</li>
-                <li>Share links expire after 24 hours</li>
-                <li>No user accounts or personal information required</li>
+                <li><strong>No Cookies:</strong> We use only localStorage for essential functionality (consent preferences, link expiry)</li>
+                <li><strong>No Tracking:</strong> No analytics, no third-party scripts, no user tracking</li>
+                <li><strong>True P2P:</strong> Files transferred directly between browsers, never stored on servers</li>
+                <li><strong>Minimal Data:</strong> Only metadata (filename, size, peer IDs) temporarily stored for 24 hours</li>
+                <li><strong>Automatic Deletion:</strong> All metadata automatically deleted after 24 hours</li>
+                <li><strong>No User Accounts:</strong> No registration, no personal information collected</li>
+                <li><strong>No Logs:</strong> We do not log IP addresses, file contents, or user-identifiable information</li>
+                <li><strong>Encryption Keys:</strong> Generated in your browser, never transmitted to or accessible by servers</li>
+                <li><strong>Right to Erasure:</strong> Data automatically erased after 24 hours (no manual request needed)</li>
               </ul>
             </section>
 

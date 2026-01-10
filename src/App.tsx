@@ -12,6 +12,8 @@ import { createShortLink, getMetadata } from './services/metadataApi';
 import { PinToggle } from './components/PinToggle';
 import { PinVerification } from './components/PinVerification';
 import { FileTypeWarning } from './components/FileTypeWarning';
+import { TrustBadges } from './components/TrustBadges';
+import { CookieBanner } from './components/CookieBanner';
 import { Legal } from './pages/Legal';
 import { Info } from './pages/Info';
 
@@ -519,6 +521,10 @@ function App() {
             Privacy-first file sharing with true peer-to-peer transfer
           </p>
           
+          <div className="mt-4">
+            <TrustBadges />
+          </div>
+          
           {/* Connection Status Alerts */}
           {!isOnline && (
             <div className="mt-4 bg-red-500/20 border-2 border-red-500 rounded-lg p-4 max-w-md mx-auto">
@@ -839,6 +845,9 @@ function App() {
           </div>
         </div>
       </footer>
+
+      {/* Cookie/Privacy Banner */}
+      <CookieBanner />
     </div>
   );
 }

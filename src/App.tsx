@@ -12,6 +12,9 @@ import { createStreamingZip } from './utils/streamingZip';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { PinToggle } from './components/PinToggle';
 import { PinVerification } from './components/PinVerification';
+import { FileTypeWarning } from './components/FileTypeWarning';
+import { Legal } from './pages/Legal';
+import { Info } from './pages/Info';
 
 function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
@@ -32,6 +35,7 @@ function App() {
   const [pinError, setPinError] = useState<string>('');
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
+  const [currentPage, setCurrentPage] = useState<'home' | 'legal' | 'info'>('home');
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
@@ -438,13 +442,22 @@ function App() {
   };
 
 
+  // Page routing
+  if (currentPage === 'legal') {
+    return <Legal onBack={() => setCurrentPage('home')} />;
+  }
+  
+  if (currentPage === 'info') {
+    return <Info onBack={() => setCurrentPage('home')} />;
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 flex flex-col">
       {/* Animated background */}
       <div className="fixed inset-0 bg-black/20" />
       <div className="fixed inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-pink-600/20 animate-gradient-shift" />
       
-      <div className="relative z-10 mx-auto px-4 py-6 max-w-7xl">
+      <div className="relative z-10 mx-auto px-4 py-6 max-w-7xl flex-1">
         {/* Header */}
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
@@ -651,6 +664,10 @@ function App() {
                     </div>
                   </div>
                   
+                  <div className="max-w-md mx-auto mb-6">
+                    <FileTypeWarning fileName={incomingFileInfo.name} />
+                  </div>
+                  
                   <button
                     onClick={handleChooseSaveLocation}
                     className="px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors shadow-lg"
@@ -729,6 +746,29 @@ function App() {
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="relative z-10 border-t border-white/10 mt-12">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-white/60 text-sm">
+            <p>© 2026 P2P File Share. Privacy-first file sharing.</p>
+            <div className="flex gap-6">
+              <button
+                onClick={() => setCurrentPage('info')}
+                className="hover:text-white transition-colors"
+              >
+                How It Works
+              </button>
+              <button
+                onClick={() => setCurrentPage('legal')}
+                className="hover:text-white transition-colors"
+              >
+                Legal & Privacy
+              </button>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -69,23 +69,28 @@ export async function getMetadata(key: string, pin?: string): Promise<TransferMe
     const response = await fetch(url);
 
     if (!response.ok) {
+      const error = await response.json();
+      
       if (response.status === 404) {
         throw new Error('Link not found or has expired');
       }
       if (response.status === 410) {
         throw new Error('Link has expired');
       }
-      if (response.status === 401) {
-        const error = await response.json();
-        if (error.requiresPin) {
-          throw new Error('PIN_REQUIRED');
-        }
+      if (response.status === 401 && error.requiresPin) {
+        const err: any = new Error('PIN_REQUIRED');
+        err.requiresPin = true;
+        throw err;
       }
       if (response.status === 403) {
-        throw new Error('Invalid PIN');
+        const err: any = new Error(error.message || 'Invalid PIN');
+        err.remainingAttempts = error.remainingAttempts;
+        throw err;
       }
-      const error = await response.json();
-      throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
+      if (response.status === 429) {
+        throw new Error(error.message || 'Too many PIN attempts. Please try again later.');
+      }
+      throw new Error(error.error || error.message || `HTTP ${response.status}: ${response.statusText}`);
     }
 
     const metadata: TransferMetadata = await response.json();

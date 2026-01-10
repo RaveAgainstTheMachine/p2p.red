@@ -241,6 +241,21 @@ app.get('/api/metadata/:key', async (req, res) => {
       });
     }
     
+    // Check rate limiting for PIN attempts
+    const rateLimitKey = `pin_attempts:${key}`;
+    const attempts = await redisClient.get(rateLimitKey);
+    const maxAttempts = 5;
+    const lockoutMinutes = 15;
+    
+    if (attempts && parseInt(attempts) >= maxAttempts) {
+      const ttl = await redisClient.ttl(rateLimitKey);
+      return res.status(429).json({
+        error: 'Too many PIN attempts',
+        retryAfter: ttl,
+        message: `Too many failed attempts. Try again in ${Math.ceil(ttl / 60)} minutes.`,
+      });
+    }
+    
     // Try cache first
     const cacheKey = getCacheKey(key);
     const cached = await redisClient.get(cacheKey);
@@ -279,10 +294,22 @@ app.get('/api/metadata/:key', async (req, res) => {
       
       const pinValid = await bcrypt.compare(pin, link.pin_hash);
       if (!pinValid) {
+        // Increment failed attempts
+        const currentAttempts = parseInt(attempts || '0') + 1;
+        await redisClient.setEx(rateLimitKey, lockoutMinutes * 60, currentAttempts.toString());
+        
+        const remainingAttempts = maxAttempts - currentAttempts;
         return res.status(403).json({
           error: 'Invalid PIN',
+          remainingAttempts: Math.max(0, remainingAttempts),
+          message: remainingAttempts > 0 
+            ? `Invalid PIN. ${remainingAttempts} attempts remaining.`
+            : `Too many failed attempts. Try again in ${lockoutMinutes} minutes.`,
         });
       }
+      
+      // Clear rate limit on successful PIN
+      await redisClient.del(rateLimitKey);
     }
     
     // Check expiration

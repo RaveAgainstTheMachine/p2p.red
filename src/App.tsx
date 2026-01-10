@@ -5,13 +5,13 @@ import { useFileTransfer } from './hooks/useFileTransfer';
 import { DropZone } from './components/DropZone';
 import { ShareLink } from './components/ShareLink';
 import { EnhancedProgressBar } from './components/EnhancedProgressBar';
-import { ConnectionStatus } from './components/ConnectionStatus';
 import { ResumeButton } from './components/ResumeButton';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { Download, Share2, Shield, CheckCircle, File } from 'lucide-react';
 import { createStreamingZip } from './utils/streamingZip';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { PinToggle } from './components/PinToggle';
+import { PinVerification } from './components/PinVerification';
 
 function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
@@ -28,6 +28,10 @@ function App() {
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [pin, setPin] = useState<string>('');
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [requiresPin, setRequiresPin] = useState<boolean>(false);
+  const [pinError, setPinError] = useState<string>('');
+  const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
+  const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
@@ -67,9 +71,13 @@ function App() {
           setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize });
           setPendingReceive(true);
         })
-        .catch(error => {
+        .catch((error: any) => {
           console.error('❌ Failed to retrieve metadata:', error);
-          setStatus('error');
+          if (error.requiresPin) {
+            setRequiresPin(true);
+          } else {
+            setStatus('error');
+          }
         });
     } else if (!window.location.hash) {
       console.log('No hash present, setting share mode');
@@ -85,6 +93,30 @@ function App() {
 
   const handleFileSelect = (files: FileList) => {
     setSelectedFiles(files);
+  };
+
+  const handlePinVerification = async (enteredPin: string) => {
+    setIsVerifyingPin(true);
+    setPinError('');
+    
+    const shortKey = window.location.hash.substring(1);
+    
+    try {
+      const metadata = await getMetadata(shortKey, enteredPin);
+      console.log('📦 Retrieved metadata with PIN:', metadata);
+      setSenderPeerId(metadata.peerId);
+      setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize });
+      setRequiresPin(false);
+      setPendingReceive(true);
+    } catch (error: any) {
+      console.error('❌ PIN verification failed:', error);
+      setPinError(error.message || 'Invalid PIN');
+      if (error.remainingAttempts !== undefined) {
+        setRemainingAttempts(error.remainingAttempts);
+      }
+    } finally {
+      setIsVerifyingPin(false);
+    }
   };
 
   const handleProceedWithTransfer = async () => {
@@ -417,15 +449,6 @@ function App() {
             Privacy-first file sharing with true peer-to-peer transfer
           </p>
           
-          {isConnected && (
-            <div className="mt-3 flex justify-center">
-              <ConnectionStatus 
-                status={isTransferring ? 'transferring' : 'connected'} 
-                speed={transferProgress.speed}
-              />
-            </div>
-          )}
-          
           {/* Connection Status Alerts */}
           {!isOnline && (
             <div className="mt-4 bg-red-500/20 border-2 border-red-500 rounded-lg p-4 max-w-md mx-auto">
@@ -468,7 +491,16 @@ function App() {
         />
 
         {/* Main Content */}
-        {mode === 'share' ? (
+        {requiresPin ? (
+          <div className="glass-card" style={{ minHeight: '200px' }}>
+            <PinVerification 
+              onVerify={handlePinVerification}
+              error={pinError}
+              remainingAttempts={remainingAttempts}
+              isVerifying={isVerifyingPin}
+            />
+          </div>
+        ) : mode === 'share' ? (
           <div className="glass-card p-8" style={{ minHeight: '200px' }}>
             {!shareLink ? (
               <>

@@ -40,6 +40,18 @@
   }
 }
 
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-5px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(5px);
+  }
+}
+
 .animate-gradient-shift {
   animation: gradient-shift 8s ease infinite;
   background-size: 200% 200%;
@@ -47,4 +59,8 @@
 
 .animate-shine {
   animation: shine 2s ease-in-out infinite;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
 }

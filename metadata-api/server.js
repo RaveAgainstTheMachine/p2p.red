@@ -133,6 +133,15 @@ app.post('/api/metadata', async (req, res) => {
   try {
     const { peerId, fileName, fileSize, fileType, pin } = req.body;
     
+    console.log('📥 Received metadata creation request:', {
+      peerId,
+      fileName,
+      fileSize,
+      fileType,
+      hasPin: !!pin,
+      pin: pin ? '****' : undefined
+    });
+    
     // Validation
     if (!peerId || !fileName || fileSize === undefined) {
       return res.status(400).json({

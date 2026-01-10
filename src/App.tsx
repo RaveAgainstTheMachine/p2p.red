@@ -400,7 +400,7 @@ function App() {
         // Start receive only after file handle is obtained
         setPendingReceive(false);
         await handleReceive(handle);
-        await startFileReceive();
+        await startFileReceive(handle);
       } catch (err) {
         console.error('User cancelled save dialog - cannot proceed without save location:', err);
         setStatus('error');
@@ -410,7 +410,7 @@ function App() {
       console.log('File System Access API not supported - using traditional download method');
       setPendingReceive(false);
       await handleReceive(null); // null handle triggers fallback download
-      await startFileReceive();
+      await startFileReceive(null);
     }
   };
 
@@ -430,14 +430,17 @@ function App() {
     console.log('📁 Ready to receive file, waiting for user to start download');
   };
 
-  const startFileReceive = async () => {
+  const startFileReceive = async (handle?: any) => {
     if (!senderPeerId) {
       console.error('❌ No sender peer ID');
       return;
     }
     
+    // Use passed handle or fall back to state
+    const activeHandle = handle !== undefined ? handle : fileHandle;
+    
     try {
-      console.log('Connecting to sender:', senderPeerId, 'with handle:', !!fileHandle);
+      console.log('Connecting to sender:', senderPeerId, 'with handle:', !!activeHandle);
       const conn = connectToPeer(senderPeerId);
       if (!conn) {
         console.error('Failed to create connection');
@@ -467,11 +470,11 @@ function App() {
       
       setStatus('transferring');
       console.log('Starting file receive...');
-      const received = await receiveFile(conn, new Set(), fileHandle);
+      const received = await receiveFile(conn, new Set(), activeHandle);
       console.log('File received:', received.name, received.size);
       
       // For streaming writes, file is already on disk
-      if (fileHandle) {
+      if (activeHandle) {
         setStatus('complete');
         console.log('✅ File saved successfully');
       } else {

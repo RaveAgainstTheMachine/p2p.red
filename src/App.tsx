@@ -28,7 +28,7 @@ function App() {
   const [senderPeerId, setSenderPeerId] = useState<string>('');
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
-  const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string} | null>(null);
+  const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string; fileType?: string} | null>(null);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [pin, setPin] = useState<string>('');
@@ -106,7 +106,7 @@ function App() {
         .then(metadata => {
           console.log('📦 Retrieved metadata:', metadata);
           setSenderPeerId(metadata.peerId);
-          setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize, expiresAt: metadata.expiresAt });
+          setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize, expiresAt: metadata.expiresAt, fileType: metadata.fileType });
           setPendingReceive(true);
         })
         .catch((error: any) => {
@@ -143,7 +143,7 @@ function App() {
       const metadata = await getMetadata(shortKey, enteredPin);
       console.log('📦 Retrieved metadata with PIN:', metadata);
       setSenderPeerId(metadata.peerId);
-      setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize, expiresAt: metadata.expiresAt });
+      setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize, expiresAt: metadata.expiresAt, fileType: metadata.fileType });
       setRequiresPin(false);
       setPendingReceive(true);
     } catch (error: any) {
@@ -324,6 +324,76 @@ function App() {
           });
         }
         return;
+      } else if (!enableZip && (files.length > 1 || isFolderSelection)) {
+        // Multiple files or folder without ZIP - send them individually
+        console.log('Multiple files/folder without ZIP, sending individually');
+        
+        // Calculate total size for metadata
+        let totalSize = 0;
+        for (let i = 0; i < files.length; i++) {
+          totalSize += files[i].size;
+        }
+        
+        // Create short link via metadata API
+        try {
+          const pinToSend = pin && pin.length === 4 ? pin : undefined;
+          console.log('📤 Creating short link with PIN:', { hasPin: !!pinToSend, pinLength: pinToSend?.length });
+          // Determine display name
+          let displayName: string;
+          if (isFolderSelection) {
+            // Get folder name from first file's path
+            displayName = 'folder';
+            if (files.length > 0 && files[0].webkitRelativePath) {
+              const pathParts = files[0].webkitRelativePath.split('/');
+              if (pathParts.length > 1) {
+                displayName = `${pathParts[0]} (folder)`;
+              }
+            }
+          } else {
+            displayName = `${files.length} files`;
+          }
+          
+          const shortKey = await createShortLink({
+            peerId: peerId!,
+            fileName: displayName,
+            fileSize: totalSize,
+            fileType: isFolderSelection ? 'folder/files' : 'multiple/files'
+          }, pinToSend);
+          const shareLink = `${window.location.origin}${window.location.pathname}#${shortKey}`;
+          setShareLink(shareLink);
+          setStatus('waiting');
+        } catch (error) {
+          console.error('Failed to create short link:', error);
+          setStatus('error');
+          return;
+        }
+        
+        // Wait for receiver connection
+        if (peer) {
+          peer.on('connection', async (conn) => {
+            console.log('Sender: Incoming connection from receiver:', conn.peer);
+            conn.on('open', async () => {
+              console.log('Sender: Connection open, starting multiple file transfer');
+              setShowEncryptionIndicator(true);
+              setIsEncryptedConnection(true);
+              setStatus('transferring');
+              try {
+                // Send all files sequentially
+                for (let i = 0; i < files.length; i++) {
+                  console.log(`Sending file ${i + 1}/${files.length}: ${files[i].name}`);
+                  await sendFile(conn, files[i]);
+                  // Small delay between files
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                setStatus('complete');
+              } catch (error) {
+                console.error('Multiple file transfer failed:', error);
+                setStatus('error');
+              }
+            });
+          });
+        }
+        return; // Exit early, don't use normal file transfer flow
       } else {
         // Single file without ZIP
         console.log('Single file without ZIP, using directly');
@@ -470,16 +540,83 @@ function App() {
       
       setStatus('transferring');
       console.log('Starting file receive...');
-      const received = await receiveFile(conn, new Set(), activeHandle);
-      console.log('File received:', received.name, received.size);
       
-      // For streaming writes, file is already on disk
-      if (activeHandle) {
-        setStatus('complete');
-        console.log('✅ File saved successfully');
+      // Check if this is multiple files or folder
+      const fileType = incomingFileInfo?.fileType;
+      if (fileType === 'multiple/files' || fileType === 'folder/files') {
+        console.log('Receiving multiple files/folder without ZIP');
+        
+        if (!activeHandle) {
+          // For traditional download, we need to handle multiple files differently
+          console.log('Traditional download for multiple files not yet supported');
+          setStatus('error');
+          return;
+        }
+        
+        // For File System Access API, we can create a directory
+        try {
+          const dirHandle = await (window as any).showDirectoryPicker({
+            mode: 'readwrite'
+          });
+          
+          let fileCount = 0;
+          let currentFileHandle: any = null;
+          let currentWritable: any = null;
+          
+          conn.on('data', async (data: any) => {
+            if (data.type === 'metadata') {
+              // Close previous file if open
+              if (currentWritable) {
+                await currentWritable.close();
+                currentWritable = null;
+              }
+              
+              // Create new file in directory
+              currentFileHandle = await dirHandle.getFileHandle(data.name, { create: true });
+              currentWritable = await currentFileHandle.createWritable();
+              fileCount++;
+              
+              console.log(`📁 Receiving file ${fileCount}: ${data.name}`);
+              
+              // Send acknowledgment
+              conn.send({ type: 'file_ready', transferId: data.transferId });
+            } else if (data.type === 'chunk' && currentWritable) {
+              // Write chunk to current file
+              await currentWritable.write(data.data);
+              
+              // Update progress (approximate)
+              const fileCountStr = incomingFileInfo?.name?.match(/\d+/)?.[0] || '1';
+              const progress = (fileCount / parseInt(fileCountStr)) * 100;
+              console.log(`Progress: ${fileCount}/${fileCountStr} files (${Math.round(progress)}%)`);
+            } else if (data.type === 'complete') {
+              // Close last file
+              if (currentWritable) {
+                await currentWritable.close();
+                currentWritable = null;
+              }
+              
+              console.log(`✅ All ${fileCount} files received successfully`);
+              setStatus('complete');
+            }
+          });
+          
+        } catch (error) {
+          console.error('Failed to create directory for multiple files:', error);
+          setStatus('error');
+        }
       } else {
-        // Traditional download - file is already handled in receiveFile
-        setStatus('complete');
+        // Single file
+        const received = await receiveFile(conn, new Set(), activeHandle);
+        console.log('File received:', received.name, received.size);
+        
+        // For streaming writes, file is already on disk
+        if (activeHandle) {
+          setStatus('complete');
+          console.log('✅ File saved successfully');
+        } else {
+          // Traditional download - file is already handled in receiveFile
+          setStatus('complete');
+        }
       }
       
       setStatus('complete');

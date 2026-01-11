@@ -7,6 +7,7 @@ import { ShareLink } from './components/ShareLink';
 import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { ResumeButton } from './components/ResumeButton';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
+import { FileStructure } from './components/FileStructure';
 import { Download, Share2, Shield, CheckCircle, File, Check } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
@@ -760,19 +761,19 @@ function App() {
                 {selectedFiles && (
                   <div className="flex flex-col gap-6 mt-6">
                     {/* File Details */}
-                    <div className="flex items-center justify-center gap-3 text-white/80">
-                      <File size={20} className="text-blue-400" />
-                      <div className="text-center">
-                        <p className="font-medium">{selectedFiles[0].name}</p>
-                        <p className="text-sm text-white/60">
-                          {formatFileSize(selectedFiles.length > 1 
-                            ? Array.from(selectedFiles).reduce((sum, f) => sum + f.size, 0)
-                            : selectedFiles[0].size
-                          )}
-                          {selectedFiles.length > 1 && ` • ${selectedFiles.length} files`}
-                        </p>
+                    {selectedFiles.length === 1 ? (
+                      <div className="flex items-center justify-center gap-3 text-white/80">
+                        <File size={20} className="text-blue-400" />
+                        <div className="text-center">
+                          <p className="font-medium">{selectedFiles[0].name}</p>
+                          <p className="text-sm text-white/60">
+                            {formatFileSize(selectedFiles[0].size)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <FileStructure files={selectedFiles} />
+                    )}
 
                     {/* ZIP Toggle */}
                     <div className="flex items-center justify-center gap-2 text-white/80">

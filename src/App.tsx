@@ -867,7 +867,6 @@ function App() {
                 {status === 'waiting' && (
                   <div className="text-center">
                     <div className="flex flex-col items-center gap-4">
-                      <Logo size="medium" />
                       <div className="inline-flex items-center gap-2 text-white/60">
                         <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                         <span>Waiting for recipient to connect...</span>
@@ -878,9 +877,6 @@ function App() {
                 
                 {status === 'transferring' && (
                   <div className="w-full">
-                    <div className="flex justify-center mb-4">
-                      <Logo size="medium" />
-                    </div>
                     <EnhancedProgressBar 
                       progress={transferProgress} 
                       label="Transferring file" 

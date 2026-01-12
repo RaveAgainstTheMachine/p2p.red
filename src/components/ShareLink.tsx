@@ -173,7 +173,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
           </button>
           <button
             onClick={() => handleSocialShare('facebook')}
-            className="p-2 rounded-lg bg-[#1877F2] hover:bg-[#1565C0] transition-colors"
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
             title="Share on Facebook"
           >
             <svg className="w-[18px] h-[18px] text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -182,7 +182,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
           </button>
           <button
             onClick={() => handleSocialShare('twitter')}
-            className="p-2 rounded-lg bg-black hover:bg-gray-800 transition-colors"
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
             title="Share on X (Twitter)"
           >
             <svg className="w-[18px] h-[18px] text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -191,7 +191,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
           </button>
           <button
             onClick={() => handleSocialShare('whatsapp')}
-            className="p-2 rounded-lg bg-[#25D366] hover:bg-[#1EBE57] transition-colors"
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
             title="Share on WhatsApp"
           >
             <svg className="w-[18px] h-[18px] text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -200,7 +200,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
           </button>
           <button
             onClick={() => handleSocialShare('telegram')}
-            className="p-2 rounded-lg bg-[#0088cc] hover:bg-[#0077b5] transition-colors"
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
             title="Share on Telegram"
           >
             <svg className="w-[18px] h-[18px] text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -209,7 +209,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
           </button>
           <button
             onClick={() => handleSocialShare('discord')}
-            className="p-2 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] transition-colors"
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
             title="Copy for Discord"
           >
             <svg className="w-[18px] h-[18px] text-white" fill="currentColor" viewBox="0 0 24 24">

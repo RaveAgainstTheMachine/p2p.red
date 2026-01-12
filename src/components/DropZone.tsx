@@ -124,8 +124,10 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
           const relativePath = file.webkitRelativePath;
           const pathParts = relativePath.split('/');
           
+          console.log('Processing file:', relativePath, 'pathParts:', pathParts, 'length:', pathParts.length);
+          
           // Build directory structure - only add directories that are direct children of root
-          if (pathParts.length > 1) {
+          if (pathParts.length > 2) { // Only if there are subdirectories beyond the root
             const dirName = pathParts[1]; // Only process first level subdirectories
             const fullPath = dirName;
             
@@ -146,8 +148,8 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
             }
           }
           
-          // Add file only if it's directly in the root directory
-          if (pathParts.length === 2) { // Only root level files
+          // Add file only if it's directly in the root directory (no subdirectories)
+          if (pathParts.length === 2) { // Only root level files: "foldername/filename.ext"
             const fileKey = relativePath;
             if (!processedFiles.has(fileKey)) {
               rootItems.push({
@@ -196,8 +198,10 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
             const remainingPath = relativePath.substring(currentDirPath.length + 1);
             const subPathParts = remainingPath.split('/');
             
+            console.log('Navigating file:', relativePath, 'remainingPath:', remainingPath, 'subPathParts:', subPathParts, 'length:', subPathParts.length);
+            
             // Build subdirectory structure - only direct children
-            if (subPathParts.length > 1) {
+            if (subPathParts.length > 1) { // Only if there are subdirectories
               const dirName = subPathParts[0]; // Only first level subdirectory
               const fullPath = dirName;
               
@@ -219,7 +223,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
             }
             
             // Add file only if it's directly in this directory
-            if (subPathParts.length === 1) {
+            if (subPathParts.length === 1) { // Only files directly in this directory
               const fileKey = relativePath;
               if (!processedFiles.has(fileKey)) {
                 subItems.push({

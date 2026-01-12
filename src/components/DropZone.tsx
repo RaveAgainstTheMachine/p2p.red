@@ -316,6 +316,12 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const calculateTotalSize = useCallback((): number => {
+    return items
+      .filter(item => !item.isDirectory && item.file)
+      .reduce((total, item) => total + (item.file?.size || 0), 0);
+  }, [items]);
+
   // Folder Selection View (inline, no modal)
   if (showFolderSelection) {
     return (
@@ -400,39 +406,55 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
           </div>
         </div>
 
-        {/* File List */}
-        <div className="min-h-[300px] max-h-[400px] overflow-y-auto">
-          <div className="space-y-1">
-            {items.map((item, index) => (
-              <div
-                key={index}
-                onClick={() => item.isDirectory && navigateToDirectory(item)}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                  item.isDirectory 
-                    ? 'hover:bg-white/10 cursor-pointer' 
-                    : 'bg-white/5'
-                }`}
-              >
-                <div className="flex items-center gap-2 flex-1">
-                  {item.isDirectory ? (
-                    <ChevronRight size={16} className="text-white/40" />
-                  ) : (
-                    <div className="w-4" />
+        {/* File List with Locked Header */}
+        <div className="flex flex-col h-[400px]">
+          {/* Locked Header */}
+          <div className="bg-white/5 border-b border-white/10 px-4 py-3 sticky top-0 z-10">
+            <div className="flex items-center justify-between text-white/80 text-sm">
+              <span className="font-medium">
+                {items.filter(i => !i.isDirectory).length} files
+                {items.filter(i => i.isDirectory).length > 0 && `, ${items.filter(i => i.isDirectory).length} folders`}
+              </span>
+              <span className="text-white/60">
+                Total: {formatFileSize(calculateTotalSize())}
+              </span>
+            </div>
+          </div>
+          
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="space-y-1">
+              {items.map((item, index) => (
+                <div
+                  key={index}
+                  onClick={() => item.isDirectory && navigateToDirectory(item)}
+                  className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                    item.isDirectory 
+                      ? 'hover:bg-white/10 cursor-pointer' 
+                      : 'bg-white/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 flex-1">
+                    {item.isDirectory ? (
+                      <ChevronRight size={16} className="text-white/40" />
+                    ) : (
+                      <div className="w-4" />
+                    )}
+                    {item.isDirectory ? (
+                      <Folder size={18} className="text-blue-400" />
+                    ) : (
+                      <File size={18} className="text-white/60" />
+                    )}
+                    <span className="text-white/90">{item.name}</span>
+                  </div>
+                  {!item.isDirectory && item.file && (
+                    <span className="text-white/50 text-sm">
+                      {formatFileSize(item.file.size)}
+                    </span>
                   )}
-                  {item.isDirectory ? (
-                    <Folder size={18} className="text-blue-400" />
-                  ) : (
-                    <File size={18} className="text-white/60" />
-                  )}
-                  <span className="text-white/90">{item.name}</span>
                 </div>
-                {!item.isDirectory && item.file && (
-                  <span className="text-white/50 text-sm">
-                    {formatFileSize(item.file.size)}
-                  </span>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 

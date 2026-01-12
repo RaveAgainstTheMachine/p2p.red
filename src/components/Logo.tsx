@@ -23,21 +23,14 @@ export const Logo: React.FC<LogoProps> = ({ size = 'medium', className = '' }) =
         xmlns="http://www.w3.org/2000/svg"
         className="w-full h-full"
       >
-        <defs>
-          <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style={{stopColor:'#60A5FA', stopOpacity:1}} />
-            <stop offset="100%" style={{stopColor:'#3B82F6', stopOpacity:1}} />
-          </linearGradient>
-        </defs>
-        
         <text 
           x="60" 
           y={height * 0.7} 
-          fontFamily="system-ui, -apple-system, sans-serif" 
+          fontFamily="Arial, sans-serif" 
           fontSize={fontSize} 
-          fontWeight="700" 
+          fontWeight="bold" 
           textAnchor="middle" 
-          fill="url(#logoGradient)"
+          fill="#60A5FA"
         >
           P2P
         </text>

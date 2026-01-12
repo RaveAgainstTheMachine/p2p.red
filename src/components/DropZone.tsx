@@ -322,11 +322,6 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
     return (
       <div className="w-full p-8 border-2 border-dashed border-white/30 rounded-xl bg-white/5">
         <div className="flex flex-col items-center justify-center gap-6">
-          <div className="flex items-center gap-3 text-white/80">
-            <Folder size={32} className="text-blue-400" />
-            <h2 className="text-xl font-semibold">Select Folder to Share</h2>
-          </div>
-          
           <div className="bg-white/5 rounded-lg p-4 border border-white/10 max-w-md w-full">
             <div className="flex items-center gap-3 text-white/80 mb-2">
               <HardDrive size={20} className="text-blue-400" />

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
 import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
-import { FileBrowser } from './components/FileBrowser';
+import { DropZone } from './components/DropZone';
 import { ShareLink } from './components/ShareLink';
 import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { ResumeButton } from './components/ResumeButton';
@@ -795,7 +795,7 @@ function App() {
           <div className="glass-card p-8" style={{ minHeight: '200px' }}>
             {!shareLink ? (
               <>
-                <FileBrowser 
+                <DropZone 
                   onFileSelect={handleFileSelect} 
                   isProcessing={isEncrypting || status === 'encrypting'}
                 />

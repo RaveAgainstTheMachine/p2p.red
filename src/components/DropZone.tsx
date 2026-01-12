@@ -407,7 +407,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
         </div>
 
         {/* File List with Locked Header */}
-        <div className="flex flex-col h-[400px]">
+        <div className="flex flex-col h-[400px] relative">
           {/* Locked Header */}
           <div className="bg-white/5 border-b border-white/10 px-4 py-3 sticky top-0 z-10">
             <div className="flex items-center justify-between text-white/80 text-sm">
@@ -455,18 +455,6 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-4 pt-4 border-t border-white/10">
-          <div className="flex items-center justify-between text-white/60 text-sm">
-            <span>
-              {items.length} items ({items.filter(i => i.isDirectory).length} folders, {items.filter(i => !i.isDirectory).length} files)
-            </span>
-            {currentPath.length > 0 && (
-              <span>Current: {currentPath.join(' / ')}</span>
-            )}
           </div>
         </div>
       </div>

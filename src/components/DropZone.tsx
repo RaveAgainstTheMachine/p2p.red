@@ -180,12 +180,11 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
       // Mock directory from file input
       const subItems: FileSystemItem[] = [];
       const processedDirs = new Set<string>();
+      const currentDirPath = item.entry.fullPath || '';
       
       for (const file of item.entry.files as File[]) {
         const relativePath = file.webkitRelativePath;
         if (relativePath) {
-          const currentDirPath = item.entry.fullPath || '';
-          
           // Check if file is in this directory
           if (relativePath.startsWith(currentDirPath + '/')) {
             const remainingPath = relativePath.substring(currentDirPath.length + 1);
@@ -215,7 +214,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
               subCurrentPath = fullPath;
             }
             
-            // Add file if it's directly in this directory
+            // Add file if it's directly in this directory (no more subdirectories)
             if (subPathParts.length === 1) {
               subItems.push({
                 name: file.name,

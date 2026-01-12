@@ -15,14 +15,18 @@ export const Logo: React.FC<LogoProps> = ({ size = 'medium', className = '' }) =
   const { width, height } = sizeMap[size];
 
   return (
-    <div className={`inline-block ${className}`} style={{ width: `${width}px`, height: `${height}px` }}>
+    <div className={`inline-block ${className}`}>
       <img 
         src="/logo.svg" 
         alt="P2P.RED Logo"
         width={width}
         height={height}
         className="w-full h-full"
-        style={{ objectFit: 'contain' }}
+        style={{ 
+          objectFit: 'contain',
+          width: `${width}px`,
+          height: `${height}px`
+        }}
       />
     </div>
   );

@@ -20,6 +20,92 @@ import { Monitoring } from './components/Monitoring';
 import { Legal } from './pages/Legal';
 import { Info } from './pages/Info';
 
+// Meta tag management for rich link previews
+const updateMetaTags = (metadata: any) => {
+  // Update title
+  document.title = `${metadata.fileName} - P2P File Share`;
+  
+  // Update or create Open Graph meta tags
+  const updateMetaTag = (property: string, content: string) => {
+    let tag = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
+    if (!tag) {
+      tag = document.createElement('meta');
+      tag.setAttribute('property', property);
+      document.head.appendChild(tag);
+    }
+    tag.content = content;
+  };
+  
+  const updateMetaName = (name: string, content: string) => {
+    let tag = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
+    if (!tag) {
+      tag = document.createElement('meta');
+      tag.setAttribute('name', name);
+      document.head.appendChild(tag);
+    }
+    tag.content = content;
+  };
+  
+  // Update Open Graph tags
+  updateMetaTag('og:type', 'website');
+  updateMetaTag('og:url', `${window.location.origin}${window.location.pathname}${window.location.hash}`);
+  updateMetaTag('og:title', `${metadata.fileName} - Shared via P2P`);
+  updateMetaTag('og:description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with P2P encryption. Download directly from sender.`);
+  updateMetaTag('og:site_name', 'p2p.red');
+  
+  // Update Twitter Card tags
+  updateMetaName('twitter:card', 'summary');
+  updateMetaName('twitter:url', `${window.location.origin}${window.location.pathname}${window.location.hash}`);
+  updateMetaName('twitter:title', `${metadata.fileName} - Shared via P2P`);
+  updateMetaName('twitter:description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with P2P encryption.`);
+  
+  // Update basic meta description
+  updateMetaName('description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage.`);
+};
+
+const resetMetaTags = () => {
+  // Reset to default meta tags
+  document.title = 'P2P File Share - Secure Peer-to-Peer File Sharing';
+  
+  const updateMetaTag = (property: string, content: string) => {
+    let tag = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
+    if (tag) {
+      tag.content = content;
+    }
+  };
+  
+  const updateMetaName = (name: string, content: string) => {
+    let tag = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
+    if (tag) {
+      tag.content = content;
+    }
+  };
+  
+  // Reset Open Graph tags
+  updateMetaTag('og:type', 'website');
+  updateMetaTag('og:url', 'https://p2p.red/');
+  updateMetaTag('og:title', 'P2P File Share - Secure File Sharing');
+  updateMetaTag('og:description', 'Share files securely with end-to-end encryption. True peer-to-peer transfer, no server storage.');
+  updateMetaTag('og:site_name', 'p2p.red');
+  
+  // Reset Twitter Card tags
+  updateMetaName('twitter:card', 'summary');
+  updateMetaName('twitter:url', 'https://p2p.red/');
+  updateMetaName('twitter:title', 'P2P File Share - Secure File Sharing');
+  updateMetaName('twitter:description', 'Share files securely with end-to-end encryption. True peer-to-peer transfer, no server storage.');
+  
+  // Reset basic meta description
+  updateMetaName('description', 'Share files securely with end-to-end encryption. True peer-to-peer transfer, no server storage, no tracking.');
+};
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
 function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
   const { isEncrypting } = useEncryption();
@@ -42,14 +128,6 @@ function App() {
   const [currentPage, setCurrentPage] = useState<'home' | 'legal' | 'info'>('home');
   const [enableZip, setEnableZip] = useState<boolean>(true);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
 
   const copyShareLinkToClipboard = async (link: string) => {
     try {
@@ -104,7 +182,6 @@ function App() {
       hasPeer: !!peer,
       isConnected,
       connectionState,
-      currentMode: mode
     });
     
     // Auto-detect mode: receive if hash present, otherwise share
@@ -117,16 +194,25 @@ function App() {
       
       // Fetch metadata from API
       getMetadata(shortKey)
-        .then(metadata => {
-          console.log('📦 Retrieved metadata:', metadata);
-          setSenderPeerId(metadata.peerId);
-          setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize, expiresAt: metadata.expiresAt, fileType: metadata.fileType });
+        .then((metadata) => {
+          console.log('📄 Metadata received:', metadata);
+          setIncomingFileInfo({
+            name: metadata.fileName,
+            size: metadata.fileSize,
+            expiresAt: metadata.expiresAt,
+            fileType: metadata.fileType
+          });
           setPendingReceive(true);
+          setStatus('idle');
+          
+          // Update meta tags for rich link preview
+          updateMetaTags(metadata);
         })
-        .catch((error: any) => {
-          console.error('❌ Failed to retrieve metadata:', error);
-          if (error.requiresPin) {
+        .catch((error) => {
+          console.error('❌ Failed to fetch metadata:', error);
+          if (error.response?.status === 401) {
             setRequiresPin(true);
+            setStatus('idle');
           } else {
             setStatus('error');
           }
@@ -134,14 +220,12 @@ function App() {
     } else if (!window.location.hash) {
       console.log('No hash present, setting share mode');
       setMode('share');
+      // Reset meta tags to default
+      resetMetaTags();
     } else {
-      console.log('⏳ Waiting for peer connection...', {
-        hasPeer: !!peer,
-        isConnected,
-        connectionState
-      });
+      console.log('Hash present but peer not ready, waiting...');
     }
-  }, [peer, isConnected, connectionState]);
+  }, [window.location.hash, peer, isConnected]);
 
   const handleFileSelect = (files: File[]) => {
     setSelectedFiles(files as any);

@@ -163,6 +163,13 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
           }
         }
         
+        // Add the root folder itself as a directory entry if we haven't added any subdirectories
+        if (processedDirs.size === 0 && processedFiles.size > 0) {
+          // This means we have files directly in the root folder, so show the root folder
+          // But we're already IN the root folder, so we don't need to show it as a subdirectory
+          // The UI should show we're browsing the root folder with its contents
+        }
+        
         // Sort and set items
         const sortedItems = rootItems.sort((a, b) => {
           if (a.isDirectory && !b.isDirectory) return -1;
@@ -424,8 +431,17 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
           <div className="bg-white/5 border-b border-white/10 px-4 py-3 sticky top-0 z-10">
             <div className="flex items-center justify-between text-white/80 text-sm">
               <span className="font-medium">
-                {items.filter(i => !i.isDirectory).length} files
-                {items.filter(i => i.isDirectory).length > 0 && `, ${items.filter(i => i.isDirectory).length} folders`}
+                {currentPath.length > 0 ? (
+                  <>
+                    {currentPath.length} folder{currentPath.length > 1 ? 's' : ''} 
+                    {items.filter(i => !i.isDirectory).length > 0 && `, ${items.filter(i => !i.isDirectory).length} file${items.filter(i => !i.isDirectory).length > 1 ? 's' : ''}`}
+                  </>
+                ) : (
+                  <>
+                    {items.filter(i => !i.isDirectory).length} file{items.filter(i => !i.isDirectory).length > 1 ? 's' : ''}
+                    {items.filter(i => i.isDirectory).length > 0 && `, ${items.filter(i => i.isDirectory).length} folder${items.filter(i => i.isDirectory).length > 1 ? 's' : ''}`}
+                  </>
+                )}
               </span>
               <span className="text-white/60">
                 Total: {formatFileSize(calculateTotalSize())}

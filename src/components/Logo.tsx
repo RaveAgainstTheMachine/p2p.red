@@ -7,9 +7,9 @@ interface LogoProps {
 
 export const Logo: React.FC<LogoProps> = ({ size = 'medium', className = '' }) => {
   const sizeMap = {
-    small: { width: 32, height: 10 },
-    medium: { width: 48, height: 16 },
-    large: { width: 64, height: 19 }
+    small: { width: 81, height: 99 },
+    medium: { width: 162, height: 198 },
+    large: { width: 324, height: 397 }
   };
 
   const { width, height } = sizeMap[size];

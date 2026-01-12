@@ -852,7 +852,6 @@ function App() {
                       >
                         {status === 'encrypting' ? (
                           <div className="flex items-center gap-2">
-                            <Logo size="small" />
                             <span>Processing...</span>
                           </div>
                         ) : 'Create Share Link'}

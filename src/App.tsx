@@ -1026,7 +1026,7 @@ function App() {
             <span className="text-white/40">•</span>
             <span className="text-white/60">© 2026 p2p.red</span>
             <span className="text-white/40">•</span>
-            <span className="text-white/50">Logo by <a href="https://cv.tee215.com/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors">Talal Al-Saymaree</a></span>
+            <span className="text-white/50">Logo inspired by <a href="https://cv.tee215.com/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors">Talal Al-Saymaree</a></span>
           </div>
         </div>
       </footer>

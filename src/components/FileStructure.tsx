@@ -122,7 +122,10 @@ export const FileStructure: React.FC<FileStructureProps> = ({ files, maxFiles = 
                 <div key={index} className="flex items-center gap-2 py-1 px-2 hover:bg-white/5 rounded transition-colors">
                   {getFileIcon(file.name, file.type)}
                   <span className="text-white/70 text-sm flex-1 truncate" title={file.name}>
-                    {folder !== '/' ? file.name.split('/').slice(1).join('/') : file.name}
+                    {file.webkitRelativePath ? 
+                      (folder !== '/' ? file.webkitRelativePath.split('/').slice(1).join('/') : file.webkitRelativePath) 
+                      : file.name
+                    }
                   </span>
                   <span className="text-white/50 text-xs">
                     {formatFileSize(file.size)}

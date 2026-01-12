@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Upload, Folder, File, ArrowLeft, ChevronRight } from 'lucide-react';
+import { Upload, Folder, File, ArrowLeft, ChevronRight, X, HardDrive } from 'lucide-react';
 
 interface DropZoneProps {
   onFileSelect: (files: File[]) => void;
@@ -18,6 +18,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
   const [currentPath, setCurrentPath] = useState<string[]>([]);
   const [items, setItems] = useState<FileSystemItem[]>([]);
   const [isBrowsing, setIsBrowsing] = useState(false);
+  const [showFolderDialog, setShowFolderDialog] = useState(false);
 
   const readDirectory = async (entry: any, path: string = ''): Promise<File[]> => {
     const files: File[] = [];
@@ -284,6 +285,30 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
     }
   }, [items, onFileSelect]);
 
+  const handleBrowseClick = useCallback(() => {
+    setShowFolderDialog(true);
+  }, []);
+
+  const handleFolderDialogSelect = useCallback(() => {
+    // Trigger the actual folder selection
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.setAttribute('webkitdirectory', '');
+    input.onchange = (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files && files.length > 0) {
+        handleFileInput(e as any);
+      }
+      setShowFolderDialog(false);
+    };
+    input.click();
+  }, [handleFileInput]);
+
+  const handleFolderDialogCancel = useCallback(() => {
+    setShowFolderDialog(false);
+  }, []);
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -291,6 +316,65 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
+
+  // Custom Folder Selection Dialog
+  if (showFolderDialog) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="bg-gray-900 border border-white/20 rounded-2xl p-6 max-w-md w-full mx-4">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              <Folder size={24} className="text-blue-400" />
+              Select Folder
+            </h2>
+            <button
+              onClick={handleFolderDialogCancel}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            >
+              <X size={20} className="text-white/60" />
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <div className="flex items-center gap-3 text-white/80 mb-2">
+                <HardDrive size={20} className="text-blue-400" />
+                <span className="font-medium">Choose a folder to share</span>
+              </div>
+              <p className="text-white/60 text-sm">
+                Select a folder containing files you want to share. All files and subfolders will be included.
+              </p>
+            </div>
+            
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+              <div className="flex items-start gap-2">
+                <div className="w-2 h-2 bg-blue-400 rounded-full mt-1.5 flex-shrink-0" />
+                <div className="text-white/70 text-sm">
+                  <p className="font-medium text-white mb-1">Privacy First</p>
+                  <p>Your files never leave your device until someone connects directly to receive them.</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleFolderDialogCancel}
+                className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleFolderDialogSelect}
+                className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
+              >
+                Choose Folder
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // If browsing, show browser view
   if (isBrowsing) {
@@ -323,17 +407,12 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
               Select This Folder
             </button>
             
-            <label className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors cursor-pointer">
-              <input
-                type="file"
-                onChange={handleFileInput}
-                className="hidden"
-                disabled={isProcessing}
-                multiple
-                {...({ webkitdirectory: '' } as any)}
-              />
+            <button
+              onClick={handleBrowseClick}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+            >
               Browse
-            </label>
+            </button>
           </div>
         </div>
 
@@ -405,15 +484,8 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
+      onClick={handleBrowseClick}
     >
-      <input
-        type="file"
-        onChange={handleFileInput}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-        disabled={isProcessing}
-        multiple
-        {...({ webkitdirectory: '' } as any)}
-      />
       
       <Upload 
         size={48} 

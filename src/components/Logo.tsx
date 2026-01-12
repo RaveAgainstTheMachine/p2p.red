@@ -6,27 +6,18 @@ interface LogoProps {
 }
 
 export const Logo: React.FC<LogoProps> = ({ size = 'medium', className = '' }) => {
-  const sizeMap = {
-    small: { width: 81, height: 99 },
-    medium: { width: 162, height: 198 },
-    large: { width: 324, height: 397 }
+  const sizeClasses = {
+    small: 'w-[81px] h-[99px]',
+    medium: 'w-[162px] h-[198px]',
+    large: 'w-[324px] h-[397px]'
   };
-
-  const { width, height } = sizeMap[size];
 
   return (
     <div className={`inline-block ${className}`}>
       <img 
         src="/logo.svg" 
         alt="P2P.RED Logo"
-        width={width}
-        height={height}
-        className="w-full h-full"
-        style={{ 
-          objectFit: 'contain',
-          width: `${width}px`,
-          height: `${height}px`
-        }}
+        className={`${sizeClasses[size]} object-contain`}
       />
     </div>
   );

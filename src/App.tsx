@@ -267,9 +267,18 @@ function App() {
           
           // Wait for receiver connection
           if (peer) {
+            let connectionHandled = false;
             peer.on('connection', async (conn) => {
               console.log('Sender: Incoming connection from receiver:', conn.peer);
               conn.on('open', async () => {
+                // Only handle the first successful connection
+                if (connectionHandled) {
+                  console.log('Connection already handled, closing additional connection');
+                  conn.close();
+                  return;
+                }
+                connectionHandled = true;
+                
                 console.log('Sender: Connection open, starting stream transfer');
                 setShowEncryptionIndicator(true);
                 setIsEncryptedConnection(true);
@@ -280,6 +289,17 @@ function App() {
                 } catch (error) {
                   console.error('Stream transfer failed:', error);
                   setStatus('error');
+                }
+              });
+              
+              conn.on('close', () => {
+                console.log('Connection closed with:', conn.peer);
+              });
+              
+              conn.on('error', (error) => {
+                console.error('Connection error with:', conn.peer, error);
+                if (!connectionHandled) {
+                  connectionHandled = false; // Allow retry if this connection failed
                 }
               });
             });
@@ -322,9 +342,18 @@ function App() {
         
         // Wait for receiver connection
         if (peer) {
+          let connectionHandled = false;
           peer.on('connection', async (conn) => {
             console.log('Sender: Incoming connection from receiver:', conn.peer);
             conn.on('open', async () => {
+              // Only handle the first successful connection
+              if (connectionHandled) {
+                console.log('Connection already handled, closing additional connection');
+                conn.close();
+                return;
+              }
+              connectionHandled = true;
+              
               console.log('Sender: Connection open, starting stream transfer');
               setShowEncryptionIndicator(true);
               setIsEncryptedConnection(true);
@@ -335,6 +364,17 @@ function App() {
               } catch (error) {
                 console.error('Stream transfer failed:', error);
                 setStatus('error');
+              }
+            });
+            
+            conn.on('close', () => {
+              console.log('Connection closed with:', conn.peer);
+            });
+            
+            conn.on('error', (error) => {
+              console.error('Connection error with:', conn.peer, error);
+              if (!connectionHandled) {
+                connectionHandled = false; // Allow retry if this connection failed
               }
             });
           });

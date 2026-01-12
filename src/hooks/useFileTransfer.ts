@@ -588,7 +588,10 @@ export const useFileTransfer = () => {
         timeRemaining: 0
       });
 
-      const reader = stream.getReader();
+      // Create a new reader for each connection attempt
+      // Clone the stream to avoid locking issues
+      const streamClone = stream.tee()[0]; // Use tee() to create a clone
+      const reader = streamClone.getReader();
       let chunkIndex = 0;
       let bytesTransferred = 0;
       let buffer = new Uint8Array(0);

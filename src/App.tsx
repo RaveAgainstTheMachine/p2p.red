@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
 import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
-import { DropZone } from './components/DropZone';
+import { FileBrowser } from './components/FileBrowser';
 import { ShareLink } from './components/ShareLink';
 import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { ResumeButton } from './components/ResumeButton';
@@ -143,8 +143,8 @@ function App() {
     }
   }, [peer, isConnected, connectionState]);
 
-  const handleFileSelect = (files: FileList) => {
-    setSelectedFiles(files);
+  const handleFileSelect = (files: File[]) => {
+    setSelectedFiles(files as any);
   };
 
   const handlePinVerification = async (enteredPin: string) => {
@@ -795,7 +795,7 @@ function App() {
           <div className="glass-card p-8" style={{ minHeight: '200px' }}>
             {!shareLink ? (
               <>
-                <DropZone 
+                <FileBrowser 
                   onFileSelect={handleFileSelect} 
                   isProcessing={isEncrypting || status === 'encrypting'}
                 />

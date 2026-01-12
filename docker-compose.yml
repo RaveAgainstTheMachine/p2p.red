@@ -74,6 +74,28 @@ services:
       retries: 3
       start_period: 40s
 
+  # Metadata server - Rich link previews
+  metadata-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.metadata-server
+    container_name: p2p-metadata-server
+    restart: unless-stopped
+    depends_on:
+      - metadata-api
+    environment:
+      - NODE_ENV=production
+      - METADATA_PORT=3002
+      - METADATA_API_URL=http://metadata-api:3001
+    networks:
+      - p2p-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # Frontend app (React)
   app:
     build: .

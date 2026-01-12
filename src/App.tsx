@@ -22,8 +22,11 @@ import { Info } from './pages/Info';
 
 // Meta tag management for rich link previews
 const updateMetaTags = (metadata: any) => {
+  console.log('🏷️ Updating meta tags for:', metadata);
+  
   // Update title
   document.title = `${metadata.fileName} - P2P File Share`;
+  console.log('📝 Updated title:', document.title);
   
   // Update or create Open Graph meta tags
   const updateMetaTag = (property: string, content: string) => {
@@ -32,8 +35,10 @@ const updateMetaTags = (metadata: any) => {
       tag = document.createElement('meta');
       tag.setAttribute('property', property);
       document.head.appendChild(tag);
+      console.log('➕ Created meta tag:', property);
     }
     tag.content = content;
+    console.log('🏷️ Updated meta tag:', property, '=', content);
   };
   
   const updateMetaName = (name: string, content: string) => {
@@ -42,8 +47,10 @@ const updateMetaTags = (metadata: any) => {
       tag = document.createElement('meta');
       tag.setAttribute('name', name);
       document.head.appendChild(tag);
+      console.log('➕ Created meta name:', name);
     }
     tag.content = content;
+    console.log('🏷️ Updated meta name:', name, '=', content);
   };
   
   // Update Open Graph tags
@@ -53,14 +60,22 @@ const updateMetaTags = (metadata: any) => {
   updateMetaTag('og:description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with P2P encryption. Download directly from sender.`);
   updateMetaTag('og:site_name', 'p2p.red');
   
+  // Add image for better preview (optional)
+  updateMetaTag('og:image', `${window.location.origin}/favicon.svg`);
+  updateMetaTag('og:image:width', '256');
+  updateMetaTag('og:image:height', '256');
+  
   // Update Twitter Card tags
-  updateMetaName('twitter:card', 'summary');
+  updateMetaName('twitter:card', 'summary_large_image');
   updateMetaName('twitter:url', `${window.location.origin}${window.location.pathname}${window.location.hash}`);
   updateMetaName('twitter:title', `${metadata.fileName} - Shared via P2P`);
   updateMetaName('twitter:description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with P2P encryption.`);
+  updateMetaName('twitter:image', `${window.location.origin}/favicon.svg`);
   
   // Update basic meta description
   updateMetaName('description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage.`);
+  
+  console.log('✅ Meta tags updated successfully');
 };
 
 const resetMetaTags = () => {

@@ -1,0 +1,24 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy metadata server
+COPY metadata-server.js ./metadata-server.cjs
+
+# Copy axios dependency
+RUN npm install axios
+
+# Create health endpoint
+RUN echo 'const http = require("http"); const server = http.createServer((req, res) => { if (req.url === "/health") { res.writeHead(200); res.end("OK"); } }); server.listen(3002);' > health-server.cjs
+
+# Expose port
+EXPOSE 3002
+
+# Start both servers
+CMD ["sh", "-c", "node health-server.cjs & node metadata-server.cjs"]

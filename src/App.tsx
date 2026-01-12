@@ -8,6 +8,7 @@ import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { ResumeButton } from './components/ResumeButton';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { FileStructure } from './components/FileStructure';
+import { Logo } from './components/Logo';
 import { Download, Share2, Shield, CheckCircle, File, Check } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
@@ -692,9 +693,9 @@ function App() {
       <div className="relative z-10 mx-auto px-4 py-6 max-w-7xl flex-1">
         {/* Header */}
         <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
-            SHARE FILES SECURELY
-          </h1>
+          <div className="flex justify-center mb-3">
+            <Logo size="large" />
+          </div>
           <p className="text-white/80 text-base">
             Privacy-first file sharing with true peer-to-peer transfer
           </p>
@@ -809,7 +810,12 @@ function App() {
                         className="btn-primary"
                         disabled={status === 'encrypting'}
                       >
-                        {status === 'encrypting' ? 'Processing...' : 'Create Share Link'}
+                        {status === 'encrypting' ? (
+                          <div className="flex items-center gap-2">
+                            <Logo size="small" />
+                            <span>Processing...</span>
+                          </div>
+                        ) : 'Create Share Link'}
                       </button>
                     </div>
                   </div>
@@ -821,15 +827,21 @@ function App() {
                 
                 {status === 'waiting' && (
                   <div className="text-center">
-                    <div className="inline-flex items-center gap-2 text-white/60">
-                      <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                      <span>Waiting for recipient to connect...</span>
+                    <div className="flex flex-col items-center gap-4">
+                      <Logo size="medium" />
+                      <div className="inline-flex items-center gap-2 text-white/60">
+                        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                        <span>Waiting for recipient to connect...</span>
+                      </div>
                     </div>
                   </div>
                 )}
                 
                 {status === 'transferring' && (
                   <div className="w-full">
+                    <div className="flex justify-center mb-4">
+                      <Logo size="medium" />
+                    </div>
                     <EnhancedProgressBar 
                       progress={transferProgress} 
                       label="Transferring file" 

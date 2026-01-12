@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Upload, Folder } from 'lucide-react';
+import { Logo } from './Logo';
 
 interface DropZoneProps {
   onFileSelect: (files: FileList) => void;
@@ -179,16 +180,24 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
         }`}
       />
       
-      <h3 className="text-xl font-semibold text-white mb-2">
-        {isProcessing ? 'Processing...' : 'Drop files or folders here'}
-      </h3>
-      
-      <p className="text-white/60 text-center mb-4">
-        {isProcessing 
-          ? 'Please wait while we process your files'
-          : 'or click to browse'
-        }
-      </p>
+      {isProcessing ? (
+        <div className="flex flex-col items-center gap-4">
+          <Logo size="medium" />
+          <h3 className="text-xl font-semibold text-white mb-2">Processing...</h3>
+          <p className="text-white/60 text-center mb-4">
+            Please wait while we process your files
+          </p>
+        </div>
+      ) : (
+        <>
+          <h3 className="text-xl font-semibold text-white mb-2">
+            Drop files or folders here
+          </h3>
+          <p className="text-white/60 text-center mb-4">
+            or click to browse
+          </p>
+        </>
+      )}
       
       <div className="flex items-center gap-2 text-white/40 text-sm">
         <Folder size={16} />

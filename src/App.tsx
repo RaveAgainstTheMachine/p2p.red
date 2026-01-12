@@ -196,6 +196,7 @@ function App() {
       getMetadata(shortKey)
         .then((metadata) => {
           console.log('📄 Metadata received:', metadata);
+          setSenderPeerId(metadata.peerId);
           setIncomingFileInfo({
             name: metadata.fileName,
             size: metadata.fileSize,

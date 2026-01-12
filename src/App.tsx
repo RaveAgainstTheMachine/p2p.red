@@ -694,7 +694,7 @@ function App() {
         {/* Header */}
         <header className="text-center mb-8">
           <div className="flex justify-center mb-3">
-            <Logo size="large" />
+            <Logo size="medium" />
           </div>
           <p className="text-white/80 text-base">
             Privacy-first file sharing with true peer-to-peer transfer

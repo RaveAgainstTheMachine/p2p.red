@@ -321,6 +321,7 @@ export const useFileTransfer = () => {
       let totalBytes = 0;
       let bytesTransferred = 0;
       let writable: any = null;
+      let chunks: Uint8Array[] = []; // Buffer for traditional download
       const stallCheckInterval = setInterval(() => {
         const timeSinceLastChunk = Date.now() - lastChunkTimeRef.current;
         if (timeSinceLastChunk > CHUNK_TIMEOUT && isTransferring) {
@@ -358,20 +359,19 @@ export const useFileTransfer = () => {
             transferId: currentTransferId
           });
           
-          // ALWAYS require file handle - never use RAM
-          if (!fileHandle) {
-            console.error('❌ No file handle provided - cannot receive file');
-            reject(new Error('File handle required for receiving files'));
-            return;
-          }
-          
-          try {
-            writable = await fileHandle.createWritable();
-            console.log('✅ Using streaming write to disk');
-          } catch (err) {
-            console.error('❌ Failed to create writable stream:', err);
-            reject(err);
-            return;
+          // Handle both file handle and traditional download
+          if (fileHandle) {
+            try {
+              writable = await fileHandle.createWritable();
+              console.log('✅ Using streaming write to disk');
+            } catch (err) {
+              console.error('❌ Failed to create writable stream:', err);
+              reject(err);
+              return;
+            }
+          } else {
+            console.log('📥 Using traditional download - buffering in memory');
+            chunks = []; // Initialize buffer for traditional download
           }
           
           // Calculate bytes already received from resume chunks
@@ -393,13 +393,18 @@ export const useFileTransfer = () => {
           }
         } else if (data.type === 'chunk') {
           if (data.transferId === currentTransferId) {
-            // ONLY write to disk - no RAM fallback
-            try {
-              await writable.write(data.data);
-            } catch (writeError) {
-              console.error('❌ Failed to write chunk to disk:', writeError);
-              reject(writeError);
-              return;
+            if (fileHandle && writable) {
+              // Stream to disk
+              try {
+                await writable.write(data.data);
+              } catch (writeError) {
+                console.error('❌ Failed to write chunk to disk:', writeError);
+                reject(writeError);
+                return;
+              }
+            } else if (!fileHandle) {
+              // Buffer in memory for traditional download
+              chunks.push(new Uint8Array(data.data));
             }
             
             bytesTransferred += data.data.byteLength;
@@ -440,7 +445,6 @@ export const useFileTransfer = () => {
             console.log('🏁 Transfer complete signal received');
             clearInterval(stallCheckInterval);
             
-            console.log('✅ All chunks written to disk');
             setIsTransferring(false);
             
             // Clear saved state on successful completion
@@ -458,18 +462,50 @@ export const useFileTransfer = () => {
             });
             console.log('📤 Sent completion acknowledgment to sender');
             
-            // Close file handle - file is already written to disk
-            try {
-              await writable.close();
-              console.log('💾 File written to disk successfully:', metadata.name);
+            if (fileHandle && writable) {
+              // Close file handle - file is already written to disk
+              try {
+                await writable.close();
+                console.log('💾 File written to disk successfully:', metadata.name);
+                resolve({
+                  data: new Blob([]), // Empty blob since file is on disk
+                  name: metadata.name,
+                  size: metadata.size
+                });
+              } catch (closeError) {
+                console.error('❌ Failed to close file:', closeError);
+                reject(closeError);
+              }
+            } else {
+              // Traditional download - create blob from buffered chunks
+              console.log('📥 Creating blob from buffered chunks for traditional download');
+              const totalSize = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+              const combined = new Uint8Array(totalSize);
+              let offset = 0;
+              
+              for (const chunk of chunks) {
+                combined.set(chunk, offset);
+                offset += chunk.length;
+              }
+              
+              const blob = new Blob([combined], { type: metadata.fileType || 'application/octet-stream' });
+              
+              // Trigger download
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = metadata.name;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              
+              console.log('📥 Traditional download triggered for:', metadata.name);
               resolve({
-                data: new Blob([]), // Empty blob since file is on disk
+                data: blob,
                 name: metadata.name,
                 size: metadata.size
               });
-            } catch (closeError) {
-              console.error('❌ Failed to close file:', closeError);
-              reject(closeError);
             }
           }
         }

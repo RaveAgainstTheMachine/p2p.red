@@ -452,13 +452,167 @@ app.get('/share/:key', async (req, res) => {
 app.get('/api/metadata/:key', async (req, res) => {
   try {
     const { key } = req.params;
-    const { pin } = req.query;
+    const { pin, html } = req.query; // Check for html parameter
     
     // Validation
     if (!key || key.length !== 16 || !/^[a-zA-Z0-9]{16}$/.test(key)) {
       return res.status(400).json({
         error: 'Invalid key format',
       });
+    }
+    
+    // If html parameter is present, serve rich preview HTML
+    if (html === 'true') {
+      try {
+        // Get metadata (no PIN needed for public preview)
+        const result = await pool.query(
+          `SELECT peer_id, file_name, file_size, file_type, expires_at, has_pin 
+           FROM short_links 
+           WHERE short_key = $1 AND (expires_at IS NULL OR expires_at > NOW())`,
+          [key]
+        );
+        
+        if (result.rows.length === 0) {
+          return res.status(404).send(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta http-equiv="refresh" content="0; url=https://p2p.red/#${key}">
+              </head>
+              <body>
+                <p>Link not found or expired. Redirecting to P2P File Share...</p>
+              </body>
+            </html>
+          `);
+        }
+        
+        const metadata = result.rows[0];
+        
+        // Helper function to format file size
+        function formatFileSize(bytes) {
+          if (bytes === 0) return '0 Bytes';
+          const k = 1024;
+          const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Generate HTML with rich meta tags
+        const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${metadata.file_name} - P2P File Share</title>
+    <meta name="description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage." />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://p2p.red/#${key}" />
+    <meta property="og:title" content="${metadata.file_name} - Shared via P2P" />
+    <meta property="og:description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption. Download directly from sender." />
+    <meta property="og:site_name" content="p2p.red" />
+    <meta property="og:image" content="https://p2p.red/favicon.svg" />
+    <meta property="og:image:width" content="256" />
+    <meta property="og:image:height" content="256" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://p2p.red/#${key}" />
+    <meta name="twitter:title" content="${metadata.file_name} - Shared via P2P" />
+    <meta name="twitter:description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption." />
+    <meta name="twitter:image" content="https://p2p.red/favicon.svg" />
+    
+    <!-- Redirect to main app after 1 second -->
+    <meta http-equiv="refresh" content="1; url=https://p2p.red/#${key}" />
+    
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        margin: 0;
+        padding: 20px;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+      }
+      .container {
+        text-align: center;
+        max-width: 600px;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 40px;
+        border-radius: 20px;
+        backdrop-filter: blur(10px);
+      }
+      .icon {
+        font-size: 4rem;
+        margin-bottom: 20px;
+      }
+      h1 {
+        margin: 0 0 10px 0;
+        font-size: 2rem;
+      }
+      .file-info {
+        font-size: 1.2rem;
+        opacity: 0.9;
+        margin: 10px 0;
+      }
+      .redirect {
+        margin-top: 30px;
+        font-size: 0.9rem;
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="icon">📁</div>
+      <h1>${metadata.file_name}</h1>
+      <div class="file-info">
+        ${metadata.file_type} file • ${formatFileSize(metadata.file_size)}
+      </div>
+      <div class="file-info">
+        Shared securely with P2P encryption
+      </div>
+      <div class="redirect">
+        Redirecting to download page...
+      </div>
+    </div>
+    
+    <script>
+      // Immediate redirect for better UX
+      window.location.href = 'https://p2p.red/#${key}';
+    </script>
+  </body>
+</html>`;
+        
+        res.setHeader('Content-Type', 'text/html');
+        return res.send(htmlContent);
+        
+      } catch (error) {
+        console.error('❌ Rich preview error:', error.message);
+        
+        // Fallback to redirect if metadata not found
+        const fallbackHtml = `
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta http-equiv="refresh" content="0; url=https://p2p.red/#${key}" />
+  </head>
+  <body>
+    <p>Redirecting to P2P File Share...</p>
+    <script>
+      window.location.href = 'https://p2p.red/#${key}';
+    </script>
+  </body>
+</html>`;
+        
+        res.setHeader('Content-Type', 'text/html');
+        return res.send(fallbackHtml);
+      }
     }
     
     // Check rate limiting for PIN attempts

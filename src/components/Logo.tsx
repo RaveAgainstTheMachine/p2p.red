@@ -15,7 +15,7 @@ export const Logo: React.FC<LogoProps> = ({ size = 'medium', className = '' }) =
   const { width, height } = sizeMap[size];
 
   return (
-    <div className={`inline-block ${className}`}>
+    <div className={`inline-block ${className}`} style={{ width: `${width}px`, height: `${height}px` }}>
       <img 
         src="/logo.svg" 
         alt="P2P.RED Logo"

@@ -117,17 +117,17 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
         // Create a mock directory entry structure
         const rootItems: FileSystemItem[] = [];
         const processedDirs = new Set<string>();
+        const processedFiles = new Set<string>();
         
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
           const relativePath = file.webkitRelativePath;
           const pathParts = relativePath.split('/');
           
-          // Build directory structure
-          let currentPath = '';
-          for (let j = 0; j < pathParts.length - 1; j++) {
-            const dirName = pathParts[j];
-            const fullPath = currentPath ? `${currentPath}/${dirName}` : dirName;
+          // Build directory structure - only add directories that are direct children of root
+          if (pathParts.length > 1) {
+            const dirName = pathParts[1]; // Only process first level subdirectories
+            const fullPath = dirName;
             
             if (!processedDirs.has(fullPath)) {
               rootItems.push({
@@ -138,22 +138,27 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
                   isDirectory: true,
                   fullPath,
                   files: Array.from(files).filter((f: File) => 
-                    f.webkitRelativePath?.startsWith(fullPath + '/')
+                    f.webkitRelativePath?.startsWith(rootDirName + '/' + fullPath + '/')
                   )
                 }
               });
               processedDirs.add(fullPath);
             }
-            currentPath = fullPath;
           }
           
-          // Add file
-          rootItems.push({
-            name: file.name,
-            isDirectory: false,
-            file,
-            entry: file
-          });
+          // Add file only if it's directly in the root directory
+          if (pathParts.length === 2) { // Only root level files
+            const fileKey = relativePath;
+            if (!processedFiles.has(fileKey)) {
+              rootItems.push({
+                name: file.name,
+                isDirectory: false,
+                file,
+                entry: file
+              });
+              processedFiles.add(fileKey);
+            }
+          }
         }
         
         // Sort and set items
@@ -180,6 +185,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
       // Mock directory from file input
       const subItems: FileSystemItem[] = [];
       const processedDirs = new Set<string>();
+      const processedFiles = new Set<string>();
       const currentDirPath = item.entry.fullPath || '';
       
       for (const file of item.entry.files as File[]) {
@@ -190,11 +196,10 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
             const remainingPath = relativePath.substring(currentDirPath.length + 1);
             const subPathParts = remainingPath.split('/');
             
-            // Build subdirectory structure
-            let subCurrentPath = '';
-            for (let j = 0; j < subPathParts.length - 1; j++) {
-              const dirName = subPathParts[j];
-              const fullPath = subCurrentPath ? `${subCurrentPath}/${dirName}` : dirName;
+            // Build subdirectory structure - only direct children
+            if (subPathParts.length > 1) {
+              const dirName = subPathParts[0]; // Only first level subdirectory
+              const fullPath = dirName;
               
               if (!processedDirs.has(fullPath)) {
                 subItems.push({
@@ -211,17 +216,20 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
                 });
                 processedDirs.add(fullPath);
               }
-              subCurrentPath = fullPath;
             }
             
-            // Add file if it's directly in this directory (no more subdirectories)
+            // Add file only if it's directly in this directory
             if (subPathParts.length === 1) {
-              subItems.push({
-                name: file.name,
-                isDirectory: false,
-                file,
-                entry: file
-              });
+              const fileKey = relativePath;
+              if (!processedFiles.has(fileKey)) {
+                subItems.push({
+                  name: file.name,
+                  isDirectory: false,
+                  file,
+                  entry: file
+                });
+                processedFiles.add(fileKey);
+              }
             }
           }
         }

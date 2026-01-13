@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
 import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
-import { useBrowserNativeP2P } from './hooks/useBrowserNativeP2P';
-import { useMaximumSpeedTransfer } from './hooks/useMaximumSpeedTransfer';
+import { useAdaptiveMultiStreamTransfer } from './hooks/useAdaptiveMultiStreamTransfer';
 import { DropZone } from './components/DropZone';
 import { ShareLink } from './components/ShareLink';
 import { PinToggle } from './components/PinToggle';
@@ -126,8 +125,7 @@ function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
   const { isEncrypting } = useEncryption();
   const { transferProgress, isTransferring, sendStream, resumeTransfer } = useFileTransfer();
-  const { transferProgress: p2pProgress, transferFileBrowserP2P } = useBrowserNativeP2P();
-  const { transferProgress: speedProgress, transferFileMaximumSpeed } = useMaximumSpeedTransfer();
+  const { transferProgress: adaptiveProgress, transferFileAdaptive } = useAdaptiveMultiStreamTransfer();
   const [mode, setMode] = useState<'share' | 'receive'>('share');
   const [shareLink, setShareLink] = useState<string>('');
   const [status, setStatus] = useState<'idle' | 'encrypting' | 'waiting' | 'connecting' | 'transferring' | 'complete' | 'error'>('idle');
@@ -146,7 +144,6 @@ function App() {
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<'home' | 'legal' | 'info'>('home');
   const [enableZip, setEnableZip] = useState<boolean>(true);
-  const [useBrowserP2P] = useState<boolean>(false); // Default to maximum speed now
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
 
   const copyShareLinkToClipboard = async (link: string) => {
@@ -554,14 +551,10 @@ function App() {
               // setIsEncryptedConnection(true);
               setStatus('transferring');
               try {
-                // Send all files sequentially
+                // Send all files sequentially with adaptive multi-stream
                 for (let i = 0; i < files.length; i++) {
                   console.log(`Sending file ${i + 1}/${files.length}: ${files[i].name}`);
-                  if (useBrowserP2P) {
-                    await transferFileBrowserP2P(conn, files[i], true);
-                  } else {
-                    await transferFileMaximumSpeed(conn, files[i], true);
-                  }
+                  await transferFileAdaptive(conn, files[i], true);
                   // Small delay between files
                   await new Promise(resolve => setTimeout(resolve, 100));
                 }
@@ -624,11 +617,7 @@ function App() {
             // setShowEncryptionIndicator(true);
             // setIsEncryptedConnection(true);
             setStatus('transferring');
-            if (useBrowserP2P) {
-              await transferFileBrowserP2P(conn, fileToTransfer, true);
-            } else {
-              await transferFileMaximumSpeed(conn, fileToTransfer, true);
-            }
+            await transferFileAdaptive(conn, fileToTransfer, true);
             setStatus('complete');
           });
         });
@@ -728,6 +717,8 @@ function App() {
       
       // Check if this is multiple files or folder
       const fileType = incomingFileInfo?.fileType;
+      console.log('🔍 File type check:', { fileType, incomingFileInfo });
+      
       if (fileType === 'multiple/files' || fileType === 'folder/files') {
         console.log('Receiving multiple files/folder without ZIP');
         
@@ -791,33 +782,18 @@ function App() {
         }
       } else {
         // Single file
-        let received;
-        if (useBrowserP2P) {
-          received = await transferFileBrowserP2P(conn, null as any, false);
-          if (received instanceof Blob) {
-            // Trigger download for browser P2P
-            const url = URL.createObjectURL(received);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = incomingFileInfo?.name || 'download';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          received = await transferFileMaximumSpeed(conn, null as any, false);
-          if (received instanceof Blob) {
-            // Trigger download for maximum speed
-            const url = URL.createObjectURL(received);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = incomingFileInfo?.name || 'download';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-          }
+        console.log('📂 Single file path - Starting adaptive multi-stream download');
+        const received = await transferFileAdaptive(conn, null as any, false);
+        if (received instanceof Blob) {
+          // Trigger download
+          const url = URL.createObjectURL(received);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = incomingFileInfo?.name || 'download';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
         }
         
         // For streaming writes, file is already on disk
@@ -1042,8 +1018,8 @@ function App() {
                 {status === 'transferring' && (
                   <div className="w-full">
                     <EnhancedProgressBar 
-                      progress={useBrowserP2P ? p2pProgress : speedProgress} 
-                      label={`Transferring file (${useBrowserP2P ? 'Browser P2P Sync' : 'Maximum Speed'})`} 
+                      progress={adaptiveProgress} 
+                      label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`} 
                       showETA={true}
                       showSpeed={true}
                     />
@@ -1074,8 +1050,8 @@ function App() {
               {status === 'transferring' && (
                 <div className="mt-8 max-w-5xl mx-auto">
                   <EnhancedProgressBar 
-                    progress={useBrowserP2P ? p2pProgress : speedProgress} 
-                    label={`Receiving file (${useBrowserP2P ? 'Browser P2P Sync' : 'Maximum Speed'})`}
+                    progress={adaptiveProgress} 
+                    label={`Receiving file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}
                     showETA={true}
                     showSpeed={true}
                   />

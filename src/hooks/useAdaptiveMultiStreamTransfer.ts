@@ -1,0 +1,387 @@
+import { useState, useRef, useCallback } from 'react';
+import { DataConnection } from 'peerjs';
+
+interface AdaptiveTransferProgress {
+  bytesTransferred: number;
+  totalBytes: number;
+  percentage: number;
+  speed: number;
+  timeRemaining: number;
+  activeStreams: number;
+  networkQuality: 'excellent' | 'good' | 'fair' | 'poor';
+  adaptiveChunkSize: number;
+}
+
+export const useAdaptiveMultiStreamTransfer = () => {
+  const [transferProgress, setTransferProgress] = useState<AdaptiveTransferProgress>({
+    bytesTransferred: 0,
+    totalBytes: 0,
+    percentage: 0,
+    speed: 0,
+    timeRemaining: 0,
+    activeStreams: 0,
+    networkQuality: 'good',
+    adaptiveChunkSize: 256 * 1024 // Start with 256KB
+  });
+
+  const [isTransferring, setIsTransferring] = useState(false);
+  const startTime = useRef<number>(0);
+
+  // Detect network quality from ICE candidates
+  const detectNetworkQuality = useCallback((conn: DataConnection): 'excellent' | 'good' | 'fair' | 'poor' => {
+    try {
+      const pc = (conn as any).peerConnection;
+      if (!pc) return 'good';
+
+      // Check ICE connection state
+      const iceState = pc.iceConnectionState;
+      const connectionState = pc.connectionState;
+
+      console.log('🌐 Network detection:', { iceState, connectionState });
+
+      // Excellent: Direct connection (host or srflx)
+      if (iceState === 'connected' && connectionState === 'connected') {
+        return 'excellent';
+      }
+
+      // Good: Stable connection
+      if (iceState === 'completed') {
+        return 'good';
+      }
+
+      // Fair: Using relay
+      if (iceState === 'connected') {
+        return 'fair';
+      }
+
+      return 'poor';
+    } catch (error) {
+      console.warn('Network quality detection failed:', error);
+      return 'good';
+    }
+  }, []);
+
+  // Adaptive chunk size based on network quality
+  const getAdaptiveChunkSize = useCallback((quality: string, currentSpeed: number): number => {
+    // Dynamic chunk sizing based on network quality and current speed
+    if (quality === 'excellent' && currentSpeed > 10 * 1024 * 1024) {
+      return 2 * 1024 * 1024; // 2MB for excellent connections with high speed
+    } else if (quality === 'excellent') {
+      return 1024 * 1024; // 1MB for excellent connections
+    } else if (quality === 'good') {
+      return 512 * 1024; // 512KB for good connections
+    } else if (quality === 'fair') {
+      return 256 * 1024; // 256KB for fair connections
+    } else {
+      return 128 * 1024; // 128KB for poor connections
+    }
+  }, []);
+
+  // Create multiple parallel DataChannels
+  const createParallelChannels = useCallback(async (
+    baseConn: DataConnection,
+    streamCount: number
+  ): Promise<RTCDataChannel[]> => {
+    const pc = (baseConn as any).peerConnection;
+    if (!pc) {
+      console.error('No peer connection available');
+      return [];
+    }
+
+    const channels: RTCDataChannel[] = [];
+    
+    console.log(`🚀 Creating ${streamCount} parallel DataChannels`);
+
+    for (let i = 0; i < streamCount; i++) {
+      try {
+        const channel = pc.createDataChannel(`stream_${i}`, {
+          ordered: false, // Unordered for maximum speed
+          maxRetransmits: 0, // No retransmits for speed
+          priority: 'high'
+        });
+
+        // Wait for channel to open
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Channel open timeout')), 5000);
+          
+          if (channel.readyState === 'open') {
+            clearTimeout(timeout);
+            resolve();
+          } else {
+            channel.onopen = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            channel.onerror = (err: Event) => {
+              clearTimeout(timeout);
+              reject(err);
+            };
+          }
+        });
+
+        channels.push(channel);
+        console.log(`✅ Channel ${i} opened`);
+      } catch (error) {
+        console.error(`Failed to create channel ${i}:`, error);
+      }
+    }
+
+    console.log(`✅ Created ${channels.length}/${streamCount} parallel channels`);
+    return channels;
+  }, []);
+
+  // Send file with multi-stream parallel transfer
+  const sendFileMultiStream = useCallback(async (
+    conn: DataConnection,
+    file: File
+  ): Promise<void> => {
+    setIsTransferring(true);
+    startTime.current = Date.now();
+
+    // Detect network quality
+    const quality = detectNetworkQuality(conn);
+    console.log(`🌐 Network quality: ${quality}`);
+
+    // Determine optimal stream count based on network quality
+    const streamCount = quality === 'excellent' ? 8 : quality === 'good' ? 4 : quality === 'fair' ? 2 : 1;
+    
+    // Get adaptive chunk size
+    let chunkSize = getAdaptiveChunkSize(quality, 0);
+    
+    console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks`);
+
+    try {
+      // Create parallel channels
+      const channels = await createParallelChannels(conn, streamCount);
+      
+      if (channels.length === 0) {
+        throw new Error('Failed to create any parallel channels');
+      }
+
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      let bytesTransferred = 0;
+      let lastSpeedCheck = Date.now();
+      let lastBytesTransferred = 0;
+
+      // Send metadata first on main connection
+      conn.send({
+        type: 'multi_stream_start',
+        totalChunks,
+        fileSize: file.size,
+        streamCount: channels.length,
+        timestamp: Date.now()
+      });
+
+      // Use File.stream() for memory efficiency
+      const stream = file.stream();
+      const reader = stream.getReader();
+      
+      let chunkIndex = 0;
+      let buffer = new Uint8Array(0);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done && buffer.length === 0) break;
+
+        // Append to buffer
+        if (value) {
+          const newBuffer = new Uint8Array(buffer.length + value.length);
+          newBuffer.set(buffer);
+          newBuffer.set(value, buffer.length);
+          buffer = newBuffer;
+        }
+
+        // Process chunks from buffer
+        while (buffer.length >= chunkSize || (done && buffer.length > 0)) {
+          const chunkData = buffer.slice(0, Math.min(chunkSize, buffer.length));
+          buffer = buffer.slice(chunkData.length);
+
+          // Select channel (round-robin)
+          const channelIndex = chunkIndex % channels.length;
+          const channel = channels[channelIndex];
+
+          // Check buffer before sending
+          if (channel.bufferedAmount > 16 * 1024 * 1024) {
+            // Wait for buffer to drain
+            await new Promise(resolve => setTimeout(resolve, 10));
+            continue;
+          }
+
+          // Send chunk
+          const message = JSON.stringify({
+            type: 'multi_stream_chunk',
+            chunkIndex,
+            data: Array.from(chunkData),
+            streamId: channelIndex,
+            timestamp: Date.now()
+          });
+
+          channel.send(message);
+
+          bytesTransferred += chunkData.length;
+          chunkIndex++;
+
+          // Adaptive chunk size adjustment
+          const now = Date.now();
+          if (now - lastSpeedCheck > 1000) {
+            const elapsed = (now - lastSpeedCheck) / 1000;
+            const currentSpeed = (bytesTransferred - lastBytesTransferred) / elapsed;
+            
+            // Adjust chunk size based on current speed
+            chunkSize = getAdaptiveChunkSize(quality, currentSpeed);
+            
+            lastSpeedCheck = now;
+            lastBytesTransferred = bytesTransferred;
+
+            // Update progress
+            const totalElapsed = (now - startTime.current) / 1000;
+            const avgSpeed = bytesTransferred / totalElapsed;
+            const timeRemaining = avgSpeed > 0 ? (file.size - bytesTransferred) / avgSpeed : 0;
+
+            setTransferProgress({
+              bytesTransferred,
+              totalBytes: file.size,
+              percentage: (bytesTransferred / file.size) * 100,
+              speed: avgSpeed,
+              timeRemaining,
+              activeStreams: channels.length,
+              networkQuality: quality,
+              adaptiveChunkSize: chunkSize
+            });
+
+            console.log(`📤 Progress: ${(bytesTransferred/1024/1024).toFixed(2)}MB / ${(file.size/1024/1024).toFixed(2)}MB, Speed: ${(avgSpeed/1024/1024).toFixed(2)} MB/s, Chunk: ${chunkSize/1024}KB`);
+          }
+
+          if (buffer.length < chunkSize && !done) break;
+        }
+
+        if (done && buffer.length === 0) break;
+      }
+
+      // Send completion signal
+      conn.send({
+        type: 'multi_stream_complete',
+        totalChunks: chunkIndex,
+        fileSize: file.size,
+        timestamp: Date.now()
+      });
+
+      // Close channels
+      channels.forEach(ch => ch.close());
+
+      console.log('🎉 MULTI-STREAM: Transfer completed');
+
+    } finally {
+      setIsTransferring(false);
+    }
+  }, [detectNetworkQuality, getAdaptiveChunkSize, createParallelChannels]);
+
+  // Receive file with multi-stream
+  const receiveFileMultiStream = useCallback(async (
+    conn: DataConnection
+  ): Promise<Blob> => {
+    console.log('🚀 receiveFileMultiStream called');
+    setIsTransferring(true);
+    startTime.current = Date.now();
+
+    const chunks = new Map<number, Uint8Array>();
+    let totalChunks = 0;
+    let fileSize = 0;
+    let bytesReceived = 0;
+    let expectedStreams = 0;
+
+    return new Promise((resolve) => {
+      // Listen on main connection for metadata
+      const handleMainMessage = (data: any) => {
+        console.log('📨 Main connection message:', data.type);
+
+        if (data.type === 'multi_stream_start') {
+          totalChunks = data.totalChunks;
+          fileSize = data.fileSize;
+          expectedStreams = data.streamCount;
+          console.log(`📊 Expecting ${totalChunks} chunks across ${expectedStreams} streams, total: ${(fileSize/1024/1024).toFixed(2)}MB`);
+        } else if (data.type === 'multi_stream_complete') {
+          console.log('✅ Transfer complete signal received');
+        }
+      };
+
+      conn.on('data', handleMainMessage);
+
+      // Listen for incoming DataChannels
+      const pc = (conn as any).peerConnection;
+      if (pc) {
+        pc.ondatachannel = (event: RTCDataChannelEvent) => {
+          const channel = event.channel;
+          console.log(`📥 Incoming DataChannel: ${channel.label}`);
+
+          channel.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              
+              if (data.type === 'multi_stream_chunk') {
+                // Store chunk
+                const chunkData = new Uint8Array(data.data);
+                chunks.set(data.chunkIndex, chunkData);
+                bytesReceived += chunkData.length;
+
+                // Update progress
+                const elapsed = (Date.now() - startTime.current) / 1000;
+                const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
+                const timeRemaining = speed > 0 ? (fileSize - bytesReceived) / speed : 0;
+
+                setTransferProgress(prev => ({
+                  ...prev,
+                  bytesTransferred: bytesReceived,
+                  totalBytes: fileSize,
+                  percentage: fileSize > 0 ? (bytesReceived / fileSize) * 100 : 0,
+                  speed,
+                  timeRemaining
+                }));
+
+                // Check if complete
+                if (chunks.size === totalChunks && totalChunks > 0) {
+                  console.log('🎉 All chunks received, assembling file');
+                  
+                  // Reassemble file
+                  const sortedChunks = Array.from(chunks.entries())
+                    .sort((a, b) => a[0] - b[0])
+                    .map(([, data]) => data);
+
+                  const blob = new Blob(sortedChunks as BlobPart[]);
+                  setIsTransferring(false);
+                  conn.off('data', handleMainMessage);
+                  resolve(blob);
+                }
+              }
+            } catch (error) {
+              console.error('Failed to parse chunk:', error);
+            }
+          };
+        };
+      }
+    });
+  }, []);
+
+  // Main transfer function
+  const transferFileAdaptive = useCallback(async (
+    conn: DataConnection,
+    file: File,
+    isSender: boolean
+  ): Promise<Blob | void> => {
+    console.log('🎯 transferFileAdaptive called:', { isSender, fileName: file?.name });
+
+    if (isSender) {
+      await sendFileMultiStream(conn, file);
+    } else {
+      console.log('📥 Starting multi-stream receiver');
+      return await receiveFileMultiStream(conn);
+    }
+  }, [sendFileMultiStream, receiveFileMultiStream]);
+
+  return {
+    transferProgress,
+    isTransferring,
+    transferFileAdaptive
+  };
+};

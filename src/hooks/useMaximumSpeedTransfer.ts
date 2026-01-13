@@ -87,6 +87,7 @@ export const useMaximumSpeedTransfer = () => {
 
   // MAXIMUM SPEED: Receive as fast as possible
   const receiveFileMaximumSpeed = async (conn: DataConnection): Promise<Blob> => {
+    console.log('🚀 receiveFileMaximumSpeed called');
     setIsTransferring(true);
     startTime.current = Date.now();
     
@@ -97,6 +98,8 @@ export const useMaximumSpeedTransfer = () => {
     
     return new Promise((resolve) => {
       const handleMessage = (data: any) => {
+        console.log('📨 Received message:', data.type, data);
+        
         if (data.type === 'speed_chunk') {
           // Store chunk immediately
           chunks.set(data.chunkIndex, data.data);
@@ -134,9 +137,12 @@ export const useMaximumSpeedTransfer = () => {
           totalChunks = data.totalChunks;
           fileSize = data.fileSize;
           console.log(`📊 Expecting ${totalChunks} chunks, total size: ${(fileSize/1024/1024).toFixed(2)}MB`);
+        } else {
+          console.log('❓ Unknown message type:', data.type);
         }
       };
       
+      console.log('👂 Setting up message listener');
       conn.on('data', handleMessage);
     });
   };
@@ -147,9 +153,12 @@ export const useMaximumSpeedTransfer = () => {
     file: File,
     isSender: boolean
   ): Promise<Blob | void> => {
+    console.log('🎯 transferFileMaximumSpeed called:', { isSender, fileName: file?.name });
+    
     if (isSender) {
       await sendFileMaximumSpeed(conn, file);
     } else {
+      console.log('📥 Starting receiver mode');
       return await receiveFileMaximumSpeed(conn);
     }
   };

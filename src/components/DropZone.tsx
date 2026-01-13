@@ -535,8 +535,8 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
       )}
       
       <div className="flex items-center gap-2 text-white/40 text-sm">
-        <Folder size={16} />
-        <span>Files and folders supported</span>
+        <span className="text-yellow-400">⚠️</span>
+        <span>Files are never uploaded to our servers.</span>
       </div>
       
       <div className="text-center mt-2 text-white/30 text-xs">

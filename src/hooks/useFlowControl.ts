@@ -21,9 +21,9 @@ export const useFlowControl = () => {
   const pendingChunks = useRef(new Set<number>());
 
   const calculateOptimalWindow = (receiverSpeed: number, rtt: number) => {
-    // Bandwidth-delay product calculation
+    // More aggressive window sizing for better synchronization
     const bandwidthDelayProduct = (receiverSpeed * rtt) / 1000; // Convert to chunks
-    const optimalWindow = Math.max(5, Math.min(50, Math.ceil(bandwidthDelayProduct)));
+    const optimalWindow = Math.max(2, Math.min(20, Math.ceil(bandwidthDelayProduct))); // Reduced max window
     
     console.log(`🎯 Flow Control: Receiver speed=${receiverSpeed}KB/s, RTT=${rtt}ms, Optimal window=${optimalWindow}`);
     return optimalWindow;
@@ -78,9 +78,9 @@ export const useFlowControl = () => {
   const getBackpressureSignal = () => {
     const utilization = pendingChunks.current.size / senderWindow.current;
     
-    if (utilization > 0.8) {
+    if (utilization > 0.6) { // Lowered threshold for more aggressive throttling
       return 'HIGH'; // Slow down significantly
-    } else if (utilization > 0.5) {
+    } else if (utilization > 0.3) { // Lowered threshold
       return 'MEDIUM'; // Moderate throttling
     } else {
       return 'LOW'; // Full speed ahead

@@ -462,13 +462,13 @@ export const useFileTransfer = () => {
             // }
             
             // NEW: Flow control ACK system - send receiver performance back to sender
-            if (data.index % 10 === 0) {
+            if (data.index % 5 === 0) { // Send ACK every 5 chunks (more frequent)
               // Calculate instantaneous processing speed (last few chunks)
               const now = Date.now();
               recentChunkTimes.push(now);
               
-              // Keep only last 10 timestamps
-              if (recentChunkTimes.length > 10) {
+              // Keep only last 5 timestamps (more responsive)
+              if (recentChunkTimes.length > 5) {
                 recentChunkTimes.shift();
               }
               
@@ -480,6 +480,7 @@ export const useFileTransfer = () => {
                 instantaneousSpeed = timeSpan > 0 ? bytesInSpan / timeSpan : 0;
               }
               
+              // Send ACK immediately with current capacity
               conn.send({
                 type: 'flow_control_ack',
                 transferId: currentTransferId,

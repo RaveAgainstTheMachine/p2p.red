@@ -1,54 +1,73 @@
 #!/bin/bash
 
-# VPS Deployment Script for P2P File Share
+# Streamlined Build & Deploy Script for P2P File Share
+# Prevents service restart issues by proper container management
 
 set -e
 
-VPS_HOST="ubuntu@p2p.red"
 APP_DIR="/opt/p2p-file-share"
 
-echo "🚀 Deploying P2P File Share to VPS..."
+echo "🚀 Starting streamlined build & deploy..."
 
-# Build application locally
+# Build application
 echo "📦 Building application..."
 npm run build
 
-# Create deployment package
-echo "📁 Creating deployment package..."
-tar -czf deploy.tar.gz \
-    dist/ \
-    node_modules/ \
-    package.json \
-    docker-compose.yml \
-    Dockerfile \
-    Dockerfile.peerjs \
-    nginx.conf \
-    turnserver.conf
+if [ $? -ne 0 ]; then
+    echo "❌ Build failed!"
+    exit 1
+fi
 
-# Copy to VPS
-echo "📤 Copying files to VPS..."
-scp deploy.tar.gz $VPS_HOST:/tmp/
+echo "✅ Build successful"
 
-# Deploy on VPS
-echo "🔧 Deploying on VPS..."
-ssh $VPS_HOST "
-    sudo mkdir -p $APP_DIR
-    cd $APP_DIR
-    sudo tar -xzf /tmp/deploy.tar.gz
-    rm /tmp/deploy.tar.gz
-    
-    # Stop existing services
-    sudo docker-compose down || true
-    
-    # Start new services
-    sudo docker-compose up -d
-    
-    # Clean up old images
-    sudo docker image prune -f
-"
+# Stop services gracefully
+echo "🛑 Stopping services..."
+docker-compose down
 
-# Cleanup local package
-rm deploy.tar.gz
+# Remove old containers and images
+echo "🧹 Cleaning up old containers..."
+docker-compose rm -f || true
 
-echo "✅ Deployment complete!"
-echo "🌐 https://p2p.red"
+# Rebuild only changed services
+echo "🔨 Building Docker images..."
+docker-compose build --no-cache nginx app
+
+# Start all services in correct order
+echo "🚀 Starting services..."
+docker-compose up -d
+
+# Wait for services to be healthy
+echo "⏳ Waiting for services to start..."
+sleep 10
+
+# Check service health
+echo "🔍 Checking service health..."
+docker-compose ps
+
+# Verify critical services
+echo "✅ Verifying critical services..."
+
+# Check nginx
+if ! docker-compose ps | grep -q "nginx.*Up"; then
+    echo "❌ Nginx failed to start"
+    docker-compose logs --tail=20 nginx
+    exit 1
+fi
+
+# Check app
+if ! docker-compose ps | grep -q "app.*Up"; then
+    echo "❌ App failed to start"
+    docker-compose logs --tail=20 app
+    exit 1
+fi
+
+# Check peerjs (check actual container name)
+if ! docker ps | grep -q "p2p-peerjs"; then
+    echo "❌ PeerJS failed to start"
+    docker-compose logs --tail=20 peerjs-server
+    exit 1
+fi
+
+echo "✅ All critical services running"
+echo "🌐 Site: https://p2p.red"
+echo "📊 Status: docker-compose ps"

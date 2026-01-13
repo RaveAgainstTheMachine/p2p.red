@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { DataConnection } from 'peerjs';
+import { MultiStreamOrchestrator } from '../utils/multiStreamOrchestrator';
 
 interface AdaptiveTransferProgress {
   bytesTransferred: number;
@@ -77,57 +78,28 @@ export const useAdaptiveMultiStreamTransfer = () => {
     }
   }, []);
 
-  // Create multiple parallel DataChannels
+  // Create multiple parallel DataChannels using orchestrator
   const createParallelChannels = useCallback(async (
     baseConn: DataConnection,
-    streamCount: number
+    streamCount: number,
+    isSender: boolean
   ): Promise<RTCDataChannel[]> => {
-    const pc = (baseConn as any).peerConnection;
-    if (!pc) {
-      console.error('No peer connection available');
+    console.log(`🎯 Creating ${streamCount} parallel channels (${isSender ? 'SENDER' : 'RECEIVER'})`);
+
+    try {
+      const orchestrator = new MultiStreamOrchestrator(baseConn, isSender);
+      const streamChannels = await orchestrator.initializeChannels(streamCount);
+      
+      const channels = streamChannels
+        .filter(sc => sc.ready)
+        .map(sc => sc.channel);
+
+      console.log(`✅ Orchestrator: ${channels.length}/${streamCount} channels ready`);
+      return channels;
+    } catch (error) {
+      console.error('❌ Orchestrator failed:', error);
       return [];
     }
-
-    const channels: RTCDataChannel[] = [];
-    
-    console.log(`🚀 Creating ${streamCount} parallel DataChannels`);
-
-    for (let i = 0; i < streamCount; i++) {
-      try {
-        const channel = pc.createDataChannel(`stream_${i}`, {
-          ordered: false, // Unordered for maximum speed
-          maxRetransmits: 0, // No retransmits for speed
-          priority: 'high'
-        });
-
-        // Wait for channel to open
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Channel open timeout')), 5000);
-          
-          if (channel.readyState === 'open') {
-            clearTimeout(timeout);
-            resolve();
-          } else {
-            channel.onopen = () => {
-              clearTimeout(timeout);
-              resolve();
-            };
-            channel.onerror = (err: Event) => {
-              clearTimeout(timeout);
-              reject(err);
-            };
-          }
-        });
-
-        channels.push(channel);
-        console.log(`✅ Channel ${i} opened`);
-      } catch (error) {
-        console.error(`Failed to create channel ${i}:`, error);
-      }
-    }
-
-    console.log(`✅ Created ${channels.length}/${streamCount} parallel channels`);
-    return channels;
   }, []);
 
   // Send file with multi-stream parallel transfer
@@ -151,8 +123,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
     console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks`);
 
     try {
-      // Create parallel channels
-      const channels = await createParallelChannels(conn, streamCount);
+      // Create parallel channels (SENDER mode)
+      const channels = await createParallelChannels(conn, streamCount, true);
       
       if (channels.length === 0) {
         throw new Error('Failed to create any parallel channels');

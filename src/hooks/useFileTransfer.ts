@@ -352,6 +352,7 @@ export const useFileTransfer = () => {
       let bytesTransferred = 0;
       let writable: any = null;
       let chunks: Uint8Array[] = []; // Buffer for traditional download
+      const recentChunkTimes: number[] = []; // Track recent chunk timestamps for speed calculation
       const stallCheckInterval = setInterval(() => {
         const timeSinceLastChunk = Date.now() - lastChunkTimeRef.current;
         if (timeSinceLastChunk > CHUNK_TIMEOUT && isTransferring) {
@@ -462,13 +463,29 @@ export const useFileTransfer = () => {
             
             // NEW: Flow control ACK system - send receiver performance back to sender
             if (data.index % 10 === 0) {
-              const currentSpeed = bytesTransferred / ((Date.now() - startTimeRef.current) / 1000);
+              // Calculate instantaneous processing speed (last few chunks)
+              const now = Date.now();
+              recentChunkTimes.push(now);
+              
+              // Keep only last 10 timestamps
+              if (recentChunkTimes.length > 10) {
+                recentChunkTimes.shift();
+              }
+              
+              let instantaneousSpeed = 0;
+              if (recentChunkTimes.length >= 2) {
+                const timeSpan = (recentChunkTimes[recentChunkTimes.length - 1] - recentChunkTimes[0]) / 1000; // seconds
+                const chunksInSpan = recentChunkTimes.length - 1;
+                const bytesInSpan = chunksInSpan * data.data.byteLength;
+                instantaneousSpeed = timeSpan > 0 ? bytesInSpan / timeSpan : 0;
+              }
+              
               conn.send({
                 type: 'flow_control_ack',
                 transferId: currentTransferId,
                 chunkIndex: data.index,
-                receiverSpeed: currentSpeed,
-                timestamp: Date.now()
+                receiverSpeed: instantaneousSpeed,
+                timestamp: now
               });
             }
             

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { DataConnection } from 'peerjs';
+import { performanceMonitor } from '../utils/performanceMonitor';
 
 export interface TransferProgress {
   bytesTransferred: number;
@@ -30,6 +31,10 @@ export const useFileTransfer = () => {
 
   const sendFile = useCallback(async (conn: DataConnection, file: File, resumeFrom: number = 0) => {
     console.log('Starting file transfer:', file.name, file.size);
+    
+    // Start performance monitoring for sender
+    performanceMonitor.startMonitoring();
+    performanceMonitor.log('SEND_START', { fileName: file.name, fileSize: file.size, resumeFrom });
     
     // Validate file
     if (!file || file.size === 0) {
@@ -316,6 +321,10 @@ export const useFileTransfer = () => {
       setIsTransferring(true);
       startTimeRef.current = Date.now();
       
+      // Start performance monitoring
+      performanceMonitor.startMonitoring();
+      performanceMonitor.log('RECEIVE_START', { fileHandle: !!fileHandle, resumeChunks: resumeChunks.size });
+      
       let metadata: any = null;
       let currentTransferId: string | null = null;
       let totalBytes = 0;
@@ -335,6 +344,9 @@ export const useFileTransfer = () => {
         const speed = bytesTransferred / elapsed;
         const timeRemaining = speed > 0 ? (totalBytes - bytesTransferred) / speed : 0;
         const percentage = totalBytes > 0 ? (bytesTransferred / totalBytes) * 100 : 0;
+        
+        // Log sender speed for monitoring
+        performanceMonitor.onSenderSpeedReport(speed);
         
         setTransferProgress({
           bytesTransferred,
@@ -413,6 +425,9 @@ export const useFileTransfer = () => {
             connectionHealthRef.current = true;
             // Remove setReceivedChunks for maximum speed
             // setReceivedChunks(prev => new Set(prev).add(data.index));
+            
+            // Log chunk reception for performance monitoring
+            performanceMonitor.onChunkReceived(data.index, data.data.byteLength, bytesTransferred);
             
             // Minimal progress updates - receiver is completely overwhelmed
             if (data.index % 100 === 0) {

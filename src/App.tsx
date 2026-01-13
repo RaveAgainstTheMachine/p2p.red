@@ -4,21 +4,19 @@ import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
 import { DropZone } from './components/DropZone';
 import { ShareLink } from './components/ShareLink';
-import { EnhancedProgressBar } from './components/EnhancedProgressBar';
-import { ResumeButton } from './components/ResumeButton';
-import { EncryptionIndicator } from './components/EncryptionIndicator';
-import { FileStructure } from './components/FileStructure';
-import { Logo } from './components/Logo';
-import { Download, Share2, Shield, CheckCircle, File, Check } from 'lucide-react';
-import { createShortLink, getMetadata } from './services/metadataApi';
-import { formatExpirationTime } from './utils/timeFormat';
 import { PinToggle } from './components/PinToggle';
 import { PinVerification } from './components/PinVerification';
 import { FileTypeWarning } from './components/FileTypeWarning';
 import { CookieBanner } from './components/CookieBanner';
 import { Monitoring } from './components/Monitoring';
-import { Legal } from './pages/Legal';
+import { PerformanceDebug } from './components/PerformanceDebug';
+import { FileStructure } from './components/FileStructure';
+import { Logo } from './components/Logo';
+import { Download, Share2, Shield, CheckCircle, File, Check } from 'lucide-react';
+import { createShortLink, getMetadata } from './services/metadataApi';
+import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
+import { Legal } from './pages/Legal';
 
 // Meta tag management for rich link previews
 const updateMetaTags = (metadata: any) => {
@@ -132,8 +130,9 @@ function App() {
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string; fileType?: string} | null>(null);
-  const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
-  const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
+  // const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
+  // const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
+  const [showPerformanceDebug, setShowPerformanceDebug] = useState<boolean>(false);
   const [pin, setPin] = useState<string>('');
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [requiresPin, setRequiresPin] = useState<boolean>(false);
@@ -158,6 +157,20 @@ function App() {
   useEffect(() => {
     initializePeer();
   }, [initializePeer]);
+
+  // Add keyboard shortcut for performance debug
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Ctrl+Shift+D to toggle performance debug
+      if (event.ctrlKey && event.shiftKey && event.key === 'D') {
+        event.preventDefault();
+        setShowPerformanceDebug(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
 
   // Update meta tags for rich link previews
   useEffect(() => {
@@ -380,8 +393,8 @@ function App() {
                 connectionHandled = true;
                 
                 console.log('Sender: Connection open, starting stream transfer');
-                setShowEncryptionIndicator(true);
-                setIsEncryptedConnection(true);
+                // setShowEncryptionIndicator(true);
+                // setIsEncryptedConnection(true);
                 setStatus('transferring');
                 try {
                   await sendStream(conn, zipStream, zipFileName, totalSize);
@@ -455,8 +468,8 @@ function App() {
               connectionHandled = true;
               
               console.log('Sender: Connection open, starting stream transfer');
-              setShowEncryptionIndicator(true);
-              setIsEncryptedConnection(true);
+              // setShowEncryptionIndicator(true);
+              // setIsEncryptedConnection(true);
               setStatus('transferring');
               try {
                 await sendStream(conn, zipStream, zipFileName, file.size);
@@ -531,8 +544,8 @@ function App() {
             console.log('Sender: Incoming connection from receiver:', conn.peer);
             conn.on('open', async () => {
               console.log('Sender: Connection open, starting multiple file transfer');
-              setShowEncryptionIndicator(true);
-              setIsEncryptedConnection(true);
+              // setShowEncryptionIndicator(true);
+              // setIsEncryptedConnection(true);
               setStatus('transferring');
               try {
                 // Send all files sequentially
@@ -598,8 +611,8 @@ function App() {
           console.log('Sender: Incoming connection from receiver:', conn.peer);
           conn.on('open', async () => {
             console.log('Sender: Connection open, starting file transfer');
-            setShowEncryptionIndicator(true);
-            setIsEncryptedConnection(true);
+            // setShowEncryptionIndicator(true);
+            // setIsEncryptedConnection(true);
             setStatus('transferring');
             await sendFile(conn, fileToTransfer);
             setStatus('complete');
@@ -683,8 +696,8 @@ function App() {
         
         conn.on('open', () => {
           console.log('Connection opened, ready to receive');
-          setShowEncryptionIndicator(true);
-          setIsEncryptedConnection(true);
+          // setShowEncryptionIndicator(true);
+          // setIsEncryptedConnection(true);
           clearTimeout(timeout);
           resolve();
         });
@@ -840,6 +853,17 @@ function App() {
             Privacy-first file sharing with true peer-to-peer transfer
           </p>
           
+          {/* Performance Debug Toggle */}
+          <div className="mt-2 text-center">
+            <button
+              onClick={() => setShowPerformanceDebug(true)}
+              className="text-xs text-white/40 hover:text-white/60 transition-colors underline"
+              title="Press Ctrl+Shift+D to open performance monitor"
+            >
+              🔍 Performance Debug (Ctrl+Shift+D)
+            </button>
+          </div>
+          
           {/* Connection Status Alerts */}
           {!isOnline && (
             <div className="mt-4 bg-red-500/20 border-2 border-red-500 rounded-lg p-4 max-w-md mx-auto">
@@ -876,10 +900,10 @@ function App() {
         </header>
 
         {/* Encryption Indicator */}
-        <EncryptionIndicator 
-          isEncrypted={isEncryptedConnection}
+        {/* <EncryptionIndicator
           isVisible={showEncryptionIndicator}
-        />
+          transferProgress={transferProgress}
+        /> */}
 
         {/* Main Content */}
         {requiresPin ? (
@@ -977,12 +1001,9 @@ function App() {
                 
                 {status === 'transferring' && (
                   <div className="w-full">
-                    <EnhancedProgressBar 
-                      progress={transferProgress} 
-                      label="Transferring file" 
-                      showETA={true}
-                      showSpeed={true}
-                    />
+                    <div className="text-center text-white/60">
+                      Transferring: {transferProgress.percentage.toFixed(1)}%
+                    </div>
                   </div>
                 )}
                 
@@ -1009,26 +1030,23 @@ function App() {
               
               {status === 'transferring' && (
                 <div className="mt-8 max-w-5xl mx-auto">
-                  <EnhancedProgressBar 
-                    progress={transferProgress} 
-                    label="Receiving file"
-                    showETA={true}
-                    showSpeed={true}
-                  />
-                  
-                  {!isTransferring && transferProgress.percentage > 0 && transferProgress.percentage < 100 && (
-                    <div className="text-center mt-4">
-                      <p className="text-yellow-400 mb-2">Transfer interrupted</p>
-                      <ResumeButton
-                        onClick={() => {
-                          const resumeFromChunk = Math.floor(transferProgress.bytesTransferred / (64 * 1024));
-                          handleResume(resumeFromChunk);
-                        }}
-                        disabled={false}
-                        progress={transferProgress.percentage}
-                      />
-                    </div>
-                  )}
+                  <div className="text-center text-white/60">
+                    Receiving: {transferProgress.percentage.toFixed(1)}%
+                  </div>
+                </div>
+              )}
+              
+              {!isTransferring && transferProgress.percentage > 0 && transferProgress.percentage < 100 && (
+                <div className="text-center mt-4">
+                  <p className="text-yellow-400 mb-2">Transfer interrupted</p>
+                  {/* <ResumeButton
+                    onClick={() => {
+                      const resumeFromChunk = Math.floor(transferProgress.bytesTransferred / (64 * 1024));
+                      handleResume(resumeFromChunk);
+                    }}
+                    disabled={false}
+                    progress={transferProgress.percentage}
+                  /> */}
                 </div>
               )}
               
@@ -1105,14 +1123,20 @@ function App() {
                   </p>
                   {transferProgress.percentage > 0 && transferProgress.percentage < 100 && (
                     <div className="flex justify-center mt-4">
-                      <ResumeButton
+                      {/* <ResumeButton
                         onClick={() => {
                           const resumeFromChunk = Math.floor(transferProgress.bytesTransferred / (64 * 1024));
                           handleResume(resumeFromChunk);
                         }}
                         disabled={false}
                         progress={transferProgress.percentage}
-                      />
+                      /> */}
+                      <button 
+                        onClick={() => handleResume(0)}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                      >
+                        Resume Transfer
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1181,6 +1205,12 @@ function App() {
           </div>
         </div>
       )}
+      
+      {/* Performance Debug Panel */}
+      <PerformanceDebug 
+        isVisible={showPerformanceDebug} 
+        onClose={() => setShowPerformanceDebug(false)} 
+      />
       
       {/* Under Construction Ribbon - Above Footer */}
       <div className="fixed bottom-16 left-0 right-0 z-40">

@@ -3,6 +3,7 @@ import { useWebRTC } from './hooks/useWebRTC';
 import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
 import { useBrowserNativeP2P } from './hooks/useBrowserNativeP2P';
+import { useMaximumSpeedTransfer } from './hooks/useMaximumSpeedTransfer';
 import { DropZone } from './components/DropZone';
 import { ShareLink } from './components/ShareLink';
 import { PinToggle } from './components/PinToggle';
@@ -124,8 +125,9 @@ const formatFileSize = (bytes: number): string => {
 function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
   const { isEncrypting } = useEncryption();
-  const { transferProgress, isTransferring, sendFile, sendStream, receiveFile, resumeTransfer } = useFileTransfer();
+  const { transferProgress, isTransferring, sendStream, resumeTransfer } = useFileTransfer();
   const { transferProgress: p2pProgress, transferFileBrowserP2P } = useBrowserNativeP2P();
+  const { transferProgress: speedProgress, transferFileMaximumSpeed } = useMaximumSpeedTransfer();
   const [mode, setMode] = useState<'share' | 'receive'>('share');
   const [shareLink, setShareLink] = useState<string>('');
   const [status, setStatus] = useState<'idle' | 'encrypting' | 'waiting' | 'connecting' | 'transferring' | 'complete' | 'error'>('idle');
@@ -144,7 +146,7 @@ function App() {
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<'home' | 'legal' | 'info'>('home');
   const [enableZip, setEnableZip] = useState<boolean>(true);
-  const [useBrowserP2P] = useState<boolean>(true); // Default to new system
+  const [useBrowserP2P] = useState<boolean>(false); // Default to maximum speed now
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
 
   const copyShareLinkToClipboard = async (link: string) => {
@@ -558,7 +560,7 @@ function App() {
                   if (useBrowserP2P) {
                     await transferFileBrowserP2P(conn, files[i], true);
                   } else {
-                    await sendFile(conn, files[i]);
+                    await transferFileMaximumSpeed(conn, files[i], true);
                   }
                   // Small delay between files
                   await new Promise(resolve => setTimeout(resolve, 100));
@@ -625,7 +627,7 @@ function App() {
             if (useBrowserP2P) {
               await transferFileBrowserP2P(conn, fileToTransfer, true);
             } else {
-              await sendFile(conn, fileToTransfer);
+              await transferFileMaximumSpeed(conn, fileToTransfer, true);
             }
             setStatus('complete');
           });
@@ -804,8 +806,18 @@ function App() {
             URL.revokeObjectURL(url);
           }
         } else {
-          received = await receiveFile(conn, new Set(), activeHandle);
-          console.log('File received:', received.name, received.size);
+          received = await transferFileMaximumSpeed(conn, null as any, false);
+          if (received instanceof Blob) {
+            // Trigger download for maximum speed
+            const url = URL.createObjectURL(received);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = incomingFileInfo?.name || 'download';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }
         }
         
         // For streaming writes, file is already on disk
@@ -1030,8 +1042,8 @@ function App() {
                 {status === 'transferring' && (
                   <div className="w-full">
                     <EnhancedProgressBar 
-                      progress={useBrowserP2P ? p2pProgress : transferProgress} 
-                      label={`Transferring file (${useBrowserP2P ? 'Browser P2P' : 'WebRTC'})`} 
+                      progress={useBrowserP2P ? p2pProgress : speedProgress} 
+                      label={`Transferring file (${useBrowserP2P ? 'Browser P2P Sync' : 'Maximum Speed'})`} 
                       showETA={true}
                       showSpeed={true}
                     />
@@ -1062,8 +1074,8 @@ function App() {
               {status === 'transferring' && (
                 <div className="mt-8 max-w-5xl mx-auto">
                   <EnhancedProgressBar 
-                    progress={useBrowserP2P ? p2pProgress : transferProgress} 
-                    label={`Receiving file (${useBrowserP2P ? 'Browser P2P' : 'WebRTC'})`}
+                    progress={useBrowserP2P ? p2pProgress : speedProgress} 
+                    label={`Receiving file (${useBrowserP2P ? 'Browser P2P Sync' : 'Maximum Speed'})`}
                     showETA={true}
                     showSpeed={true}
                   />

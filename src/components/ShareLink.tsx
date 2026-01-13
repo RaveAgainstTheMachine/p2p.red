@@ -61,7 +61,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
     }
   };
 
-  const handleSocialShare = (platform: string) => {
+  const handleSocialShare = async (platform: string) => {
     const text = encodeURIComponent('Check out this file I shared with you');
     // Extract short key from hash and create /share/ URL for better previews
     const shortKey = shareLink.split('#')[1];
@@ -77,8 +77,9 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
     };
     
     if (platform === 'discord') {
-      // Open Discord and copy link to clipboard for easy pasting
-      handleCopy();
+      // Open Discord and copy rich preview link for better social media display
+      await navigator.clipboard.writeText(previewUrl);
+      setCopied(true);
       window.open(shareUrls.discord, '_blank');
     } else {
       window.open(shareUrls[platform], '_blank', 'width=600,height=400');

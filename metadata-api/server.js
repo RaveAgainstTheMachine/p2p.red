@@ -347,8 +347,9 @@ app.get('/share/:key', async (req, res) => {
     <meta property="og:description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption. Download directly from sender." />
     <meta property="og:site_name" content="p2p.red" />
     <meta property="og:image" content="https://p2p.red/favicon.svg" />
-    <meta property="og:image:width" content="256" />
-    <meta property="og:image:height" content="256" />
+    <meta property="og:image:width" content="32" />
+    <meta property="og:image:height" content="32" />
+    <meta property="og:image:type" content="image/svg+xml" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -356,6 +357,7 @@ app.get('/share/:key', async (req, res) => {
     <meta name="twitter:title" content="${metadata.file_name} - Shared via P2P" />
     <meta name="twitter:description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption." />
     <meta name="twitter:image" content="https://p2p.red/favicon.svg" />
+    <meta name="twitter:image:alt" content="P2P File Share Logo" />
     
     <!-- Redirect to main app after 1 second -->
     <meta http-equiv="refresh" content="1; url=https://p2p.red/#${key}" />
@@ -514,8 +516,9 @@ app.get('/api/metadata/:key', async (req, res) => {
     <meta property="og:description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption. Download directly from sender." />
     <meta property="og:site_name" content="p2p.red" />
     <meta property="og:image" content="https://p2p.red/favicon.svg" />
-    <meta property="og:image:width" content="256" />
-    <meta property="og:image:height" content="256" />
+    <meta property="og:image:width" content="32" />
+    <meta property="og:image:height" content="32" />
+    <meta property="og:image:type" content="image/svg+xml" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -523,6 +526,7 @@ app.get('/api/metadata/:key', async (req, res) => {
     <meta name="twitter:title" content="${metadata.file_name} - Shared via P2P" />
     <meta name="twitter:description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption." />
     <meta name="twitter:image" content="https://p2p.red/favicon.svg" />
+    <meta name="twitter:image:alt" content="P2P File Share Logo" />
     
     <!-- Redirect to main app after 1 second -->
     <meta http-equiv="refresh" content="1; url=https://p2p.red/#${key}" />

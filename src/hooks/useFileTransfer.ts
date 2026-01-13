@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { DataConnection } from 'peerjs';
 import { performanceMonitor } from '../utils/performanceMonitor';
+import { useFlowControl } from './useFlowControl';
 
 export interface TransferProgress {
   bytesTransferred: number;
@@ -11,6 +12,12 @@ export interface TransferProgress {
 }
 
 export const useFileTransfer = () => {
+  const { 
+    onReceiverAck, 
+    waitForSendWindow, 
+    getBackpressureSignal 
+  } = useFlowControl();
+  
   const [transferProgress, setTransferProgress] = useState<TransferProgress>({
     bytesTransferred: 0,
     totalBytes: 0,
@@ -59,9 +66,13 @@ export const useFileTransfer = () => {
     let pendingAcks = new Set<number>();
     const ACK_BATCH_SIZE = 1000; // Effectively disabled
     
-    // Listen for chunk acknowledgments from receiver
+    // Listen for flow control acknowledgments from receiver
     const ackHandler = (data: any) => {
-      if (data.type === 'chunk_ack' && data.transferId === uniqueTransferId) {
+      if (data.type === 'flow_control_ack' && data.transferId === uniqueTransferId) {
+        // New flow control system
+        onReceiverAck(data.chunkIndex, data.receiverSpeed);
+      } else if (data.type === 'chunk_ack' && data.transferId === uniqueTransferId) {
+        // Legacy ACK system (keep for compatibility)
         lastAckedChunk = Math.max(lastAckedChunk, data.chunkIndex);
         pendingAcks.delete(data.chunkIndex);
       }
@@ -201,17 +212,27 @@ export const useFileTransfer = () => {
               }
             }
             
-            // Check DataChannel buffer before sending - disabled for maximum throughput
+            // NEW: Flow control - wait for receiver readiness
+            await waitForSendWindow();
+            
+            // Check backpressure and adapt sending speed
+            const backpressure = getBackpressureSignal();
+            if (backpressure === 'HIGH') {
+              await new Promise(resolve => setTimeout(resolve, 50)); // Slow down significantly
+            } else if (backpressure === 'MEDIUM') {
+              await new Promise(resolve => setTimeout(resolve, 10)); // Moderate throttling
+            }
+            
+            // OLD: Legacy buffer check (keep as fallback)
             const dataChannel = (conn as any).dataChannel;
             if (dataChannel && dataChannel.bufferedAmount > 128 * 1024 * 1024) {
-              // Only throttle at extreme buffer levels (128MB)
               await new Promise(resolve => {
                 const checkBuffer = setInterval(() => {
                   if (dataChannel.bufferedAmount < 64 * 1024 * 1024) {
                     clearInterval(checkBuffer);
                     resolve(undefined);
                   }
-                }, 5); // Ultra-fast check interval
+                }, 5);
               });
             }
             
@@ -439,7 +460,19 @@ export const useFileTransfer = () => {
             //   console.log(`📊 Chunk ${data.index}/${metadata.chunks} received (${((data.index / metadata.chunks) * 100).toFixed(1)}%)`);
             // }
             
-            // Remove ACK system for maximum speed
+            // NEW: Flow control ACK system - send receiver performance back to sender
+            if (data.index % 10 === 0) {
+              const currentSpeed = bytesTransferred / ((Date.now() - startTimeRef.current) / 1000);
+              conn.send({
+                type: 'flow_control_ack',
+                transferId: currentTransferId,
+                chunkIndex: data.index,
+                receiverSpeed: currentSpeed,
+                timestamp: Date.now()
+              });
+            }
+            
+            // Remove legacy ACK system (replaced by flow control)
             // if (data.index % 10 === 0) {
             //   conn.send({
             //     type: 'chunk_ack',

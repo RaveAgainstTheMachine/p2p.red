@@ -86,35 +86,38 @@ export const FileStructure: React.FC<FileStructureProps> = ({ files, maxFiles = 
   const hasMore = totalFiles > maxFiles;
 
   return (
-    <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 max-h-64 overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <Folder size={18} className="text-blue-400" />
-          <span className="text-white font-medium">
-            {totalFiles} {totalFiles === 1 ? 'file' : 'files'}
+    <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl max-h-64 overflow-hidden">
+      {/* Sticky Header */}
+      <div className="sticky top-0 bg-white/10 backdrop-blur-md border-b border-white/10 p-4 z-10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Folder size={18} className="text-blue-400" />
+            <span className="text-white font-medium">
+              {totalFiles} {totalFiles === 1 ? 'file' : 'files'}
+            </span>
+          </div>
+          <span className="text-white/60 text-sm">
+            {formatFileSize(totalSize)}
           </span>
         </div>
-        <span className="text-white/60 text-sm">
-          {formatFileSize(totalSize)}
-        </span>
       </div>
 
-      {/* File Tree */}
-      <div className="space-y-1">
-        {Object.entries(fileTree).map(([folder, folderFiles]) => (
-          <div key={folder}>
-            {folder !== '/' && (
-              <div className="flex items-center gap-2 py-1">
-                <Folder size={14} className="text-blue-300" />
-                <span className="text-white/80 text-sm font-medium">
-                  {folder}
-                </span>
-                <span className="text-white/50 text-xs">
-                  ({folderFiles.length} {folderFiles.length === 1 ? 'file' : 'files'})
-                </span>
-              </div>
-            )}
+      {/* Scrollable File Tree */}
+      <div className="p-4 pt-3 max-h-56 overflow-y-auto">
+        <div className="space-y-1">
+          {Object.entries(fileTree).map(([folder, folderFiles]) => (
+            <div key={folder}>
+              {folder !== '/' && (
+                <div className="flex items-center gap-2 py-1">
+                  <Folder size={14} className="text-blue-300" />
+                  <span className="text-white/80 text-sm font-medium">
+                    {folder}
+                  </span>
+                  <span className="text-white/50 text-xs">
+                    ({folderFiles.length} {folderFiles.length === 1 ? 'file' : 'files'})
+                  </span>
+                </div>
+              )}
             
             {/* Files in folder/root */}
             <div className={folder !== '/' ? 'ml-4' : ''}>
@@ -143,6 +146,7 @@ export const FileStructure: React.FC<FileStructureProps> = ({ files, maxFiles = 
             </span>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

@@ -48,7 +48,45 @@ export class MultiStreamOrchestrator {
     
     const channels: StreamChannel[] = [];
     
-    // Create all channels first
+    // Setup negotiation handler BEFORE creating channels
+    const negotiationPromise = new Promise<void>((resolve, reject) => {
+      let negotiationComplete = false;
+      const timeout = setTimeout(() => {
+        if (!negotiationComplete) {
+          console.warn('⚠️ Negotiation timeout');
+          resolve(); // Don't fail, just continue
+        }
+      }, 5000);
+
+      const handleNegotiationNeeded = async () => {
+        console.log('🔄 Negotiation needed - creating offer');
+        try {
+          const offer = await this.peerConnection!.createOffer();
+          await this.peerConnection!.setLocalDescription(offer);
+          console.log('📤 Local description set (offer)');
+          
+          // Note: PeerJS handles signaling automatically
+          // The offer will be sent through PeerJS's signaling mechanism
+        } catch (error) {
+          console.error('❌ Negotiation error:', error);
+          reject(error);
+        }
+      };
+
+      const handleSignalingStateChange = () => {
+        console.log(`📡 Signaling state: ${this.peerConnection!.signalingState}`);
+        if (this.peerConnection!.signalingState === 'stable') {
+          negotiationComplete = true;
+          clearTimeout(timeout);
+          resolve();
+        }
+      };
+
+      this.peerConnection!.addEventListener('negotiationneeded', handleNegotiationNeeded);
+      this.peerConnection!.addEventListener('signalingstatechange', handleSignalingStateChange);
+    });
+
+    // Create all channels - this will trigger negotiationneeded
     for (let i = 0; i < streamCount; i++) {
       try {
         const channel = this.peerConnection!.createDataChannel(`stream_${i}`, {
@@ -85,7 +123,7 @@ export class MultiStreamOrchestrator {
 
     // Wait for negotiation to complete
     console.log('⏳ Waiting for negotiation...');
-    await this.waitForNegotiation();
+    await negotiationPromise;
 
     // Wait for all channels to open
     console.log('⏳ Waiting for channels to open...');
@@ -157,32 +195,6 @@ export class MultiStreamOrchestrator {
     });
   }
 
-  /**
-   * Wait for WebRTC negotiation to complete
-   */
-  private async waitForNegotiation(): Promise<void> {
-    return new Promise((resolve) => {
-      // Check if negotiation is needed
-      if (this.peerConnection!.signalingState === 'stable') {
-        resolve();
-        return;
-      }
-
-      // Wait for stable state
-      const checkState = () => {
-        if (this.peerConnection!.signalingState === 'stable') {
-          resolve();
-        } else {
-          setTimeout(checkState, 100);
-        }
-      };
-
-      checkState();
-
-      // Timeout after 5 seconds
-      setTimeout(() => resolve(), 5000);
-    });
-  }
 
   /**
    * Wait for channels to be ready

@@ -521,6 +521,14 @@ export const useFileTransfer = () => {
               document.body.removeChild(a);
               URL.revokeObjectURL(url);
               
+              // Show user notification that download has started
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('Download Started', {
+                  body: `${metadata.name} is being downloaded to your default download folder`,
+                  icon: '/favicon.ico'
+                });
+              }
+              
               console.log('📥 Traditional download triggered for:', metadata.name);
               resolve({
                 data: blob,

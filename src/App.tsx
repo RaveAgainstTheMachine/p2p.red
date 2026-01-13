@@ -12,6 +12,7 @@ import { Monitoring } from './components/Monitoring';
 import { PerformanceDebug } from './components/PerformanceDebug';
 import { FileStructure } from './components/FileStructure';
 import { Logo } from './components/Logo';
+import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { Download, Share2, Shield, CheckCircle, File, Check } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
@@ -1001,9 +1002,12 @@ function App() {
                 
                 {status === 'transferring' && (
                   <div className="w-full">
-                    <div className="text-center text-white/60">
-                      Transferring: {transferProgress.percentage.toFixed(1)}%
-                    </div>
+                    <EnhancedProgressBar 
+                      progress={transferProgress} 
+                      label="Transferring file" 
+                      showETA={true}
+                      showSpeed={true}
+                    />
                   </div>
                 )}
                 
@@ -1030,9 +1034,12 @@ function App() {
               
               {status === 'transferring' && (
                 <div className="mt-8 max-w-5xl mx-auto">
-                  <div className="text-center text-white/60">
-                    Receiving: {transferProgress.percentage.toFixed(1)}%
-                  </div>
+                  <EnhancedProgressBar 
+                    progress={transferProgress} 
+                    label="Receiving file"
+                    showETA={true}
+                    showSpeed={true}
+                  />
                 </div>
               )}
               

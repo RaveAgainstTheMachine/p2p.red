@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { DataConnection } from 'peerjs';
 import { performanceMonitor } from '../utils/performanceMonitor';
-import { useFlowControl } from './useFlowControl';
 
 export interface TransferProgress {
   bytesTransferred: number;
@@ -12,12 +11,6 @@ export interface TransferProgress {
 }
 
 export const useFileTransfer = () => {
-  const { 
-    onReceiverAck, 
-    waitForSendWindow, 
-    getBackpressureSignal 
-  } = useFlowControl();
-  
   const [transferProgress, setTransferProgress] = useState<TransferProgress>({
     bytesTransferred: 0,
     totalBytes: 0,
@@ -66,13 +59,9 @@ export const useFileTransfer = () => {
     let pendingAcks = new Set<number>();
     const ACK_BATCH_SIZE = 1000; // Effectively disabled
     
-    // Listen for flow control acknowledgments from receiver
+    // Listen for acknowledgments from receiver
     const ackHandler = (data: any) => {
-      if (data.type === 'flow_control_ack' && data.transferId === uniqueTransferId) {
-        // New flow control system
-        onReceiverAck(data.chunkIndex, data.receiverSpeed);
-      } else if (data.type === 'chunk_ack' && data.transferId === uniqueTransferId) {
-        // Legacy ACK system (keep for compatibility)
+      if (data.type === 'chunk_ack' && data.transferId === uniqueTransferId) {
         lastAckedChunk = Math.max(lastAckedChunk, data.chunkIndex);
         pendingAcks.delete(data.chunkIndex);
       }
@@ -212,18 +201,7 @@ export const useFileTransfer = () => {
               }
             }
             
-            // NEW: Flow control - wait for receiver readiness
-            await waitForSendWindow();
-            
-            // Check backpressure and adapt sending speed
-            const backpressure = getBackpressureSignal();
-            if (backpressure === 'HIGH') {
-              await new Promise(resolve => setTimeout(resolve, 50)); // Slow down significantly
-            } else if (backpressure === 'MEDIUM') {
-              await new Promise(resolve => setTimeout(resolve, 10)); // Moderate throttling
-            }
-            
-            // OLD: Legacy buffer check (keep as fallback)
+// Legacy buffer check for backpressure
             const dataChannel = (conn as any).dataChannel;
             if (dataChannel && dataChannel.bufferedAmount > 128 * 1024 * 1024) {
               await new Promise(resolve => {

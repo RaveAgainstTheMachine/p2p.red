@@ -208,16 +208,18 @@ export const useAdaptiveMultiStreamTransfer = () => {
             continue;
           }
 
-          // Send chunk
-          const message = JSON.stringify({
-            type: 'multi_stream_chunk',
+          // Send chunk directly as binary (no JSON conversion for speed)
+          // First send metadata as JSON
+          channel.send(JSON.stringify({
+            type: 'multi_stream_chunk_meta',
             chunkIndex,
-            data: Array.from(chunkData),
             streamId: channelIndex,
+            size: chunkData.length,
             timestamp: Date.now()
-          });
-
-          channel.send(message);
+          }));
+          
+          // Then send raw binary data
+          channel.send(chunkData.buffer);
 
           bytesTransferred += chunkData.length;
           chunkIndex++;
@@ -315,15 +317,24 @@ export const useAdaptiveMultiStreamTransfer = () => {
           const channel = event.channel;
           console.log(`📥 Incoming DataChannel: ${channel.label}`);
 
+          let pendingMeta: any = null;
+
           channel.onmessage = (event) => {
             try {
-              const data = JSON.parse(event.data);
-              
-              if (data.type === 'multi_stream_chunk') {
-                // Store chunk
-                const chunkData = new Uint8Array(data.data);
-                chunks.set(data.chunkIndex, chunkData);
+              // Try to parse as JSON first (metadata)
+              if (typeof event.data === 'string') {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'multi_stream_chunk_meta') {
+                  // Store metadata, wait for binary data
+                  pendingMeta = data;
+                }
+              } else if (event.data instanceof ArrayBuffer && pendingMeta) {
+                // Binary data received, combine with metadata
+                const chunkData = new Uint8Array(event.data);
+                chunks.set(pendingMeta.chunkIndex, chunkData);
                 bytesReceived += chunkData.length;
+                pendingMeta = null;
 
                 // Update progress
                 const elapsed = (Date.now() - startTime.current) / 1000;

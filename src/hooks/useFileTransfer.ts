@@ -41,7 +41,7 @@ export const useFileTransfer = () => {
     lastChunkTimeRef.current = Date.now(); // Reset chunk timer when transfer starts
     lastProgressRef.current = 0;
 
-    const CHUNK_SIZE = 256 * 1024; // 256KB chunks for maximum throughput
+    const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunks for high-speed connections
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     const totalBytes = file.size;
     const uniqueTransferId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -196,17 +196,17 @@ export const useFileTransfer = () => {
               }
             }
             
-            // Check DataChannel buffer before sending
+            // Check DataChannel buffer before sending - optimized for high-speed connections
             const dataChannel = (conn as any).dataChannel;
-            if (dataChannel && dataChannel.bufferedAmount > 16 * 1024 * 1024) {
-              // Buffer is over 16MB, wait for it to drain
+            if (dataChannel && dataChannel.bufferedAmount > 64 * 1024 * 1024) {
+              // Buffer is over 64MB, wait for it to drain (higher threshold for speed)
               await new Promise(resolve => {
                 const checkBuffer = setInterval(() => {
-                  if (dataChannel.bufferedAmount < 8 * 1024 * 1024) {
+                  if (dataChannel.bufferedAmount < 32 * 1024 * 1024) {
                     clearInterval(checkBuffer);
                     resolve(undefined);
                   }
-                }, 50);
+                }, 10); // Faster check interval
               });
             }
             
@@ -582,7 +582,7 @@ export const useFileTransfer = () => {
     startTimeRef.current = Date.now();
     lastChunkTimeRef.current = Date.now();
 
-    const CHUNK_SIZE = 256 * 1024;
+    const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunks for high-speed connections
     const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
     const uniqueTransferId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -667,14 +667,14 @@ export const useFileTransfer = () => {
           buffer = buffer.slice(CHUNK_SIZE);
           
           const dataChannel = (conn as any).dataChannel;
-          if (dataChannel && dataChannel.bufferedAmount > 16 * 1024 * 1024) {
+          if (dataChannel && dataChannel.bufferedAmount > 64 * 1024 * 1024) {
             await new Promise(resolve => {
               const checkBuffer = setInterval(() => {
-                if (dataChannel.bufferedAmount < 8 * 1024 * 1024) {
+                if (dataChannel.bufferedAmount < 32 * 1024 * 1024) {
                   clearInterval(checkBuffer);
                   resolve(undefined);
                 }
-              }, 50);
+              }, 10); // Faster check interval
             });
           }
           

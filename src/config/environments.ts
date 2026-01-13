@@ -27,7 +27,7 @@ export const environments: Record<string, EnvironmentConfig> = {
     monitoring: false,
     analytics: false,
     maxFileSize: 100 * 1024 * 1024, // 100MB
-    chunkSize: 64 * 1024, // 64KB
+    chunkSize: 2 * 1024 * 1024, // 2MB
     connectionTimeout: 30000 // 30 seconds
   },
   production: {
@@ -42,7 +42,7 @@ export const environments: Record<string, EnvironmentConfig> = {
     monitoring: true,
     analytics: true,
     maxFileSize: 1024 * 1024 * 1024, // 1GB
-    chunkSize: 256 * 1024, // 256KB
+    chunkSize: 2 * 1024 * 1024, // 2MB
     connectionTimeout: 60000 // 60 seconds
   }
 };

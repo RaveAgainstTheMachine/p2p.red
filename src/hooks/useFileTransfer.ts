@@ -49,10 +49,10 @@ export const useFileTransfer = () => {
     console.log('Transfer metadata:', { totalChunks, totalBytes, transferId: uniqueTransferId });
     setTransferId(uniqueTransferId);
     
-    // Track receiver acknowledgments for backpressure
+    // Track receiver acknowledgments for backpressure (disabled for max speed)
     let lastAckedChunk = -1;
     let pendingAcks = new Set<number>();
-    const ACK_BATCH_SIZE = 50; // Larger batch for fewer ACKs
+    const ACK_BATCH_SIZE = 1000; // Effectively disabled
     
     // Listen for chunk acknowledgments from receiver
     const ackHandler = (data: any) => {
@@ -589,7 +589,7 @@ export const useFileTransfer = () => {
     setTransferId(uniqueTransferId);
     
     let lastAckedChunk = -1;
-    const ACK_BATCH_SIZE = 10;
+    // const ACK_BATCH_SIZE = 1000; // Effectively disabled
     
     const ackHandler = (data: any) => {
       if (data.type === 'chunk_ack' && data.transferId === uniqueTransferId) {
@@ -658,10 +658,11 @@ export const useFileTransfer = () => {
         while (buffer.length >= CHUNK_SIZE) {
           if (connectionClosed) throw new Error('Connection closed');
           
-          while (chunkIndex - lastAckedChunk > ACK_BATCH_SIZE * 2) {
-            await new Promise(resolve => setTimeout(resolve, 1)); // Minimal delay
-            if (connectionClosed) throw new Error('Connection closed');
-          }
+          // Remove ACK waiting for maximum speed
+            // while (chunkIndex - lastAckedChunk > ACK_BATCH_SIZE * 2) {
+            //   await new Promise(resolve => setTimeout(resolve, 10));
+            //   if (connectionClosed) throw new Error('Connection closed');
+            // }  
           
           const chunk = buffer.slice(0, CHUNK_SIZE);
           buffer = buffer.slice(CHUNK_SIZE);

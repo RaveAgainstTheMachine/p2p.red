@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Upload, Folder, File, ArrowLeft, ChevronRight, HardDrive } from 'lucide-react';
+import { Upload, Folder, File, ArrowLeft, ChevronRight, HardDrive, AlertTriangle } from 'lucide-react';
 
 interface DropZoneProps {
   onFileSelect: (files: File[]) => void;
@@ -535,7 +535,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
       )}
       
       <div className="flex items-center gap-2 text-white/40 text-sm">
-        <span className="text-yellow-400">⚠️</span>
+        <AlertTriangle size={16} className="text-yellow-400" />
         <span>Files are never uploaded to our servers.</span>
       </div>
       

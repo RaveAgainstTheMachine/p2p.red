@@ -226,7 +226,7 @@ function App() {
         })
         .catch((error) => {
           console.error('❌ Failed to fetch metadata:', error);
-          if (error.response?.status === 401) {
+          if (error.message === 'PIN_REQUIRED' || error.response?.status === 401) {
             setRequiresPin(true);
             setStatus('idle');
           } else {

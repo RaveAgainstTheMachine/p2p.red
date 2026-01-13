@@ -2,12 +2,17 @@
 
 # Streamlined Build & Deploy Script for P2P File Share
 # Prevents service restart issues by proper container management
+# Includes cache-busting to ensure latest code is served
 
 set -e
 
 APP_DIR="/opt/p2p-file-share"
 
 echo "🚀 Starting streamlined build & deploy..."
+
+# Generate build timestamp for cache busting
+BUILD_TIMESTAMP=$(date +%s)
+echo "📅 Build timestamp: $BUILD_TIMESTAMP"
 
 # Build application
 echo "📦 Building application..."
@@ -19,6 +24,23 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "✅ Build successful"
+
+# Extract build hash from generated files for verification
+BUILD_HASH=$(ls -1 dist/assets/index-*.js 2>/dev/null | head -1 | grep -oP 'index-\K[0-9]+' || echo "unknown")
+echo "🔑 Build hash: $BUILD_HASH"
+
+# Update version.json with build info
+if [ -f "public/version.json" ]; then
+    cat > public/version.json <<EOF
+{
+  "version": "1.0.0",
+  "build": "$BUILD_HASH",
+  "timestamp": $BUILD_TIMESTAMP
+}
+EOF
+    cp public/version.json dist/version.json
+    echo "📝 Updated version.json"
+fi
 
 # Stop services gracefully
 echo "🛑 Stopping services..."
@@ -69,5 +91,35 @@ if ! docker ps | grep -q "p2p-peerjs"; then
 fi
 
 echo "✅ All critical services running"
+
+# Verify build hash is being served
+echo "🔍 Verifying latest build is served..."
+sleep 2
+
+# Check if the new build hash appears in the served HTML
+SERVED_HASH=$(curl -s https://p2p.red/ | grep -oP 'index-\K[0-9]+(?=\.js)' | head -1 || echo "unknown")
+echo "📡 Served hash: $SERVED_HASH"
+
+if [ "$BUILD_HASH" != "unknown" ] && [ "$SERVED_HASH" != "unknown" ]; then
+    if [ "$BUILD_HASH" == "$SERVED_HASH" ]; then
+        echo "✅ Latest build verified - hash matches: $BUILD_HASH"
+    else
+        echo "⚠️  Warning: Build hash mismatch!"
+        echo "   Built: $BUILD_HASH"
+        echo "   Served: $SERVED_HASH"
+        echo "   This might indicate caching issues"
+    fi
+else
+    echo "⚠️  Could not verify build hash"
+fi
+
+# Force browser cache clear instructions
+echo ""
+echo "🔄 CACHE CLEARING:"
+echo "   - Nginx configured with no-cache headers"
+echo "   - Users should hard refresh: Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+R (Mac)"
+echo "   - Or clear browser cache for p2p.red"
+echo ""
 echo "🌐 Site: https://p2p.red"
 echo "📊 Status: docker-compose ps"
+echo "🔑 Build: $BUILD_HASH @ $BUILD_TIMESTAMP"

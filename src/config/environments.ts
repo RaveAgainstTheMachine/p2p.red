@@ -4,7 +4,11 @@ interface EnvironmentConfig {
     host: string;
     port: number;
     path: string;
-    secure?: boolean;
+    secure: boolean;
+    config?: {
+      iceServers: any[];
+      sdpSemantics: string;
+    };
   };
   logging: 'debug' | 'info' | 'warn' | 'error';
   monitoring: boolean;
@@ -21,13 +25,20 @@ export const environments: Record<string, EnvironmentConfig> = {
       host: 'localhost',
       port: 9000,
       path: '/peerjs',
-      secure: false
+      secure: false,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ],
+        sdpSemantics: 'unified-plan'
+      }
     },
     logging: 'debug',
     monitoring: false,
     analytics: false,
     maxFileSize: 100 * 1024 * 1024, // 100MB
-    chunkSize: 2 * 1024 * 1024, // 2MB
+    chunkSize: 16 * 1024 * 1024, // 16MB
     connectionTimeout: 30000 // 30 seconds
   },
   production: {
@@ -36,13 +47,25 @@ export const environments: Record<string, EnvironmentConfig> = {
       host: 'p2p.red',
       port: 443,
       path: '/peerjs',
-      secure: true
+      secure: true,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { 
+            urls: 'turn:p2p.red:3478',
+            username: 'p2puser',
+            credential: 'p2ppass123'
+          }
+        ],
+        sdpSemantics: 'unified-plan'
+      }
     },
     logging: 'error',
     monitoring: true,
     analytics: true,
     maxFileSize: 1024 * 1024 * 1024, // 1GB
-    chunkSize: 2 * 1024 * 1024, // 2MB
+    chunkSize: 16 * 1024 * 1024, // 16MB
     connectionTimeout: 60000 // 60 seconds
   }
 };

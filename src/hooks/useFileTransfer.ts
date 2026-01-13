@@ -41,7 +41,7 @@ export const useFileTransfer = () => {
     lastChunkTimeRef.current = Date.now(); // Reset chunk timer when transfer starts
     lastProgressRef.current = 0;
 
-    const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunks for high-speed connections
+    const CHUNK_SIZE = 16 * 1024 * 1024; // 16MB chunks for maximum throughput
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     const totalBytes = file.size;
     const uniqueTransferId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -52,7 +52,7 @@ export const useFileTransfer = () => {
     // Track receiver acknowledgments for backpressure
     let lastAckedChunk = -1;
     let pendingAcks = new Set<number>();
-    const ACK_BATCH_SIZE = 10; // Wait for ACK every 10 chunks
+    const ACK_BATCH_SIZE = 50; // Larger batch for fewer ACKs
     
     // Listen for chunk acknowledgments from receiver
     const ackHandler = (data: any) => {
@@ -196,17 +196,17 @@ export const useFileTransfer = () => {
               }
             }
             
-            // Check DataChannel buffer before sending - optimized for high-speed connections
+            // Check DataChannel buffer before sending - disabled for maximum throughput
             const dataChannel = (conn as any).dataChannel;
-            if (dataChannel && dataChannel.bufferedAmount > 64 * 1024 * 1024) {
-              // Buffer is over 64MB, wait for it to drain (higher threshold for speed)
+            if (dataChannel && dataChannel.bufferedAmount > 128 * 1024 * 1024) {
+              // Only throttle at extreme buffer levels (128MB)
               await new Promise(resolve => {
                 const checkBuffer = setInterval(() => {
-                  if (dataChannel.bufferedAmount < 32 * 1024 * 1024) {
+                  if (dataChannel.bufferedAmount < 64 * 1024 * 1024) {
                     clearInterval(checkBuffer);
                     resolve(undefined);
                   }
-                }, 10); // Faster check interval
+                }, 5); // Ultra-fast check interval
               });
             }
             
@@ -582,7 +582,7 @@ export const useFileTransfer = () => {
     startTimeRef.current = Date.now();
     lastChunkTimeRef.current = Date.now();
 
-    const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunks for high-speed connections
+    const CHUNK_SIZE = 16 * 1024 * 1024; // 16MB chunks for maximum throughput
     const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
     const uniqueTransferId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -659,7 +659,7 @@ export const useFileTransfer = () => {
           if (connectionClosed) throw new Error('Connection closed');
           
           while (chunkIndex - lastAckedChunk > ACK_BATCH_SIZE * 2) {
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await new Promise(resolve => setTimeout(resolve, 1)); // Minimal delay
             if (connectionClosed) throw new Error('Connection closed');
           }
           
@@ -667,14 +667,14 @@ export const useFileTransfer = () => {
           buffer = buffer.slice(CHUNK_SIZE);
           
           const dataChannel = (conn as any).dataChannel;
-          if (dataChannel && dataChannel.bufferedAmount > 64 * 1024 * 1024) {
+          if (dataChannel && dataChannel.bufferedAmount > 128 * 1024 * 1024) {
             await new Promise(resolve => {
               const checkBuffer = setInterval(() => {
-                if (dataChannel.bufferedAmount < 32 * 1024 * 1024) {
+                if (dataChannel.bufferedAmount < 64 * 1024 * 1024) {
                   clearInterval(checkBuffer);
                   resolve(undefined);
                 }
-              }, 10); // Faster check interval
+              }, 5); // Ultra-fast check interval
             });
           }
           

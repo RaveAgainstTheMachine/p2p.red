@@ -338,13 +338,13 @@ app.get('/share/:key', async (req, res) => {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${metadata.file_name} - P2P File Share</title>
-    <meta name="description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage." />
+    <meta name="description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage." />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://p2p.red/#${key}" />
     <meta property="og:title" content="${metadata.file_name} - Shared via P2P" />
-    <meta property="og:description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption. Download directly from sender." />
+    <meta property="og:description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption. Download directly from sender." />
     <meta property="og:site_name" content="p2p.red" />
     <meta property="og:image" content="https://p2p.red/favicon.svg" />
     <meta property="og:image:width" content="32" />
@@ -355,7 +355,7 @@ app.get('/share/:key', async (req, res) => {
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://p2p.red/#${key}" />
     <meta name="twitter:title" content="${metadata.file_name} - Shared via P2P" />
-    <meta name="twitter:description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption." />
+    <meta name="twitter:description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption." />
     <meta name="twitter:image" content="https://p2p.red/favicon.svg" />
     <meta name="twitter:image:alt" content="P2P File Share Logo" />
     
@@ -507,13 +507,13 @@ app.get('/api/metadata/:key', async (req, res) => {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${metadata.file_name} - P2P File Share</title>
-    <meta name="description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage." />
+    <meta name="description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage." />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://p2p.red/#${key}" />
     <meta property="og:title" content="${metadata.file_name} - Shared via P2P" />
-    <meta property="og:description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption. Download directly from sender." />
+    <meta property="og:description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption. Download directly from sender." />
     <meta property="og:site_name" content="p2p.red" />
     <meta property="og:image" content="https://p2p.red/favicon.svg" />
     <meta property="og:image:width" content="32" />
@@ -524,7 +524,7 @@ app.get('/api/metadata/:key', async (req, res) => {
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://p2p.red/#${key}" />
     <meta name="twitter:title" content="${metadata.file_name} - Shared via P2P" />
-    <meta name="twitter:description" content="A ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption." />
+    <meta name="twitter:description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with P2P encryption." />
     <meta name="twitter:image" content="https://p2p.red/favicon.svg" />
     <meta name="twitter:image:alt" content="P2P File Share Logo" />
     

@@ -466,7 +466,7 @@ app.get('/api/metadata/:key', async (req, res) => {
       try {
         // Get metadata (no PIN needed for public preview)
         const result = await pool.query(
-          `SELECT peer_id, file_name, file_size, file_type, expires_at, has_pin 
+          `SELECT peer_id, file_name, file_size, file_type, expires_at, pin_hash 
            FROM short_links 
            WHERE short_key = $1 AND (expires_at IS NULL OR expires_at > NOW())`,
           [key]

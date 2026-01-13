@@ -411,17 +411,18 @@ export const useFileTransfer = () => {
             bytesTransferred += data.data.byteLength;
             lastChunkTimeRef.current = Date.now();
             connectionHealthRef.current = true;
-            setReceivedChunks(prev => new Set(prev).add(data.index));
+            // Remove setReceivedChunks for maximum speed
+            // setReceivedChunks(prev => new Set(prev).add(data.index));
             
-            // Update progress less frequently to reduce overhead
-            if (data.index % 10 === 0) {
+            // Minimal progress updates - receiver is completely overwhelmed
+            if (data.index % 100 === 0) {
               updateProgress();
             }
             
-            // Log progress every 100 chunks
-            if (data.index % 100 === 0) {
-              console.log(`📊 Chunk ${data.index}/${metadata.chunks} received (${((data.index / metadata.chunks) * 100).toFixed(1)}%)`);
-            }
+            // Remove console logging for maximum speed
+            // if (data.index % 100 === 0) {
+            //   console.log(`📊 Chunk ${data.index}/${metadata.chunks} received (${((data.index / metadata.chunks) * 100).toFixed(1)}%)`);
+            // }
             
             // Remove ACK system for maximum speed
             // if (data.index % 10 === 0) {
@@ -432,18 +433,18 @@ export const useFileTransfer = () => {
             //   });
             // }
             
-            // Save transfer progress periodically for resume
-            if (data.index % 100 === 0) {
-              try {
-                sessionStorage.setItem(`receive_${currentTransferId}`, JSON.stringify({
-                  lastChunkIndex: data.index,
-                  bytesTransferred,
-                  timestamp: Date.now()
-                }));
-              } catch (e) {
-                console.warn('Failed to save receive state:', e);
-              }
-            }
+            // Remove session storage for maximum speed
+            // if (data.index % 100 === 0) {
+            //   try {
+            //     sessionStorage.setItem(`receive_${currentTransferId}`, JSON.stringify({
+            //       lastChunkIndex: data.index,
+            //       bytesTransferred,
+            //       timestamp: Date.now()
+            //     }));
+            //   } catch (e) {
+            //     console.warn('Failed to save receive state:', e);
+            //   }
+            // }
           }
         } else if (data.type === 'complete') {
           if (data.transferId === currentTransferId) {

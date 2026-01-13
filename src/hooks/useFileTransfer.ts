@@ -394,9 +394,10 @@ export const useFileTransfer = () => {
         } else if (data.type === 'chunk') {
           if (data.transferId === currentTransferId) {
             if (fileHandle && writable) {
-              // Stream to disk
+              // Stream to disk - buffer writes for performance
               try {
-                await writable.write(data.data);
+                // Don't await every write - let it buffer
+                writable.write(data.data);
               } catch (writeError) {
                 console.error('❌ Failed to write chunk to disk:', writeError);
                 reject(writeError);
@@ -411,21 +412,25 @@ export const useFileTransfer = () => {
             lastChunkTimeRef.current = Date.now();
             connectionHealthRef.current = true;
             setReceivedChunks(prev => new Set(prev).add(data.index));
-            updateProgress();
+            
+            // Update progress less frequently to reduce overhead
+            if (data.index % 10 === 0) {
+              updateProgress();
+            }
             
             // Log progress every 100 chunks
             if (data.index % 100 === 0) {
               console.log(`📊 Chunk ${data.index}/${metadata.chunks} received (${((data.index / metadata.chunks) * 100).toFixed(1)}%)`);
             }
             
-            // Send ACK every 10 chunks for backpressure
-            if (data.index % 10 === 0) {
-              conn.send({
-                type: 'chunk_ack',
-                transferId: currentTransferId,
-                chunkIndex: data.index
-              });
-            }
+            // Remove ACK system for maximum speed
+            // if (data.index % 10 === 0) {
+            //   conn.send({
+            //     type: 'chunk_ack',
+            //     transferId: currentTransferId,
+            //     chunkIndex: data.index
+            //   });
+            // }
             
             // Save transfer progress periodically for resume
             if (data.index % 100 === 0) {

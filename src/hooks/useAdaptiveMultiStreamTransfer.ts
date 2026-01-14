@@ -321,7 +321,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
     let useFileSystemAPI = false;
     
     const chunks = new Map<number, Uint8Array>();
-    let nextExpectedChunk = 0;
+    const CHUNK_SIZE = 262136; // Must match sender chunk size
 
     return new Promise((resolve) => {
       // Setup DataChannel handler factory (will be called after File System Access API)
@@ -349,34 +349,25 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   bytesReceived += chunkData.length;
                   
                   if (useFileSystemAPI && writableStream) {
-                    // Chrome/Edge: Write directly to disk
-                    console.log(`💾 DISK WRITE: chunk ${chunkIndex}, useFileSystemAPI=${useFileSystemAPI}, writableStream=${!!writableStream}`);
-                    if (chunkIndex === nextExpectedChunk) {
-                      try {
-                        await writableStream.write(chunkData);
-                        console.log(`✅ Wrote chunk ${chunkIndex} to disk (${chunkData.length} bytes)`);
-                        nextExpectedChunk++;
-                        
-                        // Write any buffered chunks that are now in order
-                        while (chunks.has(nextExpectedChunk)) {
-                          await writableStream.write(chunks.get(nextExpectedChunk)!);
-                          console.log(`✅ Wrote buffered chunk ${nextExpectedChunk} to disk`);
-                          chunks.delete(nextExpectedChunk);
-                          nextExpectedChunk++;
-                        }
-                      } catch (error) {
-                        console.error(`❌ DISK WRITE FAILED for chunk ${chunkIndex}:`, error);
-                        // Fall back to RAM on write error
-                        chunks.set(chunkIndex, chunkData);
+                    // Chrome/Edge: Write directly to disk at correct position
+                    try {
+                      // Calculate file position for this chunk
+                      const position = chunkIndex * CHUNK_SIZE;
+                      
+                      // Seek to position and write
+                      await writableStream.seek(position);
+                      await writableStream.write(chunkData);
+                      
+                      if (chunkIndex % 100 === 0) {
+                        console.log(`💾 Wrote chunk ${chunkIndex} to disk at position ${position} (${chunkData.length} bytes)`);
                       }
-                    } else {
-                      // Out of order, buffer it temporarily
-                      console.log(`📋 Buffering out-of-order chunk ${chunkIndex} (expecting ${nextExpectedChunk})`);
+                    } catch (error) {
+                      console.error(`❌ DISK WRITE FAILED for chunk ${chunkIndex}:`, error);
+                      // Fall back to RAM on write error
                       chunks.set(chunkIndex, chunkData);
                     }
                   } else {
                     // Firefox: Buffer in RAM for traditional download
-                    console.log(`📥 RAM BUFFER: chunk ${chunkIndex}, useFileSystemAPI=${useFileSystemAPI}, writableStream=${!!writableStream}`);
                     chunks.set(chunkIndex, chunkData);
                   }
 

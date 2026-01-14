@@ -167,7 +167,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           timestamp: Date.now()
         });
 
-        // Wait for receiver ready signal
+        // Wait for receiver ready signal and handle retransmission requests
         await new Promise<void>((resolveReady) => {
           const readyHandler = (data: any) => {
             if (data.type === 'receiver_ready') {
@@ -267,6 +267,82 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   
                   // Small delay to ensure completion message is sent
                   await new Promise(resolve => setTimeout(resolve, 100));
+                  
+                  // Wait for potential retransmission requests
+                  console.log('⏳ Waiting for receiver confirmation or retransmission request...');
+                  const retransmitHandler = async (data: any) => {
+                    if (data.type === 'retransmit_request') {
+                      console.log(`📡 Retransmission request received for ${data.missingRanges.length} missing ranges`);
+                      
+                      // Re-open channels if closed
+                      const activeChannels = channels.filter(ch => ch.readyState === 'open');
+                      if (activeChannels.length === 0) {
+                        console.error('❌ Cannot retransmit: All channels closed');
+                        return;
+                      }
+                      
+                      // Retransmit missing ranges
+                      for (const range of data.missingRanges) {
+                        console.log(`🔄 Retransmitting ${((range.end - range.start)/1024/1024).toFixed(1)}MB from position ${(range.start/1024/1024).toFixed(1)}MB`);
+                        
+                        // Re-read this range from the file
+                        if (input instanceof File) {
+                          const blob = input.slice(range.start, range.end);
+                          const arrayBuffer = await blob.arrayBuffer();
+                          const data = new Uint8Array(arrayBuffer);
+                          
+                          // Send in chunks
+                          let position = range.start;
+                          for (let offset = 0; offset < data.length; offset += chunkSize) {
+                            const chunkData = data.slice(offset, Math.min(offset + chunkSize, data.length));
+                            
+                            // Create header with position
+                            const header = new ArrayBuffer(16);
+                            const headerView = new DataView(header);
+                            headerView.setUint32(0, position & 0xFFFFFFFF, true);
+                            headerView.setUint32(4, Math.floor(position / 0x100000000), true);
+                            headerView.setUint32(8, chunkData.length, true);
+                            headerView.setUint32(12, 0, true);
+                            
+                            const message = new Uint8Array(header.byteLength + chunkData.length);
+                            message.set(new Uint8Array(header), 0);
+                            message.set(chunkData, header.byteLength);
+                            
+                            // Send on first available channel
+                            const channel = activeChannels[0];
+                            channel.send(message.buffer);
+                            
+                            position += chunkData.length;
+                            
+                            // Wait for buffer to drain if needed
+                            while (channel.bufferedAmount > HIGH_WATER_MARK) {
+                              await new Promise(resolve => setTimeout(resolve, 10));
+                            }
+                          }
+                        }
+                      }
+                      
+                      // Wait for buffers to drain
+                      while (true) {
+                        const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
+                        if (totalBuffered === 0) break;
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                      }
+                      
+                      console.log('✅ Retransmission complete');
+                      conn.send({
+                        type: 'retransmit_complete',
+                        crc32: finalCRC,
+                        timestamp: Date.now()
+                      });
+                    }
+                  };
+                  
+                  conn.on('data', retransmitHandler);
+                  
+                  // Wait up to 5 seconds for retransmission request
+                  await new Promise(resolve => setTimeout(resolve, 5000));
+                  conn.off('data', retransmitHandler);
                   
                   channels.forEach(ch => ch.close());
                   console.log('🎉 MULTI-STREAM: Transfer completed - RESOLVING PROMISE');
@@ -386,6 +462,50 @@ export const useAdaptiveMultiStreamTransfer = () => {
     let useFileSystemAPI = false;
     
     const chunks = new Map<number, Uint8Array>();
+    
+    // Track received byte ranges to detect missing chunks
+    const receivedRanges: Array<{start: number, end: number}> = [];
+    
+    function addReceivedRange(start: number, end: number) {
+      receivedRanges.push({start, end});
+      // Merge overlapping ranges
+      receivedRanges.sort((a, b) => a.start - b.start);
+      for (let i = 0; i < receivedRanges.length - 1; i++) {
+        if (receivedRanges[i].end >= receivedRanges[i + 1].start) {
+          receivedRanges[i].end = Math.max(receivedRanges[i].end, receivedRanges[i + 1].end);
+          receivedRanges.splice(i + 1, 1);
+          i--;
+        }
+      }
+    }
+    
+    function getMissingRanges(totalSize: number): Array<{start: number, end: number}> {
+      if (receivedRanges.length === 0) {
+        return [{start: 0, end: totalSize}];
+      }
+      
+      const missing: Array<{start: number, end: number}> = [];
+      
+      // Check gap before first range
+      if (receivedRanges[0].start > 0) {
+        missing.push({start: 0, end: receivedRanges[0].start});
+      }
+      
+      // Check gaps between ranges
+      for (let i = 0; i < receivedRanges.length - 1; i++) {
+        if (receivedRanges[i].end < receivedRanges[i + 1].start) {
+          missing.push({start: receivedRanges[i].end, end: receivedRanges[i + 1].start});
+        }
+      }
+      
+      // Check gap after last range
+      const lastRange = receivedRanges[receivedRanges.length - 1];
+      if (lastRange.end < totalSize) {
+        missing.push({start: lastRange.end, end: totalSize});
+      }
+      
+      return missing;
+    }
 
     return new Promise((resolve) => {
       // Setup DataChannel handler factory (will be called after File System Access API)
@@ -413,6 +533,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   const chunkData = message.slice(16);
                   
                   bytesReceived += chunkData.length;
+                  
+                  // Track this received byte range
+                  addReceivedRange(bytePosition, bytePosition + chunkData.length);
                   
                   // Update CRC32 with this chunk
                   receiverCRC = updateCRC32(receiverCRC, chunkData);
@@ -611,8 +734,36 @@ export const useAdaptiveMultiStreamTransfer = () => {
           });
         } else if (data.type === 'multi_stream_complete') {
           console.log('✅ Transfer complete signal received');
+          console.log(`📊 Bytes received: ${bytesReceived}/${fileSize}`);
           
-          // Verify CRC32 if provided
+          // Check for missing data
+          const missingRanges = getMissingRanges(fileSize);
+          if (missingRanges.length > 0) {
+            const totalMissing = missingRanges.reduce((sum, range) => sum + (range.end - range.start), 0);
+            console.error(`❌ MISSING DATA DETECTED: ${(totalMissing/1024/1024).toFixed(1)}MB missing in ${missingRanges.length} gaps`);
+            
+            // Log first few gaps for debugging
+            const gapsToShow = Math.min(5, missingRanges.length);
+            for (let i = 0; i < gapsToShow; i++) {
+              const gap = missingRanges[i];
+              console.error(`   Gap ${i+1}: ${(gap.start/1024/1024).toFixed(1)}MB - ${(gap.end/1024/1024).toFixed(1)}MB (${((gap.end-gap.start)/1024/1024).toFixed(1)}MB)`);
+            }
+            if (missingRanges.length > gapsToShow) {
+              console.error(`   ... and ${missingRanges.length - gapsToShow} more gaps`);
+            }
+            
+            // Request retransmission
+            console.log('📡 Requesting retransmission of missing data...');
+            conn.send({
+              type: 'retransmit_request',
+              missingRanges: missingRanges,
+              timestamp: Date.now()
+            });
+            return; // Don't verify CRC yet, wait for retransmission
+          }
+          
+          // All data received, verify CRC32
+          console.log('✅ All data received, verifying integrity...');
           if (data.crc32) {
             expectedCRC = data.crc32;
             const finalReceiverCRC = finalizeCRC32(receiverCRC);
@@ -624,6 +775,32 @@ export const useAdaptiveMultiStreamTransfer = () => {
               console.log('✅ File integrity verified - CRC32 match!');
             } else {
               console.error('❌ FILE CORRUPTION DETECTED - CRC32 mismatch!');
+              alert('⚠️ File transfer completed but integrity check FAILED!\n\nThe received file is corrupted and may not match the original.\n\nPlease try the transfer again.');
+            }
+          }
+        } else if (data.type === 'retransmit_complete') {
+          console.log('✅ Retransmission complete, verifying integrity...');
+          
+          // Check again for missing data
+          const missingRanges = getMissingRanges(fileSize);
+          if (missingRanges.length > 0) {
+            const totalMissing = missingRanges.reduce((sum, range) => sum + (range.end - range.start), 0);
+            console.error(`❌ STILL MISSING DATA: ${(totalMissing/1024/1024).toFixed(1)}MB after retransmission`);
+            alert(`⚠️ File transfer incomplete!\n\nStill missing ${(totalMissing/1024/1024).toFixed(1)}MB of data after retransmission.\n\nPlease try the transfer again.`);
+            return;
+          }
+          
+          // Verify CRC32
+          if (data.crc32) {
+            const finalReceiverCRC = finalizeCRC32(receiverCRC);
+            console.log(`🔐 Final integrity check...`);
+            console.log(`   Sender CRC32:   ${data.crc32}`);
+            console.log(`   Receiver CRC32: ${finalReceiverCRC}`);
+            
+            if (finalReceiverCRC === data.crc32) {
+              console.log('✅ File integrity verified - CRC32 match after retransmission!');
+            } else {
+              console.error('❌ FILE CORRUPTION DETECTED - CRC32 mismatch after retransmission!');
               alert('⚠️ File transfer completed but integrity check FAILED!\n\nThe received file is corrupted and may not match the original.\n\nPlease try the transfer again.');
             }
           }

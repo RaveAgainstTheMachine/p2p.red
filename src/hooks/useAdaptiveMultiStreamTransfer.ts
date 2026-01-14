@@ -133,6 +133,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
       console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks, ${name}`);
 
       try {
+        // Calculate SHA-256 hash of file for integrity verification
+        console.log('🔐 Calculating file hash for integrity verification...');
+        const hashBuffer = await crypto.subtle.digest('SHA-256', await (input as File).arrayBuffer());
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        console.log(`✅ File hash (SHA-256): ${fileHash}`);
+
         // Send metadata first and wait for receiver to be ready
         console.log('📤 Sending metadata and waiting for receiver ready signal...');
         conn.send({
@@ -140,6 +147,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           fileName: name,
           fileSize,
           streamCount,
+          fileHash,
           timestamp: Date.now()
         });
 
@@ -314,6 +322,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
     let bytesReceived = 0;
     let expectedStreams = 0;
     let fileName = 'download';
+    let expectedHash = '';
     
     // Try to use File System Access API for progressive disk writes
     let fileHandle: any = null;
@@ -397,9 +406,34 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     console.log(`🎉 All data received (${bytesReceived}/${fileSize} bytes)`);
                     
                     if (useFileSystemAPI && writableStream) {
-                      // Chrome/Edge: Close the file stream
+                      // Chrome/Edge: Close the file stream and verify hash
                       await writableStream.close();
                       console.log('✅ File written to disk');
+                      
+                      // Verify file integrity if hash was provided
+                      if (expectedHash && fileHandle) {
+                        console.log('🔐 Verifying file integrity...');
+                        try {
+                          const file = await fileHandle.getFile();
+                          const receivedHashBuffer = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+                          const receivedHashArray = Array.from(new Uint8Array(receivedHashBuffer));
+                          const receivedHash = receivedHashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                          
+                          if (receivedHash === expectedHash) {
+                            console.log('✅ File integrity verified - hashes match!');
+                            console.log(`   Expected: ${expectedHash}`);
+                            console.log(`   Received: ${receivedHash}`);
+                          } else {
+                            console.error('❌ FILE CORRUPTION DETECTED - hashes do not match!');
+                            console.error(`   Expected: ${expectedHash}`);
+                            console.error(`   Received: ${receivedHash}`);
+                            alert('⚠️ File transfer completed but integrity check FAILED!\n\nThe received file is corrupted and may not match the original.\n\nPlease try the transfer again.');
+                          }
+                        } catch (hashError) {
+                          console.error('⚠️ Failed to verify file hash:', hashError);
+                        }
+                      }
+                      
                       setIsTransferring(false);
                       conn.off('data', handleMainMessage);
                       // Return empty blob since file is already on disk
@@ -456,7 +490,11 @@ export const useAdaptiveMultiStreamTransfer = () => {
           fileSize = data.fileSize;
           expectedStreams = data.streamCount;
           fileName = data.fileName || 'download';
+          expectedHash = data.fileHash || '';
           console.log(`📊 Expecting ${(fileSize/1024/1024).toFixed(2)}MB across ${expectedStreams} streams`);
+          if (expectedHash) {
+            console.log(`🔐 Expected file hash (SHA-256): ${expectedHash}`);
+          }
           
           // Prompt for save location NOW (before chunks arrive)
           console.log('🔍 Checking for File System Access API support...');

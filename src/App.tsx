@@ -596,8 +596,8 @@ function App() {
           console.log('Sender: Incoming connection from receiver:', conn.peer);
           conn.on('open', async () => {
             console.log('Sender: Connection open, starting file transfer');
-            // setShowEncryptionIndicator(true);
-            // setIsEncryptedConnection(true);
+            setShowEncryptionIndicator(true);
+            setIsEncryptedConnection(true);
             setStatus('transferring');
             await transferFileAdaptive(conn, fileToTransfer);
             setStatus('complete');
@@ -660,8 +660,8 @@ function App() {
         
         conn.on('open', () => {
           console.log('Connection opened, ready to receive');
-          // setShowEncryptionIndicator(true);
-          // setIsEncryptedConnection(true);
+          setShowEncryptionIndicator(true);
+          setIsEncryptedConnection(true);
           clearTimeout(timeout);
           resolve();
         });

@@ -366,7 +366,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 bytesReceived += chunkData.length;
                 
                 if (useFileSystemAPI && writableStream) {
-                  // Write directly to disk
+                  // Chrome/Edge: Write directly to disk
                   if (chunkIndex === nextExpectedChunk) {
                     await writableStream.write(chunkData);
                     nextExpectedChunk++;
@@ -382,7 +382,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     chunks.set(chunkIndex, chunkData);
                   }
                 } else {
-                  // RAM buffer (fallback)
+                  // Firefox: Buffer in RAM for traditional download
                   chunks.set(chunkIndex, chunkData);
                 }
 
@@ -409,7 +409,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   console.log(`🎉 All data received (${bytesReceived}/${fileSize} bytes)`);
                   
                   if (useFileSystemAPI && writableStream) {
-                    // Close the file stream
+                    // Chrome/Edge: Close the file stream
                     await writableStream.close();
                     console.log('✅ File written to disk');
                     setIsTransferring(false);
@@ -417,13 +417,35 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     // Return empty blob since file is already on disk
                     resolve(new Blob([]));
                   } else {
-                    // Assemble from RAM
-                    console.log(`📦 Assembling ${chunks.size} chunks from RAM`);
+                    // Firefox: Assemble from RAM and trigger traditional download
+                    console.log(`📥 Firefox fallback: Assembling ${chunks.size} chunks from RAM`);
                     const sortedChunks = Array.from(chunks.entries())
                       .sort((a, b) => a[0] - b[0])
                       .map(([, data]) => data);
 
-                    const blob = new Blob(sortedChunks as BlobPart[]);
+                    // Calculate total size and combine chunks
+                    const totalSize = sortedChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+                    const combined = new Uint8Array(totalSize);
+                    let offset = 0;
+                    
+                    for (const chunk of sortedChunks) {
+                      combined.set(chunk, offset);
+                      offset += chunk.length;
+                    }
+                    
+                    const blob = new Blob([combined], { type: 'application/octet-stream' });
+                    
+                    // Trigger automatic download (Firefox traditional method)
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    console.log('📥 Traditional download triggered for:', fileName);
                     setIsTransferring(false);
                     conn.off('data', handleMainMessage);
                     resolve(blob);

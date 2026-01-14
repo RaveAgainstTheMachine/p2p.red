@@ -102,10 +102,12 @@ export const useAdaptiveMultiStreamTransfer = () => {
     }
   }, []);
 
-  // Send file with multi-stream parallel transfer
+  // Send any stream (File or ReadableStream) with multi-stream parallel transfer
   const sendFileMultiStream = useCallback(async (
     conn: DataConnection,
-    file: File
+    input: File | ReadableStream,
+    fileName?: string,
+    totalSize?: number
   ): Promise<void> => {
     setIsTransferring(true);
     startTime.current = Date.now();
@@ -120,7 +122,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
     // Get adaptive chunk size
     let chunkSize = getAdaptiveChunkSize(quality, 0);
     
-    console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks`);
+    const fileSize = totalSize || (input as File).size;
+    const name = fileName || (input as File).name;
+    
+    console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks, ${name}`);
 
     try {
       // Create parallel channels (SENDER mode)
@@ -130,7 +135,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
         throw new Error('Failed to create any parallel channels');
       }
 
-      const totalChunks = Math.ceil(file.size / chunkSize);
+      const totalChunks = Math.ceil(fileSize / chunkSize);
       let bytesTransferred = 0;
       let lastSpeedCheck = Date.now();
       let lastBytesTransferred = 0;
@@ -139,13 +144,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
       conn.send({
         type: 'multi_stream_start',
         totalChunks,
-        fileSize: file.size,
+        fileSize,
         streamCount: channels.length,
         timestamp: Date.now()
       });
 
-      // Use File.stream() for memory efficiency
-      const stream = file.stream();
+      // Get stream reader
+      const stream = input instanceof File ? input.stream() : input;
       const reader = stream.getReader();
       
       let chunkIndex = 0;
@@ -211,12 +216,12 @@ export const useAdaptiveMultiStreamTransfer = () => {
             // Update progress
             const totalElapsed = (now - startTime.current) / 1000;
             const avgSpeed = bytesTransferred / totalElapsed;
-            const timeRemaining = avgSpeed > 0 ? (file.size - bytesTransferred) / avgSpeed : 0;
+            const timeRemaining = avgSpeed > 0 ? (fileSize - bytesTransferred) / avgSpeed : 0;
 
             setTransferProgress({
               bytesTransferred,
-              totalBytes: file.size,
-              percentage: (bytesTransferred / file.size) * 100,
+              totalBytes: fileSize,
+              percentage: (bytesTransferred / fileSize) * 100,
               speed: avgSpeed,
               timeRemaining,
               activeStreams: channels.length,
@@ -224,7 +229,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
               adaptiveChunkSize: chunkSize
             });
 
-            console.log(`📤 Progress: ${(bytesTransferred/1024/1024).toFixed(2)}MB / ${(file.size/1024/1024).toFixed(2)}MB, Speed: ${(avgSpeed/1024/1024).toFixed(2)} MB/s, Chunk: ${chunkSize/1024}KB`);
+            console.log(`📤 ${(bytesTransferred/1024/1024).toFixed(1)}MB / ${(fileSize/1024/1024).toFixed(1)}MB @ ${(avgSpeed/1024/1024).toFixed(2)} MB/s, Chunk: ${chunkSize/1024}KB`);
           }
 
           if (buffer.length < chunkSize && !done) break;
@@ -237,7 +242,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
       conn.send({
         type: 'multi_stream_complete',
         totalChunks: chunkIndex,
-        fileSize: file.size,
+        fileSize,
         timestamp: Date.now()
       });
 
@@ -346,16 +351,23 @@ export const useAdaptiveMultiStreamTransfer = () => {
     });
   }, []);
 
-  // Main transfer function
+  // Main transfer function - handles File or ReadableStream
   const transferFileAdaptive = useCallback(async (
     conn: DataConnection,
-    file: File,
-    isSender: boolean
+    input: File | ReadableStream,
+    isSender: boolean,
+    fileName?: string,
+    fileSize?: number
   ): Promise<Blob | void> => {
-    console.log('🎯 transferFileAdaptive called:', { isSender, fileName: file?.name });
-
+    console.log('🎯 transferFileAdaptive called:', { 
+      isSender, 
+      inputType: input?.constructor?.name,
+      fileName: fileName || (input as File)?.name,
+      fileSize: fileSize || (input as File)?.size
+    });
+    
     if (isSender) {
-      await sendFileMultiStream(conn, file);
+      await sendFileMultiStream(conn, input, fileName, fileSize);
     } else {
       console.log('📥 Starting multi-stream receiver');
       return await receiveFileMultiStream(conn);

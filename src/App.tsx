@@ -124,7 +124,7 @@ const formatFileSize = (bytes: number): string => {
 function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
   const { isEncrypting } = useEncryption();
-  const { transferProgress, isTransferring, sendStream, resumeTransfer } = useFileTransfer();
+  const { transferProgress, isTransferring, resumeTransfer } = useFileTransfer();
   const { transferProgress: adaptiveProgress, transferFileAdaptive } = useAdaptiveMultiStreamTransfer();
   const [mode, setMode] = useState<'share' | 'receive'>('share');
   const [shareLink, setShareLink] = useState<string>('');
@@ -395,15 +395,13 @@ function App() {
                 }
                 connectionHandled = true;
                 
-                console.log('Sender: Connection open, starting stream transfer');
-                // setShowEncryptionIndicator(true);
-                // setIsEncryptedConnection(true);
+                console.log('Sender: Connection open, starting multi-stream ZIP transfer');
                 setStatus('transferring');
                 try {
-                  await sendStream(conn, zipStream, zipFileName, totalSize);
+                  await transferFileAdaptive(conn, zipStream, true, zipFileName, totalSize);
                   setStatus('complete');
                 } catch (error) {
-                  console.error('Stream transfer failed:', error);
+                  console.error('Multi-stream ZIP transfer failed:', error);
                   setStatus('error');
                 }
               });
@@ -471,14 +469,12 @@ function App() {
               connectionHandled = true;
               
               console.log('Sender: Connection open, starting stream transfer');
-              // setShowEncryptionIndicator(true);
-              // setIsEncryptedConnection(true);
               setStatus('transferring');
               try {
-                await sendStream(conn, zipStream, zipFileName, file.size);
+                await transferFileAdaptive(conn, zipStream, true, zipFileName, file.size);
                 setStatus('complete');
               } catch (error) {
-                console.error('Stream transfer failed:', error);
+                console.error('Multi-stream ZIP transfer failed:', error);
                 setStatus('error');
               }
             });

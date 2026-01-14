@@ -202,6 +202,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   });
                   channels.forEach(ch => ch.close());
                   console.log('🎉 MULTI-STREAM: Transfer completed - RESOLVING PROMISE');
+                  setIsTransferring(false);
                   resolve();
                   return;
                 }
@@ -272,17 +273,17 @@ export const useAdaptiveMultiStreamTransfer = () => {
           }
         };
       
-        // Start processing
+        // Start processing (don't await - it will pause and resume via events)
         console.log('⚡ Starting processNextChunk...');
-        await processNextChunk();
-        console.log('✅ processNextChunk completed - RESOLVING PROMISE');
-        resolve(); // Transfer complete
+        processNextChunk().catch((error) => {
+          console.error('❌ sendFileMultiStream ERROR:', error);
+          setIsTransferring(false);
+          reject(error);
+        });
       } catch (error) {
-        console.error('❌ sendFileMultiStream ERROR:', error);
-        reject(error);
-      } finally {
-        console.log('🏁 sendFileMultiStream FINALLY block');
+        console.error('❌ sendFileMultiStream SETUP ERROR:', error);
         setIsTransferring(false);
+        reject(error);
       }
     });
   }, [detectNetworkQuality, getAdaptiveChunkSize, createParallelChannels]);

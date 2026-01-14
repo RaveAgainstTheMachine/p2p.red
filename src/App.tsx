@@ -398,7 +398,7 @@ function App() {
                 console.log('Sender: Connection open, starting multi-stream ZIP transfer');
                 setStatus('transferring');
                 try {
-                  await transferFileAdaptive(conn, zipStream, true, zipFileName, totalSize);
+                  await transferFileAdaptive(conn, zipStream, zipFileName, totalSize);
                   setStatus('complete');
                 } catch (error) {
                   console.error('Multi-stream ZIP transfer failed:', error);
@@ -471,7 +471,7 @@ function App() {
               console.log('Sender: Connection open, starting stream transfer');
               setStatus('transferring');
               try {
-                await transferFileAdaptive(conn, zipStream, true, zipFileName, file.size);
+                await transferFileAdaptive(conn, zipStream, zipFileName, file.size);
                 setStatus('complete');
               } catch (error) {
                 console.error('Multi-stream ZIP transfer failed:', error);
@@ -550,7 +550,7 @@ function App() {
                 // Send all files sequentially with adaptive multi-stream
                 for (let i = 0; i < files.length; i++) {
                   console.log(`Sending file ${i + 1}/${files.length}: ${files[i].name}`);
-                  await transferFileAdaptive(conn, files[i], true);
+                  await transferFileAdaptive(conn, files[i]);
                   // Small delay between files
                   await new Promise(resolve => setTimeout(resolve, 100));
                 }
@@ -613,7 +613,7 @@ function App() {
             // setShowEncryptionIndicator(true);
             // setIsEncryptedConnection(true);
             setStatus('transferring');
-            await transferFileAdaptive(conn, fileToTransfer, true);
+            await transferFileAdaptive(conn, fileToTransfer);
             setStatus('complete');
           });
         });
@@ -779,7 +779,7 @@ function App() {
       } else {
         // Single file
         console.log('📂 Single file path - Starting adaptive multi-stream download');
-        const received = await transferFileAdaptive(conn, null as any, false);
+        const received = await transferFileAdaptive(conn, null as any);
         if (received instanceof Blob) {
           // Trigger download
           const url = URL.createObjectURL(received);

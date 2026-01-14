@@ -109,171 +109,175 @@ export const useAdaptiveMultiStreamTransfer = () => {
     fileName?: string,
     totalSize?: number
   ): Promise<void> => {
-    setIsTransferring(true);
-    startTime.current = Date.now();
+    return new Promise<void>(async (resolve, reject) => {
+      setIsTransferring(true);
+      startTime.current = Date.now();
 
-    // Detect network quality
-    const quality = detectNetworkQuality(conn);
-    console.log(`🌐 Network quality: ${quality}`);
+      // Detect network quality
+      const quality = detectNetworkQuality(conn);
+      console.log(`🌐 Network quality: ${quality}`);
 
-    // Determine optimal stream count based on network quality
-    const streamCount = quality === 'excellent' ? 8 : quality === 'good' ? 4 : quality === 'fair' ? 2 : 1;
-    
-    // Get adaptive chunk size (initial)
-    // Chrome DataChannel max message size: 262,144 bytes
-    // With 8-byte header, max chunk data: 262,136 bytes
-    const chunkSize = 262136; // Max chunk size to fit in DataChannel message limit
-    
-    const fileSize = totalSize || (input as File).size;
-    const name = fileName || (input as File).name;
-    
-    console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks, ${name}`);
-
-    try {
-      // Create parallel channels (SENDER mode)
-      const channels = await createParallelChannels(conn, streamCount, true);
+      // Determine optimal stream count based on network quality
+      const streamCount = quality === 'excellent' ? 8 : quality === 'good' ? 4 : quality === 'fair' ? 2 : 1;
       
-      if (channels.length === 0) {
-        throw new Error('Failed to create any parallel channels');
-      }
-
-      let bytesTransferred = 0;
-      let lastSpeedCheck = Date.now();
-
-      // Send metadata first on main connection
-      conn.send({
-        type: 'multi_stream_start',
-        fileName: name,
-        fileSize,
-        streamCount: channels.length,
-        timestamp: Date.now()
-      });
-
-      // Get stream reader
-      const stream = input instanceof File ? input.stream() : input;
-      const reader = stream.getReader();
+      // Get adaptive chunk size (initial)
+      // Chrome DataChannel max message size: 262,144 bytes
+      // With 8-byte header, max chunk data: 262,136 bytes
+      const chunkSize = 262136; // Max chunk size to fit in DataChannel message limit
       
-      let chunkIndex = 0;
-      let buffer = new Uint8Array(0);
-      let isPaused = false;
+      const fileSize = totalSize || (input as File).size;
+      const name = fileName || (input as File).name;
       
-      // Set up event-driven flow control for each channel
-      const HIGH_WATER_MARK = 1 * 1024 * 1024; // 1MB - pause sending
-      const LOW_WATER_MARK = 256 * 1024; // 256KB - resume sending
-      
-      channels.forEach(channel => {
-        channel.bufferedAmountLowThreshold = LOW_WATER_MARK;
-        channel.addEventListener('bufferedamountlow', () => {
-          if (isPaused) {
-            isPaused = false;
-            console.log('📤 Buffer drained, resuming send');
-            processNextChunk();
-          }
+      console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks, ${name}`);
+
+      try {
+        // Create parallel channels (SENDER mode)
+        const channels = await createParallelChannels(conn, streamCount, true);
+        
+        if (channels.length === 0) {
+          throw new Error('Failed to create any parallel channels');
+        }
+
+        let bytesTransferred = 0;
+        let lastSpeedCheck = Date.now();
+
+        // Send metadata first on main connection
+        conn.send({
+          type: 'multi_stream_start',
+          fileName: name,
+          fileSize,
+          streamCount: channels.length,
+          timestamp: Date.now()
         });
-      });
-      
-      let streamDone = false;
-      
-      const processNextChunk = async () => {
-        while (!isPaused && !streamDone) {
-          // Read more data if buffer is low
-          if (buffer.length < chunkSize) {
-            const { done, value } = await reader.read();
-            
-            if (value) {
-              const newBuffer = new Uint8Array(buffer.length + value.length);
-              newBuffer.set(buffer);
-              newBuffer.set(value, buffer.length);
-              buffer = newBuffer;
+
+        // Get stream reader
+        const stream = input instanceof File ? input.stream() : input;
+        const reader = stream.getReader();
+        
+        let chunkIndex = 0;
+        let buffer = new Uint8Array(0);
+        let isPaused = false;
+        
+        // Set up event-driven flow control for each channel
+        const HIGH_WATER_MARK = 1 * 1024 * 1024; // 1MB - pause sending
+        const LOW_WATER_MARK = 256 * 1024; // 256KB - resume sending
+        
+        channels.forEach(channel => {
+          channel.bufferedAmountLowThreshold = LOW_WATER_MARK;
+          channel.addEventListener('bufferedamountlow', () => {
+            if (isPaused) {
+              isPaused = false;
+              console.log('📤 Buffer drained, resuming send');
+              processNextChunk();
+            }
+          });
+        });
+        
+        let streamDone = false;
+        
+        const processNextChunk = async () => {
+          while (!isPaused && !streamDone) {
+            // Read more data if buffer is low
+            if (buffer.length < chunkSize) {
+              const { done, value } = await reader.read();
+              
+              if (value) {
+                const newBuffer = new Uint8Array(buffer.length + value.length);
+                newBuffer.set(buffer);
+                newBuffer.set(value, buffer.length);
+                buffer = newBuffer;
+              }
+              
+              if (done) {
+                streamDone = true;
+                if (buffer.length === 0) {
+                  // All data sent, close connection
+                  conn.send({
+                    type: 'multi_stream_complete',
+                    bytesTransferred,
+                    fileSize,
+                    timestamp: Date.now()
+                  });
+                  channels.forEach(ch => ch.close());
+                  console.log('🎉 MULTI-STREAM: Transfer completed');
+                  return;
+                }
+              }
             }
             
-            if (done) {
-              streamDone = true;
-              if (buffer.length === 0) {
-                // All data sent, close connection
-                conn.send({
-                  type: 'multi_stream_complete',
-                  bytesTransferred,
-                  fileSize,
-                  timestamp: Date.now()
+            // Process one chunk
+            if (buffer.length > 0) {
+              const chunkData = buffer.slice(0, Math.min(chunkSize, buffer.length));
+              buffer = buffer.slice(chunkData.length);
+
+              // Select channel (round-robin)
+              const channelIndex = chunkIndex % channels.length;
+              const channel = channels[channelIndex];
+
+              // Check if we need to pause (high water mark)
+              if (channel.bufferedAmount > HIGH_WATER_MARK) {
+                isPaused = true;
+                console.log(`⏸️ Buffer high (${(channel.bufferedAmount/1024/1024).toFixed(1)}MB), pausing send`);
+                return; // Will resume via bufferedamountlow event
+              }
+
+              // Send chunk as single binary message with header
+              // Header: 8 bytes for chunkIndex (uint32 x2 for 64-bit support)
+              const header = new ArrayBuffer(8);
+              const headerView = new DataView(header);
+              headerView.setUint32(0, chunkIndex, true); // Low 32 bits
+              headerView.setUint32(4, 0, true); // High 32 bits (for future large files)
+              
+              // Combine header + chunk data into single message
+              const message = new Uint8Array(8 + chunkData.length);
+              message.set(new Uint8Array(header), 0);
+              message.set(chunkData, 8);
+              
+              const bytesSent = message.buffer.byteLength;
+              channel.send(message.buffer);
+              chunkIndex++;
+              bytesTransferred += bytesSent;
+
+              // Update progress
+              const now = Date.now();
+              if (now - lastSpeedCheck > 1000) {
+                lastSpeedCheck = now;
+                
+                // Calculate actual bytes sent (not just buffered)
+                const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
+                const actualBytesSent = bytesTransferred - totalBuffered;
+
+                // Update progress based on actual sent bytes
+                const totalElapsed = (now - startTime.current) / 1000;
+                const avgSpeed = actualBytesSent / totalElapsed;
+                const timeRemaining = avgSpeed > 0 ? (fileSize - actualBytesSent) / avgSpeed : 0;
+                
+                console.log(`📊 Sender: ${(actualBytesSent/1024/1024).toFixed(1)}MB sent, ${(totalBuffered/1024/1024).toFixed(1)}MB buffered, ${(bytesTransferred/1024/1024).toFixed(1)}MB total queued`);
+
+                setTransferProgress({
+                  bytesTransferred: actualBytesSent,
+                  totalBytes: fileSize,
+                  percentage: (actualBytesSent / fileSize) * 100,
+                  speed: avgSpeed,
+                  timeRemaining,
+                  activeStreams: channels.length,
+                  networkQuality: quality,
+                  adaptiveChunkSize: chunkSize
                 });
-                channels.forEach(ch => ch.close());
-                console.log('🎉 MULTI-STREAM: Transfer completed');
-                return;
               }
             }
           }
-          
-          // Process one chunk
-          if (buffer.length > 0) {
-            const chunkData = buffer.slice(0, Math.min(chunkSize, buffer.length));
-            buffer = buffer.slice(chunkData.length);
-
-            // Select channel (round-robin)
-            const channelIndex = chunkIndex % channels.length;
-            const channel = channels[channelIndex];
-
-            // Check if we need to pause (high water mark)
-            if (channel.bufferedAmount > HIGH_WATER_MARK) {
-              isPaused = true;
-              console.log(`⏸️ Buffer high (${(channel.bufferedAmount/1024/1024).toFixed(1)}MB), pausing send`);
-              return; // Will resume via bufferedamountlow event
-            }
-
-          // Send chunk as single binary message with header
-          // Header: 8 bytes for chunkIndex (uint32 x2 for 64-bit support)
-          const header = new ArrayBuffer(8);
-          const headerView = new DataView(header);
-          headerView.setUint32(0, chunkIndex, true); // Low 32 bits
-          headerView.setUint32(4, 0, true); // High 32 bits (for future large files)
-          
-          // Combine header + chunk data into single message
-          const message = new Uint8Array(8 + chunkData.length);
-          message.set(new Uint8Array(header), 0);
-          message.set(chunkData, 8);
-          
-            const bytesSent = message.buffer.byteLength;
-            channel.send(message.buffer);
-            chunkIndex++;
-            bytesTransferred += bytesSent;
-
-            // Update progress
-            const now = Date.now();
-            if (now - lastSpeedCheck > 1000) {
-              lastSpeedCheck = now;
-              
-              // Calculate actual bytes sent (not just buffered)
-              const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
-              const actualBytesSent = bytesTransferred - totalBuffered;
-
-              // Update progress based on actual sent bytes
-              const totalElapsed = (now - startTime.current) / 1000;
-              const avgSpeed = actualBytesSent / totalElapsed;
-              const timeRemaining = avgSpeed > 0 ? (fileSize - actualBytesSent) / avgSpeed : 0;
-              
-              console.log(`📊 Sender: ${(actualBytesSent/1024/1024).toFixed(1)}MB sent, ${(totalBuffered/1024/1024).toFixed(1)}MB buffered, ${(bytesTransferred/1024/1024).toFixed(1)}MB total queued`);
-
-              setTransferProgress({
-                bytesTransferred: actualBytesSent,
-                totalBytes: fileSize,
-                percentage: (actualBytesSent / fileSize) * 100,
-                speed: avgSpeed,
-                timeRemaining,
-                activeStreams: channels.length,
-                networkQuality: quality,
-                adaptiveChunkSize: chunkSize
-              });
-            }
-          }
-        }
-      };
+        };
       
-      // Start processing
-      await processNextChunk();
-
-    } finally {
-      setIsTransferring(false);
-    }
+        // Start processing
+        await processNextChunk();
+        resolve(); // Transfer complete
+      } catch (error) {
+        reject(error);
+      } finally {
+        setIsTransferring(false);
+      }
+    });
   }, [detectNetworkQuality, getAdaptiveChunkSize, createParallelChannels]);
 
   // Receive file with multi-stream
@@ -294,17 +298,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
     let writableStream: any = null;
     let useFileSystemAPI = false;
     
-    // Check if File System Access API is supported (Chrome/Edge)
-    if ('showSaveFilePicker' in window) {
-      try {
-        console.log('📁 File System Access API available, prompting for save location...');
-        // This will be set when we get the filename from metadata
-        useFileSystemAPI = true;
-      } catch (err) {
-        console.log('⚠️ File System Access API not available, using RAM buffer');
-      }
-    }
-    
     const chunks = new Map<number, Uint8Array>();
     let nextExpectedChunk = 0;
 
@@ -319,9 +312,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
           fileName = data.fileName || 'download';
           console.log(`📊 Expecting ${(fileSize/1024/1024).toFixed(2)}MB across ${expectedStreams} streams`);
           
-          // Prompt for save location if using File System API
-          if (useFileSystemAPI) {
+          // Prompt for save location NOW (before chunks arrive)
+          if ('showSaveFilePicker' in window) {
             try {
+              console.log('📁 Prompting for save location...');
               fileHandle = await (window as any).showSaveFilePicker({
                 suggestedName: fileName,
                 types: [{
@@ -330,11 +324,14 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 }]
               });
               writableStream = await fileHandle.createWritable();
-              console.log('✅ Writing directly to disk');
+              useFileSystemAPI = true;
+              console.log('✅ File System Access API: Writing directly to disk');
             } catch (err) {
-              console.log('⚠️ User cancelled or error, falling back to RAM');
+              console.log('⚠️ User cancelled or File System Access API unavailable, using RAM buffer');
               useFileSystemAPI = false;
             }
+          } else {
+            console.log('📥 File System Access API not supported, using RAM buffer');
           }
         } else if (data.type === 'multi_stream_complete') {
           console.log('✅ Transfer complete signal received');
@@ -464,11 +461,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
   // Main transfer function - handles File or ReadableStream
   const transferFileAdaptive = useCallback(async (
     conn: DataConnection,
-    input: File | ReadableStream,
-    isSender: boolean,
+    input: File | ReadableStream | null,
     fileName?: string,
     fileSize?: number
   ): Promise<Blob | void> => {
+    // Auto-detect: if input is provided, we're sending; if null, we're receiving
+    const isSender = input !== null;
+    
     console.log('🎯 transferFileAdaptive called:', { 
       isSender, 
       inputType: input?.constructor?.name,
@@ -477,7 +476,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
     });
     
     if (isSender) {
-      await sendFileMultiStream(conn, input, fileName, fileSize);
+      await sendFileMultiStream(conn, input!, fileName, fileSize);
     } else {
       console.log('📥 Starting multi-stream receiver');
       return await receiveFileMultiStream(conn);

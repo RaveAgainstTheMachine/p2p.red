@@ -168,6 +168,14 @@ export const useAdaptiveMultiStreamTransfer = () => {
       
       console.log(`🔧 Using ${numChannels} adaptive channels for ${shards.length} shards`);
 
+      let receiverBackpressureLevel: string = 'low';
+      const receiverBackpressureHandler = (data: any) => {
+        if (data?.type === 'receiver_backpressure' && (data.level === 'low' || data.level === 'high')) {
+          receiverBackpressureLevel = data.level;
+        }
+      };
+      conn.on('data', receiverBackpressureHandler);
+
       try {
         // Send metadata first
         console.log('📤 Sending shard metadata...');
@@ -207,12 +215,14 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
         // Cache for ReadableStream shards (enables retransmission)
         const shardCache = new Map<number, Uint8Array>();
+        const shardAttemptIds = new Map<number, number>();
 
         // For Files: Use parallel shard sending
         if (isFile) {
           // Assign shards to channels (round-robin)
           shards.forEach((shard, i) => {
             shard.channelId = i % channels.length;
+            shardAttemptIds.set(shard.id, 0);
           });
 
           console.log(`📊 Shard distribution: ${channels.length} channels handling ${shards.length} shards`);
@@ -225,6 +235,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
               
               const shardBlob = (input as File).slice(shard.offset, shard.offset + shard.size);
               const shardData = new Uint8Array(await shardBlob.arrayBuffer());
+
+              const attemptId = shardAttemptIds.get(shard.id) ?? 0;
               
               // Calculate per-shard CRC32
               const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
@@ -236,13 +248,18 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 offset: shard.offset,
                 size: shard.size,
                 channelId: channelId,
+                attemptId,
                 crc32: shardCRC
               });
 
               // Send shard in chunks
               let sentBytes = 0;
               while (sentBytes < shardData.length) {
-                const chunkData = shardData.slice(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+                const chunkData = shardData.subarray(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+
+                while (receiverBackpressureLevel === 'high') {
+                  await new Promise(resolve => setTimeout(resolve, 10));
+                }
                 
                 // Wait if buffer is full
                 while (channel.bufferedAmount > 1 * 1024 * 1024) {
@@ -250,10 +267,11 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 }
                 
                 // Send chunk with shard ID
-                const message = new Uint8Array(4 + chunkData.length);
+                const message = new Uint8Array(8 + chunkData.length);
                 const view = new DataView(message.buffer);
                 view.setUint32(0, shard.id, true);
-                message.set(chunkData, 4);
+                view.setUint32(4, attemptId, true);
+                message.set(chunkData, 8);
                 
                 channel.send(message.buffer);
                 sentBytes += chunkData.length;
@@ -302,6 +320,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           // Assign shards to channels for when they're ready
           shards.forEach((shard, i) => {
             shard.channelId = i % channels.length;
+            shardAttemptIds.set(shard.id, 0);
           });
 
           while (true) {
@@ -312,7 +331,24 @@ export const useAdaptiveMultiStreamTransfer = () => {
               
               // Fill current shard(s) with this chunk
               while (valueOffset < value.length) {
+                if (currentShardIndex >= shards.length) {
+                  currentShardIndex = Math.max(0, shards.length - 1);
+                }
+
                 const shard = shards[currentShardIndex];
+                if (!shard) {
+                  break;
+                }
+
+                if (currentShardIndex === shards.length - 1 && currentShardFilled >= shard.size) {
+                  shard.size += Math.max(SHARD_SIZE, value.length - valueOffset);
+                  if (currentShardBuffer.length < shard.size) {
+                    const next = new Uint8Array(shard.size);
+                    next.set(currentShardBuffer.subarray(0, currentShardFilled), 0);
+                    currentShardBuffer = next;
+                  }
+                }
+
                 const spaceLeft = shard.size - currentShardFilled;
                 const bytesToCopy = Math.min(spaceLeft, value.length - valueOffset);
                 
@@ -325,8 +361,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 currentShardFilled += bytesToCopy;
                 valueOffset += bytesToCopy;
                 
-                // Shard complete? Send it!
-                if (currentShardFilled >= shard.size) {
+                // Shard complete? Send it! (never auto-send the last shard; it may grow until done)
+                if (currentShardIndex < shards.length - 1 && currentShardFilled >= shard.size) {
                   const shardData = currentShardBuffer.slice(0, currentShardFilled);
                   
                   // Cache shard until confirmed by receiver
@@ -334,6 +370,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   
                   // Calculate per-shard CRC32
                   const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
+
+                  const attemptId = shardAttemptIds.get(shard.id) ?? 0;
                   
                   // Send shard
                   const channel = channels[shard.channelId];
@@ -344,22 +382,28 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     offset: shard.offset,
                     size: shardData.length,
                     channelId: shard.channelId,
+                    attemptId,
                     crc32: shardCRC
                   });
                   
                   // Send in chunks
                   let sentBytes = 0;
                   while (sentBytes < shardData.length) {
-                    const chunkData = shardData.slice(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+                    const chunkData = shardData.subarray(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+
+                    while (receiverBackpressureLevel === 'high') {
+                      await new Promise(resolve => setTimeout(resolve, 10));
+                    }
                     
                     while (channel.bufferedAmount > 1 * 1024 * 1024) {
                       await new Promise(resolve => setTimeout(resolve, 10));
                     }
                     
-                    const message = new Uint8Array(4 + chunkData.length);
+                    const message = new Uint8Array(8 + chunkData.length);
                     const view = new DataView(message.buffer);
                     view.setUint32(0, shard.id, true);
-                    message.set(chunkData, 4);
+                    view.setUint32(4, attemptId, true);
+                    message.set(chunkData, 8);
                     
                     channel.send(message.buffer);
                     sentBytes += chunkData.length;
@@ -372,7 +416,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   const now = Date.now();
                   const elapsed = (now - startTime.current) / 1000;
                   const speed = elapsed > 0 ? totalBytesTransferred / elapsed : 0;
-                  const currentPercentage = Math.floor((totalBytesTransferred / fileSize) * 100);
+                  const currentPercentage = Math.floor(Math.min(1, totalBytesTransferred / fileSize) * 100);
                   
                   if (currentPercentage >= lastLoggedPercentage + 10) {
                     console.log(`📤 ${currentPercentage}% sent (${(totalBytesTransferred/1024/1024/1024).toFixed(2)}GB / ${(fileSize/1024/1024/1024).toFixed(2)}GB) @ ${(speed/1024/1024).toFixed(1)}MB/s`);
@@ -415,6 +459,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 
                 // Calculate per-shard CRC32
                 const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
+
+                const attemptId = shardAttemptIds.get(shard.id) ?? 0;
                 
                 const channel = channels[shard.channelId];
                 
@@ -424,21 +470,27 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   offset: shard.offset,
                   size: shardData.length,
                   channelId: shard.channelId,
+                  attemptId,
                   crc32: shardCRC
                 });
                 
                 let sentBytes = 0;
                 while (sentBytes < shardData.length) {
-                  const chunkData = shardData.slice(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+                  const chunkData = shardData.subarray(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+
+                  while (receiverBackpressureLevel === 'high') {
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                  }
                   
                   while (channel.bufferedAmount > 1 * 1024 * 1024) {
                     await new Promise(resolve => setTimeout(resolve, 10));
                   }
                   
-                  const message = new Uint8Array(4 + chunkData.length);
+                  const message = new Uint8Array(8 + chunkData.length);
                   const view = new DataView(message.buffer);
                   view.setUint32(0, shard.id, true);
-                  message.set(chunkData, 4);
+                  view.setUint32(4, attemptId, true);
+                  message.set(chunkData, 8);
                   
                   channel.send(message.buffer);
                   sentBytes += chunkData.length;
@@ -483,6 +535,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
             
             for (const shardId of data.shardIds) {
               const shard = shards[shardId];
+              if (!shard) continue;
               const channel = channels[shard.channelId];
               
               if (channel.readyState !== 'open') {
@@ -506,27 +559,40 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 }
                 shardData = cached;
               }
+
+              const attemptId = (shardAttemptIds.get(shard.id) ?? 0) + 1;
+              shardAttemptIds.set(shard.id, attemptId);
+
+              // Calculate per-shard CRC32 (needed so receiver can verify retransmits)
+              const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
               
               conn.send({
                 type: 'shard_start',
                 shardId: shard.id,
                 offset: shard.offset,
-                size: shard.size,
-                channelId: shard.channelId
+                size: shardData.length,
+                channelId: shard.channelId,
+                attemptId,
+                crc32: shardCRC
               });
 
               let sentBytes = 0;
               while (sentBytes < shardData.length) {
-                const chunkData = shardData.slice(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+                const chunkData = shardData.subarray(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+
+                while (receiverBackpressureLevel === 'high') {
+                  await new Promise(resolve => setTimeout(resolve, 10));
+                }
                 
                 while (channel.bufferedAmount > 1 * 1024 * 1024) {
                   await new Promise(resolve => setTimeout(resolve, 10));
                 }
                 
-                const message = new Uint8Array(4 + chunkData.length);
+                const message = new Uint8Array(8 + chunkData.length);
                 const view = new DataView(message.buffer);
                 view.setUint32(0, shard.id, true);
-                message.set(chunkData, 4);
+                view.setUint32(4, attemptId, true);
+                message.set(chunkData, 8);
                 
                 channel.send(message.buffer);
                 sentBytes += chunkData.length;
@@ -540,15 +606,33 @@ export const useAdaptiveMultiStreamTransfer = () => {
           }
         };
 
+        const waitForReceiverDone = () => new Promise<void>((resolveDone) => {
+          const doneHandler = (data: any) => {
+            if (data?.type === 'receiver_done') {
+              conn.off('data', doneHandler);
+              resolveDone();
+            }
+          };
+          conn.on('data', doneHandler);
+
+          setTimeout(() => {
+            conn.off('data', doneHandler);
+            resolveDone();
+          }, 10 * 60 * 1000);
+        });
+
         conn.on('data', messageHandler);
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await waitForReceiverDone();
         conn.off('data', messageHandler);
+
+        conn.off('data', receiverBackpressureHandler);
 
         channels.forEach(ch => ch.close());
         setIsTransferring(false);
         resolve();
       } catch (error) {
         console.error('❌ Shard transfer error:', error);
+        conn.off('data', receiverBackpressureHandler);
         setIsTransferring(false);
         reject(error);
       }
@@ -572,6 +656,107 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let shardCount = 0;
       let bytesReceived = 0;
       let lastLoggedPercentage = 0;
+
+      let completeSignalReceived = false;
+      let finalizeStarted = false;
+
+      const MAX_WRITE_BUFFER_BYTES = 512 * 1024 * 1024;
+      const HIGH_WATERMARK_BYTES = 384 * 1024 * 1024;
+      const LOW_WATERMARK_BYTES = 256 * 1024 * 1024;
+      const MAX_INFLIGHT_WRITES = 8;
+
+      let queuedOrInFlightBytes = 0;
+      let inFlightWrites = 0;
+      let receiverBackpressureLevel: 'low' | 'high' = 'low';
+      const writeQueue: Array<{ position: number; data: Uint8Array; size: number }> = [];
+
+      const verifyAndConfirmShard = (shardId: number, shardState: { received: number; total: number; complete: boolean; expectedCRC: string; currentCRC: number; attemptId: number; offset: number; }) => {
+        if (!shardState.expectedCRC) return;
+        const actualCRC = finalizeCRC32(shardState.currentCRC);
+        if (actualCRC === shardState.expectedCRC) {
+          shardState.complete = true;
+          conn.send({
+            type: 'shard_confirmed',
+            shardId: shardId,
+            timestamp: Date.now()
+          });
+          return;
+        }
+
+        console.error(`❌ Shard ${shardId} CRC32 mismatch! Expected: ${shardState.expectedCRC}, Got: ${actualCRC}`);
+        conn.send({
+          type: 'retransmit_shards',
+          shardIds: [shardId],
+          timestamp: Date.now()
+        });
+        shardState.received = 0;
+        shardState.complete = false;
+        shardState.currentCRC = 0xFFFFFFFF;
+      };
+
+      const maybeSendBackpressure = () => {
+        if (queuedOrInFlightBytes >= HIGH_WATERMARK_BYTES && receiverBackpressureLevel !== 'high') {
+          receiverBackpressureLevel = 'high';
+          conn.send({ type: 'receiver_backpressure', level: 'high', bytes: queuedOrInFlightBytes, timestamp: Date.now() });
+        } else if (queuedOrInFlightBytes <= LOW_WATERMARK_BYTES && receiverBackpressureLevel !== 'low') {
+          receiverBackpressureLevel = 'low';
+          conn.send({ type: 'receiver_backpressure', level: 'low', bytes: queuedOrInFlightBytes, timestamp: Date.now() });
+        }
+      };
+
+      const pumpWrites = () => {
+        if (!useFileSystemAPI || !writableStream) return;
+        while (inFlightWrites < MAX_INFLIGHT_WRITES && writeQueue.length > 0) {
+          const item = writeQueue.shift()!;
+          inFlightWrites++;
+          writableStream.write({
+            type: 'write',
+            position: item.position,
+            data: item.data
+          }).then(() => {
+            inFlightWrites--;
+            queuedOrInFlightBytes -= item.size;
+            maybeSendBackpressure();
+            pumpWrites();
+          }).catch((error: any) => {
+            inFlightWrites--;
+            queuedOrInFlightBytes -= item.size;
+            maybeSendBackpressure();
+            console.error('❌ Chunk write failed:', error);
+            pumpWrites();
+          });
+        }
+      };
+
+      const enqueueWrite = async (position: number, data: Uint8Array) => {
+        const size = data.byteLength;
+        while (queuedOrInFlightBytes + size > MAX_WRITE_BUFFER_BYTES) {
+          maybeSendBackpressure();
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        queuedOrInFlightBytes += size;
+        writeQueue.push({ position, data, size });
+        maybeSendBackpressure();
+        pumpWrites();
+      };
+
+      const finalizeIfReady = async () => {
+        if (finalizeStarted) return;
+        if (!completeSignalReceived) return;
+        const missingShards = Array.from(shardStates.entries())
+          .filter(([_, state]) => !state.complete)
+          .map(([id]) => id);
+        if (missingShards.length > 0) return;
+        if (!useFileSystemAPI || !writableStream) return;
+        finalizeStarted = true;
+        while (queuedOrInFlightBytes > 0 || inFlightWrites > 0 || writeQueue.length > 0) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        await writableStream.close();
+        conn.send({ type: 'receiver_done', timestamp: Date.now() });
+        setIsTransferring(false);
+        resolve(new Blob([]));
+      };
       
       // Shard tracking with CRC32 verification and immediate writes
       const shardStates = new Map<number, { 
@@ -580,6 +765,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
         complete: boolean, 
         expectedCRC: string,
         currentCRC: number, // Incremental CRC32 calculation
+        attemptId: number,
         offset: number // Shard offset in file
       }>();
       
@@ -604,11 +790,11 @@ export const useAdaptiveMultiStreamTransfer = () => {
             if (!(event.data instanceof ArrayBuffer)) return;
             
             const message = new Uint8Array(event.data);
+            if (message.byteLength < 8) return;
             const view = new DataView(message.buffer);
             const shardId = view.getUint32(0, true);
-            const chunkData = message.slice(4);
-            
-            bytesReceived += chunkData.length;
+            const attemptId = view.getUint32(4, true);
+            const chunkData = message.subarray(8);
             
             // Update shard state
             if (!shardStates.has(shardId)) {
@@ -617,54 +803,48 @@ export const useAdaptiveMultiStreamTransfer = () => {
             }
             
             const shardState = shardStates.get(shardId)!;
-            shardState.received += chunkData.length;
+
+            if (shardState.complete) {
+              return;
+            }
+
+            if (attemptId > shardState.attemptId) {
+              shardState.attemptId = attemptId;
+              shardState.received = 0;
+              shardState.complete = false;
+              shardState.currentCRC = 0xFFFFFFFF;
+            }
+
+            if (attemptId !== shardState.attemptId) {
+              return;
+            }
+
+            const remaining = shardState.total - shardState.received;
+            if (remaining <= 0) {
+              return;
+            }
+
+            const accepted = chunkData.byteLength > remaining ? chunkData.subarray(0, remaining) : chunkData;
+            const prevReceived = shardState.received;
+            shardState.received += accepted.length;
+            bytesReceived += accepted.length;
             
             // Update incremental CRC32
-            shardState.currentCRC = updateCRC32(shardState.currentCRC, chunkData);
+            shardState.currentCRC = updateCRC32(shardState.currentCRC, accepted);
             
             // Write chunk to disk immediately (non-blocking)
             if (useFileSystemAPI && writableStream) {
-              const chunkOffset = shardState.offset + (shardState.received - chunkData.length);
-              writableStream.write({
-                type: 'write',
-                position: chunkOffset,
-                data: chunkData
-              }).catch((error: any) => {
-                console.error(`❌ Chunk write failed for shard ${shardId}:`, error);
-              });
+              const chunkOffset = shardState.offset + prevReceived;
+              await enqueueWrite(chunkOffset, accepted);
             }
             
             // Shard complete? Verify CRC32
             if (shardState.received >= shardState.total) {
-              console.log(`🔍 Shard ${shardId} complete: ${shardState.received}/${shardState.total} bytes, expectedCRC: ${shardState.expectedCRC}`);
-              shardState.complete = true;
-              
-              // Finalize and verify CRC32
-              const actualCRC = finalizeCRC32(shardState.currentCRC);
-              if (actualCRC === shardState.expectedCRC) {
-                console.log(`✅ Shard ${shardId} verified (CRC32: ${actualCRC})`);
-                
-                // Send confirmation to sender
-                conn.send({
-                  type: 'shard_confirmed',
-                  shardId: shardId,
-                  timestamp: Date.now()
-                });
-              } else {
-                console.error(`❌ Shard ${shardId} CRC32 mismatch! Expected: ${shardState.expectedCRC}, Got: ${actualCRC}`);
-                
-                // Request immediate retransmission
-                conn.send({
-                  type: 'retransmit_shards',
-                  shardIds: [shardId],
-                  timestamp: Date.now()
-                });
-                
-                // Reset shardState for retransmission
-                shardState.received = 0;
-                shardState.complete = false;
-                shardState.currentCRC = 0xFFFFFFFF;
+              if (!shardState.expectedCRC) {
+                return;
               }
+              console.log(`🔍 Shard ${shardId} complete: ${shardState.received}/${shardState.total} bytes, expectedCRC: ${shardState.expectedCRC}`);
+              verifyAndConfirmShard(shardId, shardState);
             }
             
             // Note: Disk writes happen immediately per chunk (non-blocking)
@@ -674,7 +854,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
             const now = Date.now();
             const elapsed = (now - startTime.current) / 1000;
             const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
-            const currentPercentage = Math.floor((bytesReceived / fileSize) * 100);
+            const currentPercentage = Math.floor(Math.min(1, bytesReceived / fileSize) * 100);
             
             // Log every 10% milestone
             if (currentPercentage >= lastLoggedPercentage + 10) {
@@ -685,24 +865,15 @@ export const useAdaptiveMultiStreamTransfer = () => {
             setTransferProgress({
               bytesTransferred: bytesReceived,
               totalBytes: fileSize,
-              percentage: (bytesReceived / fileSize) * 100,
+              percentage: Math.min(1, bytesReceived / fileSize) * 100,
               speed,
               timeRemaining: speed > 0 ? (fileSize - bytesReceived) / speed : 0,
               activeStreams: expectedStreams,
               networkQuality: 'good',
               adaptiveChunkSize: 256 * 1024
             });
-            
-            // Check completion
-            if (bytesReceived >= fileSize) {
-              console.log('✅ All data received!');
-              
-              if (useFileSystemAPI && writableStream) {
-                await writableStream.close();
-                setIsTransferring(false);
-                resolve(new Blob([]));
-              }
-            }
+
+            await finalizeIfReady();
           };
         };
       };
@@ -725,6 +896,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
               complete: false, 
               expectedCRC: '', 
               currentCRC: 0xFFFFFFFF,
+              attemptId: 0,
               offset: i * shardSize
             });
           }
@@ -774,38 +946,62 @@ export const useAdaptiveMultiStreamTransfer = () => {
               complete: false, 
               expectedCRC: data.crc32 || '', 
               currentCRC: 0xFFFFFFFF,
+              attemptId: data.attemptId || 0,
               offset: data.offset || 0
             });
           } else {
             // Update existing shard with CRC and actual size (for retransmissions)
             const state = shardStates.get(data.shardId)!;
+            if (typeof data.attemptId === 'number' && data.attemptId !== state.attemptId) {
+              state.attemptId = data.attemptId;
+              state.received = 0;
+              state.complete = false;
+              state.currentCRC = 0xFFFFFFFF;
+            }
             state.total = data.size; // Update with actual shard size
-            state.expectedCRC = data.crc32 || '';
+            if (data.crc32) state.expectedCRC = data.crc32;
             state.offset = data.offset || state.offset;
+
+            if (!state.complete && state.expectedCRC && state.received >= state.total) {
+              verifyAndConfirmShard(data.shardId, state);
+            }
           }
         } else if (data.type === 'multi_stream_complete') {
           console.log('✅ Transfer complete signal');
-          
-          // Check for missing shards
-          const missingShards = Array.from(shardStates.entries())
-            .filter(([_, state]) => !state.complete)
-            .map(([id]) => id);
-          
-          if (missingShards.length > 0) {
-            console.error(`❌ Missing ${missingShards.length} shards:`, missingShards.slice(0, 10));
-            
-            conn.send({
-              type: 'retransmit_shards',
-              shardIds: missingShards,
-              timestamp: Date.now()
-            });
-            return;
-          }
-          
-          // All shards verified individually - transfer complete
-          console.log('✅ All shards verified! Transfer complete.');
+
+          completeSignalReceived = true;
+
+          const requestMissingAfterSettle = (retriesLeft: number) => {
+            const states = Array.from(shardStates.entries());
+            const shardsMissingMeta = states.filter(([_, state]) => !state.expectedCRC).map(([id]) => id);
+            if (shardsMissingMeta.length > 0 && retriesLeft > 0) {
+              setTimeout(() => requestMissingAfterSettle(retriesLeft - 1), 1000);
+              return;
+            }
+
+            const missingShards = states
+              .filter(([_, state]) => state.expectedCRC && !state.complete)
+              .map(([id]) => id);
+
+            if (missingShards.length > 0) {
+              console.error(`❌ Missing ${missingShards.length} shards:`, missingShards.slice(0, 10));
+              conn.send({
+                type: 'retransmit_shards',
+                shardIds: missingShards,
+                timestamp: Date.now()
+              });
+              return;
+            }
+
+            void finalizeIfReady();
+          };
+
+          setTimeout(() => requestMissingAfterSettle(5), 2000);
+          return;
         } else if (data.type === 'retransmit_complete') {
           console.log('✅ Retransmission complete');
+
+          await finalizeIfReady();
         }
       };
 

@@ -625,33 +625,12 @@ function App() {
   };
 
   const handleChooseSaveLocation = async () => {
-    // Use incoming file info from metadata API
-    const fileName = incomingFileInfo?.name || 'download';
-    
-    // Try File System Access API first (Chrome, Edge)
-    if ('showSaveFilePicker' in window) {
-      try {
-        const handle = await (window as any).showSaveFilePicker({
-          suggestedName: fileName,
-        });
-        
-        console.log('✅ File save location chosen:', handle.name);
-        
-        // Start receive only after file handle is obtained
-        setPendingReceive(false);
-        await handleReceive(handle);
-        await startFileReceive(handle);
-      } catch (err) {
-        console.error('User cancelled save dialog - cannot proceed without save location:', err);
-        setStatus('error');
-      }
-    } else {
-      // Fallback for Firefox, Safari - use traditional download
-      console.log('File System Access API not supported - using traditional download method');
-      setPendingReceive(false);
-      await handleReceive(null); // null handle triggers fallback download
-      await startFileReceive(null);
-    }
+    // The hook now handles File System Access API internally
+    // Just start the receive process
+    console.log('📁 Ready to receive file, waiting for user to start download');
+    setPendingReceive(false);
+    await handleReceive(null); // Hook handles File System Access API
+    await startFileReceive(null);
   };
 
   const handleReceive = async (handle?: any) => {

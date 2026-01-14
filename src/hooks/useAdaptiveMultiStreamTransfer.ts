@@ -137,7 +137,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
         throw new Error('Failed to create any parallel channels');
       }
 
-      const totalChunks = Math.ceil(fileSize / chunkSize);
       let bytesTransferred = 0;
       let lastSpeedCheck = Date.now();
 
@@ -187,7 +186,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
       // Send metadata first on main connection
       conn.send({
         type: 'multi_stream_start',
-        totalChunks,
         fileSize,
         streamCount: channels.length,
         timestamp: Date.now()
@@ -287,7 +285,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
       // Send completion signal
       conn.send({
         type: 'multi_stream_complete',
-        totalChunks: chunkIndex,
+        bytesTransferred,
         fileSize,
         timestamp: Date.now()
       });
@@ -311,7 +309,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
     startTime.current = Date.now();
 
     const chunks = new Map<number, Uint8Array>();
-    let totalChunks = 0;
     let fileSize = 0;
     let bytesReceived = 0;
     let expectedStreams = 0;
@@ -325,10 +322,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
         console.log('📨 Main connection message:', data.type);
 
         if (data.type === 'multi_stream_start') {
-          totalChunks = data.totalChunks;
           fileSize = data.fileSize;
           expectedStreams = data.streamCount;
-          console.log(`📊 Expecting ${totalChunks} chunks across ${expectedStreams} streams, total: ${(fileSize/1024/1024).toFixed(2)}MB`);
+          console.log(`📊 Expecting ${(fileSize/1024/1024).toFixed(2)}MB across ${expectedStreams} streams`);
         } else if (data.type === 'multi_stream_complete') {
           console.log('✅ Transfer complete signal received');
         }
@@ -369,7 +365,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 if (now - lastFeedbackTime > FEEDBACK_INTERVAL) {
                   const feedbackElapsed = (now - lastFeedbackTime) / 1000;
                   const currentSpeed = feedbackElapsed > 0 ? (bytesReceived - lastFeedbackBytes) / feedbackElapsed : 0;
-                  const bufferUtilization = chunks.size / (totalChunks || 1);
+                  const bufferUtilization = fileSize > 0 ? bytesReceived / fileSize : 0;
                   
                   conn.send({
                     type: 'receiver_feedback',
@@ -393,9 +389,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   timeRemaining
                 }));
 
-                // Check if complete
-                if (chunks.size === totalChunks && totalChunks > 0) {
-                  console.log('🎉 All chunks received, assembling file');
+                // Check if complete (based on bytes, not chunk count)
+                if (bytesReceived >= fileSize && fileSize > 0) {
+                  console.log(`🎉 All data received (${bytesReceived}/${fileSize} bytes), assembling file`);
+                  console.log(`📦 Received ${chunks.size} chunks total`);
                   
                   // Reassemble file
                   const sortedChunks = Array.from(chunks.entries())

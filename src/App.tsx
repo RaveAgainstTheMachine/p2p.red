@@ -382,6 +382,8 @@ function App() {
                 connectionHandled = true;
                 
                 console.log('Sender: Connection open, starting multi-stream ZIP transfer');
+                setShowEncryptionIndicator(true);
+                setIsEncryptedConnection(true);
                 setStatus('transferring');
                 try {
                   await transferFileAdaptive(conn, zipStream, zipFileName, totalSize);
@@ -455,6 +457,8 @@ function App() {
               connectionHandled = true;
               
               console.log('Sender: Connection open, starting stream transfer');
+              setShowEncryptionIndicator(true);
+              setIsEncryptedConnection(true);
               setStatus('transferring');
               try {
                 await transferFileAdaptive(conn, zipStream, zipFileName, file.size);

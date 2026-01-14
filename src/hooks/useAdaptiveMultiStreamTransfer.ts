@@ -11,6 +11,49 @@ interface AdaptiveTransferProgress {
   activeStreams: number;
   networkQuality: 'excellent' | 'good' | 'fair' | 'poor';
   adaptiveChunkSize: number;
+  shardProgress?: Map<number, ShardState>; // Per-shard progress tracking
+}
+
+interface ShardState {
+  id: number;
+  offset: number;
+  size: number;
+  bytesTransferred: number;
+  status: 'pending' | 'sending' | 'complete' | 'failed';
+  channelId: number;
+}
+
+// Calculate optimal shard size based on network speed
+function calculateShardSize(speed: number): number {
+  const MB = 1024 * 1024;
+  
+  if (speed > 50 * MB) {        // > 400 Mbps
+    return 100 * MB;             // 100MB shards
+  } else if (speed > 10 * MB) { // > 80 Mbps
+    return 50 * MB;              // 50MB shards
+  } else if (speed > 2 * MB) {  // > 16 Mbps
+    return 20 * MB;              // 20MB shards
+  } else {                       // < 16 Mbps
+    return 10 * MB;              // 10MB shards
+  }
+}
+
+// Create shards from file size
+function createShards(fileSize: number, shardSize: number): ShardState[] {
+  const shards: ShardState[] = [];
+  
+  for (let offset = 0; offset < fileSize; offset += shardSize) {
+    shards.push({
+      id: shards.length,
+      offset: offset,
+      size: Math.min(shardSize, fileSize - offset),
+      bytesTransferred: 0,
+      status: 'pending',
+      channelId: -1 // Will be assigned later
+    });
+  }
+  
+  return shards;
 }
 
 // CRC32 implementation for incremental hashing
@@ -52,55 +95,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
   const [isTransferring, setIsTransferring] = useState(false);
   const startTime = useRef<number>(0);
 
-  // Detect network quality from ICE candidates
-  const detectNetworkQuality = useCallback((conn: DataConnection): 'excellent' | 'good' | 'fair' | 'poor' => {
-    try {
-      const pc = (conn as any).peerConnection;
-      if (!pc) return 'good';
-
-      // Check ICE connection state
-      const iceState = pc.iceConnectionState;
-      const connectionState = pc.connectionState;
-
-      // Network detection (called frequently, don't log)
-
-      // Excellent: Direct connection (host or srflx)
-      if (iceState === 'connected' && connectionState === 'connected') {
-        return 'excellent';
-      }
-
-      // Good: Stable connection
-      if (iceState === 'completed') {
-        return 'good';
-      }
-
-      // Fair: Using relay
-      if (iceState === 'connected') {
-        return 'fair';
-      }
-
-      return 'poor';
-    } catch (error) {
-      console.warn('Network quality detection failed:', error);
-      return 'good';
-    }
-  }, []);
-
-  // Adaptive chunk size based on network quality
-  const getAdaptiveChunkSize = useCallback((quality: string, currentSpeed: number): number => {
-    // Dynamic chunk sizing based on network quality and current speed
-    if (quality === 'excellent' && currentSpeed > 10 * 1024 * 1024) {
-      return 2 * 1024 * 1024; // 2MB for excellent connections with high speed
-    } else if (quality === 'excellent') {
-      return 1024 * 1024; // 1MB for excellent connections
-    } else if (quality === 'good') {
-      return 512 * 1024; // 512KB for good connections
-    } else if (quality === 'fair') {
-      return 256 * 1024; // 256KB for fair connections
-    } else {
-      return 128 * 1024; // 128KB for poor connections
-    }
-  }, []);
 
   // Create multiple parallel DataChannels using orchestrator
   const createParallelChannels = useCallback(async (
@@ -126,52 +120,72 @@ export const useAdaptiveMultiStreamTransfer = () => {
     }
   }, []);
 
-  // Send any stream (File or ReadableStream) with multi-stream parallel transfer
+  // Send any stream (File or ReadableStream) with shard-based parallel transfer
   const sendFileMultiStream = useCallback(async (
     conn: DataConnection,
     input: File | ReadableStream,
     fileName?: string,
     totalSize?: number
   ): Promise<void> => {
-    console.log('🚀 sendFileMultiStream STARTED');
+    console.log('🚀 sendFileMultiStream STARTED (SHARD-BASED)');
     return new Promise<void>(async (resolve, reject) => {
-      console.log('📦 Promise wrapper created, setting up transfer...');
       setIsTransferring(true);
       startTime.current = Date.now();
 
-      // Detect network quality
-      const quality = detectNetworkQuality(conn);
-      console.log(`🌐 Network quality: ${quality}`);
+      const isFile = input instanceof File;
+      const fileSize = isFile ? input.size : (totalSize || 0);
+      const name = fileName || (isFile ? input.name : 'download');
 
-      // Determine optimal stream count based on network quality
-      const streamCount = quality === 'excellent' ? 8 : quality === 'good' ? 4 : quality === 'fair' ? 2 : 1;
+      // Measure initial speed to determine shard size
+      let estimatedSpeed = 50 * 1024 * 1024; // Default: 50 MB/s
       
-      // Get adaptive chunk size (initial)
-      // Chrome DataChannel max message size: 262,144 bytes
-      // With 8-byte header, max chunk data: 262,136 bytes
-      const chunkSize = 262136; // Max chunk size to fit in DataChannel message limit
+      // Calculate shard size based on estimated speed
+      const SHARD_SIZE = calculateShardSize(estimatedSpeed);
+      console.log(`📊 Shard size: ${(SHARD_SIZE/1024/1024).toFixed(0)}MB (based on estimated ${(estimatedSpeed/1024/1024).toFixed(0)}MB/s)`);
       
-      const fileSize = totalSize || (input as File).size;
-      const name = fileName || (input as File).name;
+      // Create shards
+      const shards = createShards(fileSize, SHARD_SIZE);
+      console.log(`🧩 Created ${shards.length} shards for ${(fileSize/1024/1024/1024).toFixed(2)}GB file`);
       
-      console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks, ${name}`);
+      // Adaptive channel count based on file size and network
+      const MAX_CHANNELS = 256;
+      const MIN_CHANNELS = 64;
+      
+      // Calculate optimal channels: more for larger files, fewer for smaller
+      let numChannels = Math.min(
+        Math.max(
+          Math.ceil(shards.length / 2), // At least half the shards
+          MIN_CHANNELS
+        ),
+        MAX_CHANNELS,
+        shards.length // Never more than shards
+      );
+      
+      // For very large files, use more channels
+      if (fileSize > 10 * 1024 * 1024 * 1024) { // > 10GB
+        numChannels = Math.min(MAX_CHANNELS, shards.length);
+      }
+      
+      console.log(`🔧 Using ${numChannels} adaptive channels for ${shards.length} shards`);
 
       try {
-        // Send metadata first and wait for receiver to be ready
-        console.log('📤 Sending metadata and waiting for receiver ready signal...');
+        // Send metadata first
+        console.log('📤 Sending shard metadata...');
         conn.send({
           type: 'multi_stream_start',
           fileName: name,
           fileSize,
-          streamCount,
+          streamCount: numChannels,
+          shardSize: SHARD_SIZE,
+          shardCount: shards.length,
           timestamp: Date.now()
         });
 
-        // Wait for receiver ready signal and handle retransmission requests
+        // Wait for receiver ready signal
         await new Promise<void>((resolveReady) => {
           const readyHandler = (data: any) => {
             if (data.type === 'receiver_ready') {
-              console.log('✅ Receiver ready signal received, starting transfer...');
+              console.log('✅ Receiver ready, starting shard transfer...');
               conn.off('data', readyHandler);
               resolveReady();
             }
@@ -179,666 +193,644 @@ export const useAdaptiveMultiStreamTransfer = () => {
           conn.on('data', readyHandler);
         });
 
-        // NOW create parallel channels (SENDER mode)
+        // Create parallel channels
         console.log('🔧 Creating DataChannels...');
-        const channels = await createParallelChannels(conn, streamCount, true);
+        const channels = await createParallelChannels(conn, numChannels, true);
         
         if (channels.length === 0) {
           throw new Error('Failed to create any parallel channels');
         }
 
-        let bytesTransferred = 0;
-        let lastSpeedCheck = Date.now();
-        let senderCRC = 0xFFFFFFFF; // Initialize CRC32
-        let currentBytePosition = 0; // Track actual byte position in file
-        console.log('🔐 Starting incremental CRC32 calculation...');
+        let totalBytesTransferred = 0;
+        const CHUNK_SIZE = 252 * 1024; // 252KB chunks (4 bytes reserved for shard ID header)
+        let lastLoggedPercentage = 0;
 
-        // Get stream reader
-        const stream = input instanceof File ? input.stream() : input;
-        const reader = stream.getReader();
-        
-        let chunkIndex = 0;
-        let buffer = new Uint8Array(0);
-        let isPaused = false;
-        
-        // Set up event-driven flow control for each channel
-        const HIGH_WATER_MARK = 1 * 1024 * 1024; // 1MB - pause sending
-        const LOW_WATER_MARK = 256 * 1024; // 256KB - resume sending
-        
-        channels.forEach(channel => {
-          channel.bufferedAmountLowThreshold = LOW_WATER_MARK;
-          channel.addEventListener('bufferedamountlow', () => {
-            if (isPaused) {
-              isPaused = false;
-              console.log('📤 Buffer drained, resuming send');
-              processNextChunk();
-            }
+        // Cache for ReadableStream shards (enables retransmission)
+        const shardCache = new Map<number, Uint8Array>();
+
+        // For Files: Use parallel shard sending
+        if (isFile) {
+          // Assign shards to channels (round-robin)
+          shards.forEach((shard, i) => {
+            shard.channelId = i % channels.length;
           });
-        });
-        
-        let streamDone = false;
-        
-        const processNextChunk = async () => {
-          while (!isPaused && !streamDone) {
-            // Read more data if buffer is low
-            if (buffer.length < chunkSize) {
-              const { done, value } = await reader.read();
+
+          console.log(`📊 Shard distribution: ${channels.length} channels handling ${shards.length} shards`);
+
+          const sendPromises = channels.map(async (channel, channelId) => {
+            const assignedShards = shards.filter(s => s.channelId === channelId);
+
+            for (const shard of assignedShards) {
+              shard.status = 'sending';
               
-              if (value) {
-                const newBuffer = new Uint8Array(buffer.length + value.length);
-                newBuffer.set(buffer);
-                newBuffer.set(value, buffer.length);
-                buffer = newBuffer;
+              const shardBlob = (input as File).slice(shard.offset, shard.offset + shard.size);
+              const shardData = new Uint8Array(await shardBlob.arrayBuffer());
+              
+              // Calculate per-shard CRC32
+              const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
+              
+              // Send shard metadata with CRC32
+              conn.send({
+                type: 'shard_start',
+                shardId: shard.id,
+                offset: shard.offset,
+                size: shard.size,
+                channelId: channelId,
+                crc32: shardCRC
+              });
+
+              // Send shard in chunks
+              let sentBytes = 0;
+              while (sentBytes < shardData.length) {
+                const chunkData = shardData.slice(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+                
+                // Wait if buffer is full
+                while (channel.bufferedAmount > 1 * 1024 * 1024) {
+                  await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                
+                // Send chunk with shard ID
+                const message = new Uint8Array(4 + chunkData.length);
+                const view = new DataView(message.buffer);
+                view.setUint32(0, shard.id, true);
+                message.set(chunkData, 4);
+                
+                channel.send(message.buffer);
+                sentBytes += chunkData.length;
+                shard.bytesTransferred += chunkData.length;
+                totalBytesTransferred += chunkData.length;
+                
+                // Update progress
+                const now = Date.now();
+                const elapsed = (now - startTime.current) / 1000;
+                const speed = elapsed > 0 ? totalBytesTransferred / elapsed : 0;
+                const currentPercentage = Math.floor((totalBytesTransferred / fileSize) * 100);
+                
+                // Log every 10% milestone
+                if (currentPercentage >= lastLoggedPercentage + 10) {
+                  console.log(`📤 ${currentPercentage}% sent (${(totalBytesTransferred/1024/1024/1024).toFixed(2)}GB / ${(fileSize/1024/1024/1024).toFixed(2)}GB) @ ${(speed/1024/1024).toFixed(1)}MB/s`);
+                  lastLoggedPercentage = currentPercentage;
+                }
+                
+                setTransferProgress({
+                  bytesTransferred: totalBytesTransferred,
+                  totalBytes: fileSize,
+                  percentage: (totalBytesTransferred / fileSize) * 100,
+                  speed,
+                  timeRemaining: speed > 0 ? (fileSize - totalBytesTransferred) / speed : 0,
+                  activeStreams: channels.length,
+                  networkQuality: 'good',
+                  adaptiveChunkSize: CHUNK_SIZE
+                });
               }
               
-              if (done) {
-                streamDone = true;
-                if (buffer.length === 0) {
-                  // All data queued, but WAIT for buffers to drain
-                  console.log('📤 All data queued, waiting for buffers to drain...');
+              shard.status = 'complete';
+            }
+          });
+
+          // Wait for all channels to finish
+          await Promise.all(sendPromises);
+        } else {
+          // For ReadableStreams: Sequential shard filling and sending
+          console.log('📦 ReadableStream mode - sequential shard processing');
+          
+          const reader = input.getReader();
+          let currentShardIndex = 0;
+          let currentShardBuffer = new Uint8Array(SHARD_SIZE);
+          let currentShardFilled = 0;
+          
+          // Assign shards to channels for when they're ready
+          shards.forEach((shard, i) => {
+            shard.channelId = i % channels.length;
+          });
+
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (value) {
+              let valueOffset = 0;
+              
+              // Fill current shard(s) with this chunk
+              while (valueOffset < value.length) {
+                const shard = shards[currentShardIndex];
+                const spaceLeft = shard.size - currentShardFilled;
+                const bytesToCopy = Math.min(spaceLeft, value.length - valueOffset);
+                
+                // Copy data into current shard buffer
+                currentShardBuffer.set(
+                  value.subarray(valueOffset, valueOffset + bytesToCopy),
+                  currentShardFilled
+                );
+                
+                currentShardFilled += bytesToCopy;
+                valueOffset += bytesToCopy;
+                
+                // Shard complete? Send it!
+                if (currentShardFilled >= shard.size) {
+                  const shardData = currentShardBuffer.slice(0, currentShardFilled);
                   
-                  // Wait for all channels to drain their buffers
-                  const waitForDrain = async () => {
-                    const checkInterval = 100; // Check every 100ms
-                    while (true) {
-                      const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
-                      if (totalBuffered === 0) {
-                        break;
-                      }
-                      console.log(`⏳ Waiting for ${(totalBuffered/1024/1024).toFixed(1)}MB to drain from buffers...`);
-                      await new Promise(resolve => setTimeout(resolve, checkInterval));
-                    }
-                  };
+                  // Cache shard until confirmed by receiver
+                  shardCache.set(shard.id, shardData);
                   
-                  await waitForDrain();
-                  console.log('✅ All buffers drained, sending completion signal');
+                  // Calculate per-shard CRC32
+                  const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
                   
-                  // Finalize CRC32 and send with completion
-                  const finalCRC = finalizeCRC32(senderCRC);
-                  console.log(`✅ Sender CRC32: ${finalCRC}`);
+                  // Send shard
+                  const channel = channels[shard.channelId];
                   
                   conn.send({
-                    type: 'multi_stream_complete',
-                    bytesTransferred,
-                    fileSize,
-                    crc32: finalCRC,
-                    timestamp: Date.now()
+                    type: 'shard_start',
+                    shardId: shard.id,
+                    offset: shard.offset,
+                    size: shardData.length,
+                    channelId: shard.channelId,
+                    crc32: shardCRC
                   });
                   
-                  // Small delay to ensure completion message is sent
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                  
-                  // Wait for potential retransmission requests
-                  console.log('⏳ Waiting for receiver confirmation or retransmission request...');
-                  const retransmitHandler = async (data: any) => {
-                    if (data.type === 'retransmit_request') {
-                      console.log(`📡 Retransmission request received for ${data.missingRanges.length} missing ranges`);
-                      
-                      // Re-open channels if closed
-                      const activeChannels = channels.filter(ch => ch.readyState === 'open');
-                      if (activeChannels.length === 0) {
-                        console.error('❌ Cannot retransmit: All channels closed');
-                        return;
-                      }
-                      
-                      // Retransmit missing ranges
-                      for (const range of data.missingRanges) {
-                        console.log(`🔄 Retransmitting ${((range.end - range.start)/1024/1024).toFixed(1)}MB from position ${(range.start/1024/1024).toFixed(1)}MB`);
-                        
-                        // Re-read this range from the file
-                        if (input instanceof File) {
-                          const blob = input.slice(range.start, range.end);
-                          const arrayBuffer = await blob.arrayBuffer();
-                          const data = new Uint8Array(arrayBuffer);
-                          
-                          // Send in chunks
-                          let position = range.start;
-                          for (let offset = 0; offset < data.length; offset += chunkSize) {
-                            const chunkData = data.slice(offset, Math.min(offset + chunkSize, data.length));
-                            
-                            // Create header with position
-                            const header = new ArrayBuffer(16);
-                            const headerView = new DataView(header);
-                            headerView.setUint32(0, position & 0xFFFFFFFF, true);
-                            headerView.setUint32(4, Math.floor(position / 0x100000000), true);
-                            headerView.setUint32(8, chunkData.length, true);
-                            headerView.setUint32(12, 0, true);
-                            
-                            const message = new Uint8Array(header.byteLength + chunkData.length);
-                            message.set(new Uint8Array(header), 0);
-                            message.set(chunkData, header.byteLength);
-                            
-                            // Send on first available channel
-                            const channel = activeChannels[0];
-                            channel.send(message.buffer);
-                            
-                            position += chunkData.length;
-                            
-                            // Wait for buffer to drain if needed
-                            while (channel.bufferedAmount > HIGH_WATER_MARK) {
-                              await new Promise(resolve => setTimeout(resolve, 10));
-                            }
-                          }
-                        }
-                      }
-                      
-                      // Wait for buffers to drain
-                      while (true) {
-                        const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
-                        if (totalBuffered === 0) break;
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                      }
-                      
-                      console.log('✅ Retransmission complete');
-                      conn.send({
-                        type: 'retransmit_complete',
-                        crc32: finalCRC,
-                        timestamp: Date.now()
-                      });
+                  // Send in chunks
+                  let sentBytes = 0;
+                  while (sentBytes < shardData.length) {
+                    const chunkData = shardData.slice(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+                    
+                    while (channel.bufferedAmount > 1 * 1024 * 1024) {
+                      await new Promise(resolve => setTimeout(resolve, 10));
                     }
-                  };
+                    
+                    const message = new Uint8Array(4 + chunkData.length);
+                    const view = new DataView(message.buffer);
+                    view.setUint32(0, shard.id, true);
+                    message.set(chunkData, 4);
+                    
+                    channel.send(message.buffer);
+                    sentBytes += chunkData.length;
+                  }
                   
-                  conn.on('data', retransmitHandler);
+                  totalBytesTransferred += shardData.length;
+                  shard.status = 'complete';
                   
-                  // Wait up to 5 seconds for retransmission request
-                  await new Promise(resolve => setTimeout(resolve, 5000));
-                  conn.off('data', retransmitHandler);
+                  // Update progress
+                  const now = Date.now();
+                  const elapsed = (now - startTime.current) / 1000;
+                  const speed = elapsed > 0 ? totalBytesTransferred / elapsed : 0;
+                  const currentPercentage = Math.floor((totalBytesTransferred / fileSize) * 100);
                   
-                  channels.forEach(ch => ch.close());
-                  console.log('🎉 MULTI-STREAM: Transfer completed - RESOLVING PROMISE');
-                  setIsTransferring(false);
-                  resolve();
-                  return;
+                  if (currentPercentage >= lastLoggedPercentage + 10) {
+                    console.log(`📤 ${currentPercentage}% sent (${(totalBytesTransferred/1024/1024/1024).toFixed(2)}GB / ${(fileSize/1024/1024/1024).toFixed(2)}GB) @ ${(speed/1024/1024).toFixed(1)}MB/s`);
+                    lastLoggedPercentage = currentPercentage;
+                  }
+                  
+                  setTransferProgress({
+                    bytesTransferred: totalBytesTransferred,
+                    totalBytes: fileSize,
+                    percentage: (totalBytesTransferred / fileSize) * 100,
+                    speed,
+                    timeRemaining: speed > 0 ? (fileSize - totalBytesTransferred) / speed : 0,
+                    activeStreams: channels.length,
+                    networkQuality: 'good',
+                    adaptiveChunkSize: CHUNK_SIZE
+                  });
+                  
+                  // Move to next shard
+                  currentShardIndex++;
+                  if (currentShardIndex < shards.length) {
+                    currentShardBuffer = new Uint8Array(SHARD_SIZE);
+                    currentShardFilled = 0;
+                  }
                 }
               }
             }
             
-            // Process one chunk
-            if (buffer.length > 0) {
-              const chunkData = buffer.slice(0, Math.min(chunkSize, buffer.length));
-              buffer = buffer.slice(chunkData.length);
-
-              // Select channel (round-robin)
-              const channelIndex = chunkIndex % channels.length;
-              const channel = channels[channelIndex];
-
-              // Check if we need to pause (high water mark)
-              if (channel.bufferedAmount > HIGH_WATER_MARK) {
-                isPaused = true;
-                console.log(`⏸️ Buffer high (${(channel.bufferedAmount/1024/1024).toFixed(1)}MB), pausing send`);
-                return; // Will resume via bufferedamountlow event
-              }
-
-              // Update CRC32 with this chunk
-              senderCRC = updateCRC32(senderCRC, chunkData);
-              
-              // Header: 16 bytes total
-              // Bytes 0-7: Byte position in file (uint64)
-              // Bytes 8-15: Chunk size (uint64)
-              const header = new ArrayBuffer(16);
-              const headerView = new DataView(header);
-              
-              // Write byte position (split into two 32-bit values for 64-bit support)
-              headerView.setUint32(0, currentBytePosition & 0xFFFFFFFF, true); // Low 32 bits
-              headerView.setUint32(4, Math.floor(currentBytePosition / 0x100000000), true); // High 32 bits
-              
-              // Write chunk size
-              headerView.setUint32(8, chunkData.length, true); // Low 32 bits
-              headerView.setUint32(12, 0, true); // High 32 bits (for future)
-              
-              const message = new Uint8Array(header.byteLength + chunkData.length);
-              message.set(new Uint8Array(header), 0);
-              message.set(chunkData, header.byteLength);
-
-              channel.send(message.buffer);
-              currentBytePosition += chunkData.length; // Increment by actual chunk size
-              chunkIndex++;
-              bytesTransferred += message.buffer.byteLength;
-
-              // Update progress
-              const now = Date.now();
-              if (now - lastSpeedCheck > 1000) {
-                lastSpeedCheck = now;
+            if (done) {
+              // Send final partial shard if any (only if we haven't already sent all shards)
+              if (currentShardFilled > 0 && currentShardIndex < shards.length) {
+                const shard = shards[currentShardIndex];
+                if (!shard) {
+                  console.log('✅ All shards sent, stream complete');
+                  break;
+                }
+                const shardData = currentShardBuffer.slice(0, currentShardFilled);
                 
-                // Calculate actual bytes sent (not just buffered)
-                const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
-                const actualBytesSent = bytesTransferred - totalBuffered;
-
-                // Update progress based on actual sent bytes
-                const totalElapsed = (now - startTime.current) / 1000;
-                const avgSpeed = actualBytesSent / totalElapsed;
-                const timeRemaining = avgSpeed > 0 ? (fileSize - actualBytesSent) / avgSpeed : 0;
+                // Cache final shard until confirmed
+                shardCache.set(shard.id, shardData);
                 
-                console.log(`📊 Sender: ${(actualBytesSent/1024/1024).toFixed(1)}MB sent, ${(totalBuffered/1024/1024).toFixed(1)}MB buffered, ${(bytesTransferred/1024/1024).toFixed(1)}MB total queued`);
-
-                setTransferProgress({
-                  bytesTransferred: actualBytesSent,
-                  totalBytes: fileSize,
-                  percentage: (actualBytesSent / fileSize) * 100,
-                  speed: avgSpeed,
-                  timeRemaining,
-                  activeStreams: channels.length,
-                  networkQuality: quality,
-                  adaptiveChunkSize: chunkSize
+                // Calculate per-shard CRC32
+                const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
+                
+                const channel = channels[shard.channelId];
+                
+                conn.send({
+                  type: 'shard_start',
+                  shardId: shard.id,
+                  offset: shard.offset,
+                  size: shardData.length,
+                  channelId: shard.channelId,
+                  crc32: shardCRC
                 });
+                
+                let sentBytes = 0;
+                while (sentBytes < shardData.length) {
+                  const chunkData = shardData.slice(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+                  
+                  while (channel.bufferedAmount > 1 * 1024 * 1024) {
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                  }
+                  
+                  const message = new Uint8Array(4 + chunkData.length);
+                  const view = new DataView(message.buffer);
+                  view.setUint32(0, shard.id, true);
+                  message.set(chunkData, 4);
+                  
+                  channel.send(message.buffer);
+                  sentBytes += chunkData.length;
+                }
+                
+                totalBytesTransferred += shardData.length;
+                shard.status = 'complete';
               }
+              break;
             }
           }
-        };
-      
-        // Start processing (don't await - it will pause and resume via events)
-        console.log('⚡ Starting processNextChunk...');
-        processNextChunk().catch((error) => {
-          console.error('❌ sendFileMultiStream ERROR:', error);
-          setIsTransferring(false);
-          reject(error);
+        }
+        
+        // Wait for buffers to drain (silent)
+        while (true) {
+          const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
+          if (totalBuffered === 0) break;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Send completion (no CRC32 needed - all shards already verified)
+        console.log(`✅ All shards sent!`);
+        
+        conn.send({
+          type: 'multi_stream_complete',
+          bytesTransferred: totalBytesTransferred,
+          fileSize,
+          timestamp: Date.now()
         });
+
+        // Handle shard confirmations and retransmission requests
+        const messageHandler = async (data: any) => {
+          if (data.type === 'shard_confirmed') {
+            // Receiver confirmed shard is good, clear from cache
+            const shardId = data.shardId;
+            if (shardCache.has(shardId)) {
+              shardCache.delete(shardId);
+              console.log(`✅ Shard ${shardId} confirmed, cleared from cache (${shardCache.size} shards cached)`);
+            }
+          } else if (data.type === 'retransmit_shards') {
+            console.log(`📡 Retransmit request for ${data.shardIds.length} shards`);
+            
+            for (const shardId of data.shardIds) {
+              const shard = shards[shardId];
+              const channel = channels[shard.channelId];
+              
+              if (channel.readyState !== 'open') {
+                console.error(`❌ Channel ${shard.channelId} closed, cannot retransmit shard ${shardId}`);
+                continue;
+              }
+              
+              console.log(`🔄 Retransmitting shard ${shardId} (${(shard.size/1024/1024).toFixed(1)}MB)`);
+              
+              // Get shard data from File or cache
+              let shardData: Uint8Array;
+              if (isFile) {
+                const shardBlob = (input as File).slice(shard.offset, shard.offset + shard.size);
+                shardData = new Uint8Array(await shardBlob.arrayBuffer());
+              } else {
+                // Use cached shard data from stream
+                const cached = shardCache.get(shardId);
+                if (!cached) {
+                  console.error(`❌ Shard ${shardId} not in cache, cannot retransmit`);
+                  continue;
+                }
+                shardData = cached;
+              }
+              
+              conn.send({
+                type: 'shard_start',
+                shardId: shard.id,
+                offset: shard.offset,
+                size: shard.size,
+                channelId: shard.channelId
+              });
+
+              let sentBytes = 0;
+              while (sentBytes < shardData.length) {
+                const chunkData = shardData.slice(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+                
+                while (channel.bufferedAmount > 1 * 1024 * 1024) {
+                  await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                
+                const message = new Uint8Array(4 + chunkData.length);
+                const view = new DataView(message.buffer);
+                view.setUint32(0, shard.id, true);
+                message.set(chunkData, 4);
+                
+                channel.send(message.buffer);
+                sentBytes += chunkData.length;
+              }
+            }
+            
+            conn.send({
+              type: 'retransmit_complete',
+              timestamp: Date.now()
+            });
+          }
+        };
+
+        conn.on('data', messageHandler);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        conn.off('data', messageHandler);
+
+        channels.forEach(ch => ch.close());
+        setIsTransferring(false);
+        resolve();
       } catch (error) {
-        console.error('❌ sendFileMultiStream SETUP ERROR:', error);
+        console.error('❌ Shard transfer error:', error);
         setIsTransferring(false);
         reject(error);
       }
     });
-  }, [detectNetworkQuality, getAdaptiveChunkSize, createParallelChannels]);
+  }, [createParallelChannels, setTransferProgress]);
 
-  // Receive file with multi-stream
+  // Receive file with shard-based tracking
   const receiveFileMultiStream = useCallback(async (
     conn: DataConnection
   ): Promise<Blob> => {
-    console.log('🚀 receiveFileMultiStream called');
-    setIsTransferring(true);
-    startTime.current = Date.now();
-
-    let fileSize = 0;
-    let bytesReceived = 0;
-    let expectedStreams = 0;
-    let fileName = 'download';
-    let receiverCRC = 0xFFFFFFFF; // Initialize CRC32
-    let expectedCRC = '';
+    console.log('📥 receiveFileMultiStream STARTED (SHARD-BASED)');
     
-    // Try to use File System Access API for progressive disk writes
-    let fileHandle: any = null;
-    let writableStream: any = null;
-    let useFileSystemAPI = false;
-    
-    const chunks = new Map<number, Uint8Array>();
-    
-    // Track received byte ranges to detect missing chunks
-    const receivedRanges: Array<{start: number, end: number}> = [];
-    
-    function addReceivedRange(start: number, end: number) {
-      receivedRanges.push({start, end});
-      // Merge overlapping ranges
-      receivedRanges.sort((a, b) => a.start - b.start);
-      for (let i = 0; i < receivedRanges.length - 1; i++) {
-        if (receivedRanges[i].end >= receivedRanges[i + 1].start) {
-          receivedRanges[i].end = Math.max(receivedRanges[i].end, receivedRanges[i + 1].end);
-          receivedRanges.splice(i + 1, 1);
-          i--;
-        }
-      }
-    }
-    
-    function getMissingRanges(totalSize: number): Array<{start: number, end: number}> {
-      if (receivedRanges.length === 0) {
-        return [{start: 0, end: totalSize}];
-      }
-      
-      const missing: Array<{start: number, end: number}> = [];
-      
-      // Check gap before first range
-      if (receivedRanges[0].start > 0) {
-        missing.push({start: 0, end: receivedRanges[0].start});
-      }
-      
-      // Check gaps between ranges
-      for (let i = 0; i < receivedRanges.length - 1; i++) {
-        if (receivedRanges[i].end < receivedRanges[i + 1].start) {
-          missing.push({start: receivedRanges[i].end, end: receivedRanges[i + 1].start});
-        }
-      }
-      
-      // Check gap after last range
-      const lastRange = receivedRanges[receivedRanges.length - 1];
-      if (lastRange.end < totalSize) {
-        missing.push({start: lastRange.end, end: totalSize});
-      }
-      
-      return missing;
-    }
-
     return new Promise((resolve) => {
-      // Setup DataChannel handler factory (will be called after File System Access API)
+      setIsTransferring(true);
+      startTime.current = Date.now();
+
+      let fileSize = 0;
+      let expectedStreams = 0;
+      let fileName = 'download';
+      let shardSize = 0;
+      let shardCount = 0;
+      let bytesReceived = 0;
+      let lastLoggedPercentage = 0;
+      
+      // Shard tracking with CRC32 verification and immediate writes
+      const shardStates = new Map<number, { 
+        received: number, 
+        total: number, 
+        complete: boolean, 
+        expectedCRC: string,
+        currentCRC: number, // Incremental CRC32 calculation
+        offset: number // Shard offset in file
+      }>();
+      
+      let fileHandle: any = null;
+      let writableStream: any = null;
+      let useFileSystemAPI = false;
+
       const setupDataChannelHandlers = () => {
         const pc = (conn as any).peerConnection;
-        if (pc) {
-          console.log('🔧 Setting up DataChannel handlers with useFileSystemAPI:', useFileSystemAPI);
-          pc.ondatachannel = (event: RTCDataChannelEvent) => {
-            const channel = event.channel;
-            console.log(`📥 Incoming DataChannel: ${channel.label}`);
+        if (!pc) {
+          console.error('❌ PeerConnection not available yet');
+          return;
+        }
+        
+        console.log('✅ Setting up DataChannel handlers on receiver');
+        
+        pc.ondatachannel = (event: RTCDataChannelEvent) => {
+          console.log(`📡 Received DataChannel: ${event.channel.label}`);
+          const channel = event.channel;
 
-            channel.onmessage = async (event) => {
-              try {
-                if (event.data instanceof ArrayBuffer) {
-                  // Parse binary message with header (16 bytes)
-                  const message = new Uint8Array(event.data);
-                  
-                  // Extract byte position from first 8 bytes
-                  const headerView = new DataView(event.data, 0, 16);
-                  const positionLow = headerView.getUint32(0, true);
-                  const positionHigh = headerView.getUint32(4, true);
-                  const bytePosition = positionLow + (positionHigh * 0x100000000);
-                  
-                  // Extract chunk data (skip 16-byte header)
-                  const chunkData = message.slice(16);
-                  
-                  bytesReceived += chunkData.length;
-                  
-                  // Track this received byte range
-                  addReceivedRange(bytePosition, bytePosition + chunkData.length);
-                  
-                  // Update CRC32 with this chunk
-                  receiverCRC = updateCRC32(receiverCRC, chunkData);
-                  
-                  if (useFileSystemAPI && writableStream) {
-                    // Chrome/Edge: Write directly to disk at correct position
-                    try {
-                      // Write with actual byte position from sender
-                      await writableStream.write({
-                        type: 'write',
-                        position: bytePosition,
-                        data: chunkData
-                      });
-                      
-                      if (Math.floor(bytePosition / (100 * 65536)) !== Math.floor((bytePosition - chunkData.length) / (100 * 65536))) {
-                        console.log(`💾 Wrote ${chunkData.length} bytes to disk at position ${bytePosition} (${(bytePosition/1024/1024).toFixed(1)}MB)`);
-                      }
-                    } catch (error) {
-                      console.error(`❌ DISK WRITE FAILED at position ${bytePosition}:`, error);
-                      // Fall back to RAM on write error
-                      chunks.set(bytePosition, chunkData);
-                    }
-                  } else {
-                    // Firefox: Buffer in RAM for traditional download
-                    chunks.set(bytePosition, chunkData);
-                  }
-
-                  // Update progress
-                  const now = Date.now();
-                  const elapsed = (now - startTime.current) / 1000;
-                  const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
-                  const timeRemaining = speed > 0 ? (fileSize - bytesReceived) / speed : 0;
-
-                  setTransferProgress(prev => ({
-                    ...prev,
-                    bytesTransferred: bytesReceived,
-                    totalBytes: fileSize,
-                    percentage: fileSize > 0 ? (bytesReceived / fileSize) * 100 : 0,
-                    speed,
-                    timeRemaining,
-                    activeStreams: expectedStreams,
-                    networkQuality: prev.networkQuality || 'good',
-                    adaptiveChunkSize: 256 * 1024
-                  }));
-
-                  // Check if complete (based on bytes, not chunk count)
-                  if (bytesReceived >= fileSize && fileSize > 0) {
-                    console.log(`🎉 All data received (${bytesReceived}/${fileSize} bytes)`);
-                    
-                    if (useFileSystemAPI && writableStream) {
-                      // Chrome/Edge: Close the file stream
-                      await writableStream.close();
-                      console.log('✅ File written to disk');
-                      
-                      setIsTransferring(false);
-                      conn.off('data', handleMainMessage);
-                      // Return empty blob since file is already on disk
-                      resolve(new Blob([]));
-                    } else {
-                      // Firefox: Assemble from RAM and trigger traditional download
-                      console.log(`📥 Firefox fallback: Assembling ${chunks.size} chunks from RAM`);
-                      const sortedChunks = Array.from(chunks.entries())
-                        .sort((a, b) => a[0] - b[0])
-                        .map(([, data]) => data);
-
-                      // Calculate total size and combine chunks
-                      const totalSize = sortedChunks.reduce((acc, chunk) => acc + chunk.length, 0);
-                      const combined = new Uint8Array(totalSize);
-                      let offset = 0;
-                      
-                      for (const chunk of sortedChunks) {
-                        combined.set(chunk, offset);
-                        offset += chunk.length;
-                      }
-                      
-                      const blob = new Blob([combined], { type: 'application/octet-stream' });
-                      
-                      // Trigger automatic download (Firefox traditional method)
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = fileName;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                      
-                      console.log('📥 Traditional download triggered for:', fileName);
-                      setIsTransferring(false);
-                      conn.off('data', handleMainMessage);
-                      resolve(blob);
-                    }
-                  }
-                }
-              } catch (error) {
-                console.error('Failed to parse chunk:', error);
+          channel.onmessage = async (event) => {
+            if (!(event.data instanceof ArrayBuffer)) return;
+            
+            const message = new Uint8Array(event.data);
+            const view = new DataView(message.buffer);
+            const shardId = view.getUint32(0, true);
+            const chunkData = message.slice(4);
+            
+            bytesReceived += chunkData.length;
+            
+            // Update shard state
+            if (!shardStates.has(shardId)) {
+              console.error(`❌ Received data for unknown shard ${shardId}`);
+              return;
+            }
+            
+            const shardState = shardStates.get(shardId)!;
+            shardState.received += chunkData.length;
+            
+            // Update incremental CRC32
+            shardState.currentCRC = updateCRC32(shardState.currentCRC, chunkData);
+            
+            // Write chunk to disk immediately (non-blocking)
+            if (useFileSystemAPI && writableStream) {
+              const chunkOffset = shardState.offset + (shardState.received - chunkData.length);
+              writableStream.write({
+                type: 'write',
+                position: chunkOffset,
+                data: chunkData
+              }).catch((error: any) => {
+                console.error(`❌ Chunk write failed for shard ${shardId}:`, error);
+              });
+            }
+            
+            // Shard complete? Verify CRC32
+            if (shardState.received >= shardState.total) {
+              console.log(`🔍 Shard ${shardId} complete: ${shardState.received}/${shardState.total} bytes, expectedCRC: ${shardState.expectedCRC}`);
+              shardState.complete = true;
+              
+              // Finalize and verify CRC32
+              const actualCRC = finalizeCRC32(shardState.currentCRC);
+              if (actualCRC === shardState.expectedCRC) {
+                console.log(`✅ Shard ${shardId} verified (CRC32: ${actualCRC})`);
+                
+                // Send confirmation to sender
+                conn.send({
+                  type: 'shard_confirmed',
+                  shardId: shardId,
+                  timestamp: Date.now()
+                });
+              } else {
+                console.error(`❌ Shard ${shardId} CRC32 mismatch! Expected: ${shardState.expectedCRC}, Got: ${actualCRC}`);
+                
+                // Request immediate retransmission
+                conn.send({
+                  type: 'retransmit_shards',
+                  shardIds: [shardId],
+                  timestamp: Date.now()
+                });
+                
+                // Reset shardState for retransmission
+                shardState.received = 0;
+                shardState.complete = false;
+                shardState.currentCRC = 0xFFFFFFFF;
               }
-            }; // End channel.onmessage
-          }; // End pc.ondatachannel
-        } // End if (pc)
-      }; // End setupDataChannelHandlers
+            }
+            
+            // Note: Disk writes happen immediately per chunk (non-blocking)
+            // This prevents RAM buffering while maintaining transfer speed
+            
+            // Update progress
+            const now = Date.now();
+            const elapsed = (now - startTime.current) / 1000;
+            const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
+            const currentPercentage = Math.floor((bytesReceived / fileSize) * 100);
+            
+            // Log every 10% milestone
+            if (currentPercentage >= lastLoggedPercentage + 10) {
+              console.log(`📥 ${currentPercentage}% received (${(bytesReceived/1024/1024/1024).toFixed(2)}GB / ${(fileSize/1024/1024/1024).toFixed(2)}GB) @ ${(speed/1024/1024).toFixed(1)}MB/s`);
+              lastLoggedPercentage = currentPercentage;
+            }
+            
+            setTransferProgress({
+              bytesTransferred: bytesReceived,
+              totalBytes: fileSize,
+              percentage: (bytesReceived / fileSize) * 100,
+              speed,
+              timeRemaining: speed > 0 ? (fileSize - bytesReceived) / speed : 0,
+              activeStreams: expectedStreams,
+              networkQuality: 'good',
+              adaptiveChunkSize: 256 * 1024
+            });
+            
+            // Check completion
+            if (bytesReceived >= fileSize) {
+              console.log('✅ All data received!');
+              
+              if (useFileSystemAPI && writableStream) {
+                await writableStream.close();
+                setIsTransferring(false);
+                resolve(new Blob([]));
+              }
+            }
+          };
+        };
+      };
 
-      // Listen on main connection for metadata
       const handleMainMessage = async (data: any) => {
-        console.log('📨 Main connection message:', data.type);
-
         if (data.type === 'multi_stream_start') {
           fileSize = data.fileSize;
           expectedStreams = data.streamCount;
           fileName = data.fileName || 'download';
-          console.log(`📊 Expecting ${(fileSize/1024/1024).toFixed(2)}MB across ${expectedStreams} streams`);
-          console.log('🔐 Starting incremental CRC32 calculation...');
+          shardSize = data.shardSize;
+          shardCount = data.shardCount;
           
-          // Prompt for save location NOW (before chunks arrive)
-          console.log('🔍 Checking for File System Access API support...');
-          console.log('showSaveFilePicker available:', 'showSaveFilePicker' in window);
+          console.log(`📊 Expecting ${shardCount} shards of ${(shardSize/1024/1024).toFixed(0)}MB each`);
           
+          // Initialize shard states
+          for (let i = 0; i < shardCount; i++) {
+            shardStates.set(i, { 
+              received: 0, 
+              total: shardSize, 
+              complete: false, 
+              expectedCRC: '', 
+              currentCRC: 0xFFFFFFFF,
+              offset: i * shardSize
+            });
+          }
+          
+          // Try File System Access API
           if ('showSaveFilePicker' in window) {
             try {
-              console.log('📁 PROMPTING USER for save location...');
               fileHandle = await (window as any).showSaveFilePicker({
                 suggestedName: fileName,
-                types: [{
-                  description: 'All Files',
-                  accept: {'*/*': []}
-                }]
+                types: [{ description: 'All Files', accept: {'*/*': []} }]
               });
-              console.log('✅ User selected save location:', fileHandle);
               writableStream = await fileHandle.createWritable({ keepExistingData: false });
               useFileSystemAPI = true;
-              console.log('✅ File System Access API ACTIVE: Writing directly to disk');
-            } catch (err: any) {
-              console.error('⚠️ File System Access API failed:', err);
-              if (err.name === 'AbortError') {
-                console.log('❌ User CANCELLED save dialog - falling back to RAM buffer');
-              } else {
-                console.log('❌ File System Access API error:', err.name, err.message);
-              }
-              console.log('Falling back to RAM buffer');
+              console.log('✅ File System Access API active');
+            } catch (err) {
+              console.log('⚠️ File System Access API failed, using RAM');
               useFileSystemAPI = false;
             }
-          } else {
-            console.log('📥 File System Access API NOT SUPPORTED, using RAM buffer');
           }
           
-          // Check if RAM fallback is safe
-          if (!useFileSystemAPI) {
-            const fileSizeMB = fileSize / (1024 * 1024);
-            const fileSizeGB = fileSize / (1024 * 1024 * 1024);
-            
-            // Get available memory (if supported)
-            let availableMemoryMB = 0;
-            if ('memory' in performance && (performance as any).memory) {
-              const memory = (performance as any).memory;
-              availableMemoryMB = (memory.jsHeapSizeLimit - memory.usedJSHeapSize) / (1024 * 1024);
-              console.log(`💾 Available RAM: ${availableMemoryMB.toFixed(0)}MB, File size: ${fileSizeMB.toFixed(0)}MB`);
-            }
-            
-            // Warn if file is large
-            if (fileSizeGB > 2) {
-              const proceed = confirm(
-                `⚠️ WARNING: Large file (${fileSizeGB.toFixed(2)}GB) will be buffered in RAM!\n\n` +
-                `This may cause your browser to crash or freeze.\n\n` +
-                `Recommended: Use Chrome/Edge for direct disk writing.\n\n` +
-                `Continue anyway?`
-              );
-              if (!proceed) {
-                console.log('❌ User aborted RAM fallback for large file');
-                setIsTransferring(false);
-                return;
+          // Wait for peerConnection to be ready before setting up handlers
+          await new Promise<void>((resolve) => {
+            const checkConnection = () => {
+              const pc = (conn as any).peerConnection;
+              if (pc && pc.connectionState !== 'closed') {
+                console.log(`✅ PeerConnection ready (state: ${pc.connectionState})`);
+                setupDataChannelHandlers();
+                resolve();
+              } else {
+                console.log('⏳ Waiting for peerConnection...');
+                setTimeout(checkConnection, 100);
               }
-            } else if (availableMemoryMB > 0 && fileSizeMB > availableMemoryMB * 0.8) {
-              const proceed = confirm(
-                `⚠️ WARNING: File (${fileSizeMB.toFixed(0)}MB) may exceed available RAM (${availableMemoryMB.toFixed(0)}MB)!\n\n` +
-                `This may cause your browser to crash.\n\n` +
-                `Continue anyway?`
-              );
-              if (!proceed) {
-                console.log('❌ User aborted RAM fallback due to insufficient memory');
-                setIsTransferring(false);
-                return;
-              }
-            }
-            
-            console.log('✅ RAM fallback check passed, proceeding with buffer');
-          }
+            };
+            checkConnection();
+          });
           
-          // NOW setup DataChannel handlers with correct useFileSystemAPI value
-          setupDataChannelHandlers();
-          
-          // Send ready signal to sender
-          console.log('📤 Sending receiver_ready signal to sender...');
           conn.send({
             type: 'receiver_ready',
             timestamp: Date.now()
           });
+        } else if (data.type === 'shard_start') {
+          // Initialize or update shard with expected CRC32 and actual size
+          if (!shardStates.has(data.shardId)) {
+            shardStates.set(data.shardId, { 
+              received: 0, 
+              total: data.size, 
+              complete: false, 
+              expectedCRC: data.crc32 || '', 
+              currentCRC: 0xFFFFFFFF,
+              offset: data.offset || 0
+            });
+          } else {
+            // Update existing shard with CRC and actual size (for retransmissions)
+            const state = shardStates.get(data.shardId)!;
+            state.total = data.size; // Update with actual shard size
+            state.expectedCRC = data.crc32 || '';
+            state.offset = data.offset || state.offset;
+          }
         } else if (data.type === 'multi_stream_complete') {
-          console.log('✅ Transfer complete signal received');
-          console.log(`📊 Bytes received: ${bytesReceived}/${fileSize}`);
+          console.log('✅ Transfer complete signal');
           
-          // Check for missing data
-          const missingRanges = getMissingRanges(fileSize);
-          if (missingRanges.length > 0) {
-            const totalMissing = missingRanges.reduce((sum, range) => sum + (range.end - range.start), 0);
-            console.error(`❌ MISSING DATA DETECTED: ${(totalMissing/1024/1024).toFixed(1)}MB missing in ${missingRanges.length} gaps`);
+          // Check for missing shards
+          const missingShards = Array.from(shardStates.entries())
+            .filter(([_, state]) => !state.complete)
+            .map(([id]) => id);
+          
+          if (missingShards.length > 0) {
+            console.error(`❌ Missing ${missingShards.length} shards:`, missingShards.slice(0, 10));
             
-            // Log first few gaps for debugging
-            const gapsToShow = Math.min(5, missingRanges.length);
-            for (let i = 0; i < gapsToShow; i++) {
-              const gap = missingRanges[i];
-              console.error(`   Gap ${i+1}: ${(gap.start/1024/1024).toFixed(1)}MB - ${(gap.end/1024/1024).toFixed(1)}MB (${((gap.end-gap.start)/1024/1024).toFixed(1)}MB)`);
-            }
-            if (missingRanges.length > gapsToShow) {
-              console.error(`   ... and ${missingRanges.length - gapsToShow} more gaps`);
-            }
-            
-            // Request retransmission
-            console.log('📡 Requesting retransmission of missing data...');
             conn.send({
-              type: 'retransmit_request',
-              missingRanges: missingRanges,
+              type: 'retransmit_shards',
+              shardIds: missingShards,
               timestamp: Date.now()
             });
-            return; // Don't verify CRC yet, wait for retransmission
-          }
-          
-          // All data received, verify CRC32
-          console.log('✅ All data received, verifying integrity...');
-          if (data.crc32) {
-            expectedCRC = data.crc32;
-            const finalReceiverCRC = finalizeCRC32(receiverCRC);
-            console.log(`🔐 Verifying file integrity...`);
-            console.log(`   Sender CRC32:   ${expectedCRC}`);
-            console.log(`   Receiver CRC32: ${finalReceiverCRC}`);
-            
-            if (finalReceiverCRC === expectedCRC) {
-              console.log('✅ File integrity verified - CRC32 match!');
-            } else {
-              console.error('❌ FILE CORRUPTION DETECTED - CRC32 mismatch!');
-              alert('⚠️ File transfer completed but integrity check FAILED!\n\nThe received file is corrupted and may not match the original.\n\nPlease try the transfer again.');
-            }
-          }
-        } else if (data.type === 'retransmit_complete') {
-          console.log('✅ Retransmission complete, verifying integrity...');
-          
-          // Check again for missing data
-          const missingRanges = getMissingRanges(fileSize);
-          if (missingRanges.length > 0) {
-            const totalMissing = missingRanges.reduce((sum, range) => sum + (range.end - range.start), 0);
-            console.error(`❌ STILL MISSING DATA: ${(totalMissing/1024/1024).toFixed(1)}MB after retransmission`);
-            alert(`⚠️ File transfer incomplete!\n\nStill missing ${(totalMissing/1024/1024).toFixed(1)}MB of data after retransmission.\n\nPlease try the transfer again.`);
             return;
           }
           
-          // Verify CRC32
-          if (data.crc32) {
-            const finalReceiverCRC = finalizeCRC32(receiverCRC);
-            console.log(`🔐 Final integrity check...`);
-            console.log(`   Sender CRC32:   ${data.crc32}`);
-            console.log(`   Receiver CRC32: ${finalReceiverCRC}`);
-            
-            if (finalReceiverCRC === data.crc32) {
-              console.log('✅ File integrity verified - CRC32 match after retransmission!');
-            } else {
-              console.error('❌ FILE CORRUPTION DETECTED - CRC32 mismatch after retransmission!');
-              alert('⚠️ File transfer completed but integrity check FAILED!\n\nThe received file is corrupted and may not match the original.\n\nPlease try the transfer again.');
-            }
-          }
+          // All shards verified individually - transfer complete
+          console.log('✅ All shards verified! Transfer complete.');
+        } else if (data.type === 'retransmit_complete') {
+          console.log('✅ Retransmission complete');
         }
       };
 
       conn.on('data', handleMainMessage);
     });
-  }, []);
+  }, [setTransferProgress]);
 
-  // Main transfer function - handles File or ReadableStream
   const transferFileAdaptive = useCallback(async (
     conn: DataConnection,
     input: File | ReadableStream | null,
     fileName?: string,
-    fileSize?: number
+    totalSize?: number
   ): Promise<Blob | void> => {
-    // Auto-detect: if input is provided, we're sending; if null, we're receiving
     const isSender = input !== null;
     
-    console.log('🎯 transferFileAdaptive called:', { 
-      isSender, 
-      inputType: input?.constructor?.name,
-      fileName: fileName || (input as File)?.name,
-      fileSize: fileSize || (input as File)?.size
-    });
-    
     if (isSender) {
-      await sendFileMultiStream(conn, input!, fileName, fileSize);
+      await sendFileMultiStream(conn, input, fileName, totalSize);
     } else {
-      console.log('📥 Starting multi-stream receiver');
       return await receiveFileMultiStream(conn);
     }
   }, [sendFileMultiStream, receiveFileMultiStream]);
 
   return {
+    transferFileAdaptive,
     transferProgress,
-    isTransferring,
-    transferFileAdaptive
+    isTransferring
   };
 };

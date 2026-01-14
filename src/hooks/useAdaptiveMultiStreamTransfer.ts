@@ -310,6 +310,122 @@ export const useAdaptiveMultiStreamTransfer = () => {
     let nextExpectedChunk = 0;
 
     return new Promise((resolve) => {
+      // Setup DataChannel handler FIRST - must be ready when sender creates channels
+      const pc = (conn as any).peerConnection;
+      if (pc) {
+        pc.ondatachannel = (event: RTCDataChannelEvent) => {
+          const channel = event.channel;
+          console.log(`📥 Incoming DataChannel: ${channel.label}`);
+
+          channel.onmessage = async (event) => {
+            try {
+              if (event.data instanceof ArrayBuffer) {
+                // Parse binary message with header
+                const message = new Uint8Array(event.data);
+                
+                // Extract chunk index from first 8 bytes
+                const headerView = new DataView(event.data, 0, 8);
+                const chunkIndex = headerView.getUint32(0, true);
+                
+                // Extract chunk data (skip 8-byte header)
+                const chunkData = message.slice(8);
+                
+                bytesReceived += chunkData.length;
+                
+                if (useFileSystemAPI && writableStream) {
+                  // Chrome/Edge: Write directly to disk
+                  if (chunkIndex === nextExpectedChunk) {
+                    await writableStream.write(chunkData);
+                    nextExpectedChunk++;
+                    
+                    // Write any buffered chunks that are now in order
+                    while (chunks.has(nextExpectedChunk)) {
+                      await writableStream.write(chunks.get(nextExpectedChunk)!);
+                      chunks.delete(nextExpectedChunk);
+                      nextExpectedChunk++;
+                    }
+                  } else {
+                    // Out of order, buffer it
+                    chunks.set(chunkIndex, chunkData);
+                  }
+                } else {
+                  // Firefox: Buffer in RAM for traditional download
+                  chunks.set(chunkIndex, chunkData);
+                }
+
+                // Update progress
+                const now = Date.now();
+                const elapsed = (now - startTime.current) / 1000;
+                const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
+                const timeRemaining = speed > 0 ? (fileSize - bytesReceived) / speed : 0;
+
+                setTransferProgress(prev => ({
+                  ...prev,
+                  bytesTransferred: bytesReceived,
+                  totalBytes: fileSize,
+                  percentage: fileSize > 0 ? (bytesReceived / fileSize) * 100 : 0,
+                  speed,
+                  timeRemaining,
+                  activeStreams: expectedStreams,
+                  networkQuality: prev.networkQuality || 'good',
+                  adaptiveChunkSize: 256 * 1024
+                }));
+
+                // Check if complete (based on bytes, not chunk count)
+                if (bytesReceived >= fileSize && fileSize > 0) {
+                  console.log(`🎉 All data received (${bytesReceived}/${fileSize} bytes)`);
+                  
+                  if (useFileSystemAPI && writableStream) {
+                    // Chrome/Edge: Close the file stream
+                    await writableStream.close();
+                    console.log('✅ File written to disk');
+                    setIsTransferring(false);
+                    conn.off('data', handleMainMessage);
+                    // Return empty blob since file is already on disk
+                    resolve(new Blob([]));
+                  } else {
+                    // Firefox: Assemble from RAM and trigger traditional download
+                    console.log(`📥 Firefox fallback: Assembling ${chunks.size} chunks from RAM`);
+                    const sortedChunks = Array.from(chunks.entries())
+                      .sort((a, b) => a[0] - b[0])
+                      .map(([, data]) => data);
+
+                    // Calculate total size and combine chunks
+                    const totalSize = sortedChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+                    const combined = new Uint8Array(totalSize);
+                    let offset = 0;
+                    
+                    for (const chunk of sortedChunks) {
+                      combined.set(chunk, offset);
+                      offset += chunk.length;
+                    }
+                    
+                    const blob = new Blob([combined], { type: 'application/octet-stream' });
+                    
+                    // Trigger automatic download (Firefox traditional method)
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    console.log('📥 Traditional download triggered for:', fileName);
+                    setIsTransferring(false);
+                    conn.off('data', handleMainMessage);
+                    resolve(blob);
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Failed to parse chunk:', error);
+            }
+          };
+        };
+      }
+
       // Listen on main connection for metadata
       const handleMainMessage = async (data: any) => {
         console.log('📨 Main connection message:', data.type);
@@ -351,133 +467,12 @@ export const useAdaptiveMultiStreamTransfer = () => {
           } else {
             console.log('📥 File System Access API NOT SUPPORTED, using RAM buffer');
           }
-          
-          // NOW setup DataChannel handlers after File System Access API is ready
-          setupDataChannelHandler();
         } else if (data.type === 'multi_stream_complete') {
           console.log('✅ Transfer complete signal received');
         }
       };
 
       conn.on('data', handleMainMessage);
-
-      // Setup DataChannel handler factory (will be called after metadata arrives)
-      const setupDataChannelHandler = () => {
-        const pc = (conn as any).peerConnection;
-        if (pc) {
-          pc.ondatachannel = (event: RTCDataChannelEvent) => {
-            const channel = event.channel;
-            console.log(`📥 Incoming DataChannel: ${channel.label}`);
-
-            channel.onmessage = async (event) => {
-              try {
-                if (event.data instanceof ArrayBuffer) {
-                  // Parse binary message with header
-                  const message = new Uint8Array(event.data);
-                  
-                  // Extract chunk index from first 8 bytes
-                  const headerView = new DataView(event.data, 0, 8);
-                  const chunkIndex = headerView.getUint32(0, true);
-                  
-                  // Extract chunk data (skip 8-byte header)
-                  const chunkData = message.slice(8);
-                  
-                  bytesReceived += chunkData.length;
-                  
-                  if (useFileSystemAPI && writableStream) {
-                    // Chrome/Edge: Write directly to disk
-                    if (chunkIndex === nextExpectedChunk) {
-                      await writableStream.write(chunkData);
-                      nextExpectedChunk++;
-                      
-                      // Write any buffered chunks that are now in order
-                      while (chunks.has(nextExpectedChunk)) {
-                        await writableStream.write(chunks.get(nextExpectedChunk)!);
-                        chunks.delete(nextExpectedChunk);
-                        nextExpectedChunk++;
-                      }
-                    } else {
-                      // Out of order, buffer it
-                      chunks.set(chunkIndex, chunkData);
-                    }
-                  } else {
-                    // Firefox: Buffer in RAM for traditional download
-                    chunks.set(chunkIndex, chunkData);
-                  }
-
-                  // Update progress
-                  const now = Date.now();
-                  const elapsed = (now - startTime.current) / 1000;
-                  const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
-                  const timeRemaining = speed > 0 ? (fileSize - bytesReceived) / speed : 0;
-
-                  setTransferProgress(prev => ({
-                    ...prev,
-                    bytesTransferred: bytesReceived,
-                    totalBytes: fileSize,
-                    percentage: fileSize > 0 ? (bytesReceived / fileSize) * 100 : 0,
-                    speed,
-                    timeRemaining,
-                    activeStreams: expectedStreams,
-                    networkQuality: prev.networkQuality || 'good',
-                    adaptiveChunkSize: 256 * 1024
-                  }));
-
-                  // Check if complete (based on bytes, not chunk count)
-                  if (bytesReceived >= fileSize && fileSize > 0) {
-                    console.log(`🎉 All data received (${bytesReceived}/${fileSize} bytes)`);
-                    
-                    if (useFileSystemAPI && writableStream) {
-                      // Chrome/Edge: Close the file stream
-                      await writableStream.close();
-                      console.log('✅ File written to disk');
-                      setIsTransferring(false);
-                      conn.off('data', handleMainMessage);
-                      // Return empty blob since file is already on disk
-                      resolve(new Blob([]));
-                    } else {
-                      // Firefox: Assemble from RAM and trigger traditional download
-                      console.log(`📥 Firefox fallback: Assembling ${chunks.size} chunks from RAM`);
-                      const sortedChunks = Array.from(chunks.entries())
-                        .sort((a, b) => a[0] - b[0])
-                        .map(([, data]) => data);
-
-                      // Calculate total size and combine chunks
-                      const totalSize = sortedChunks.reduce((acc, chunk) => acc + chunk.length, 0);
-                      const combined = new Uint8Array(totalSize);
-                      let offset = 0;
-                      
-                      for (const chunk of sortedChunks) {
-                        combined.set(chunk, offset);
-                        offset += chunk.length;
-                      }
-                      
-                      const blob = new Blob([combined], { type: 'application/octet-stream' });
-                      
-                      // Trigger automatic download (Firefox traditional method)
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = fileName;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                      
-                      console.log('📥 Traditional download triggered for:', fileName);
-                      setIsTransferring(false);
-                      conn.off('data', handleMainMessage);
-                      resolve(blob);
-                    }
-                  }
-                }
-              } catch (error) {
-                console.error('Failed to parse chunk:', error);
-              }
-            }; // End channel.onmessage
-          }; // End pc.ondatachannel
-        } // End if (pc)
-      }; // End setupDataChannelHandler
     });
   }, []);
 

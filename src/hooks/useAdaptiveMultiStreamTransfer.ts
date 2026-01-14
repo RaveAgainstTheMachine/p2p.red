@@ -141,6 +141,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
       // Send metadata first on main connection
       conn.send({
         type: 'multi_stream_start',
+        fileName: name,
         fileSize,
         streamCount: channels.length,
         timestamp: Date.now()
@@ -169,26 +170,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
         });
       });
       
+      let streamDone = false;
+      
       const processNextChunk = async () => {
-        while (!isPaused) {
+        while (!isPaused && !streamDone) {
           // Read more data if buffer is low
           if (buffer.length < chunkSize) {
             const { done, value } = await reader.read();
-            
-            if (done && buffer.length === 0) {
-              // Send completion signal
-              conn.send({
-                type: 'multi_stream_complete',
-                bytesTransferred,
-                fileSize,
-                timestamp: Date.now()
-              });
-              
-              // Close channels
-              channels.forEach(ch => ch.close());
-              console.log('🎉 MULTI-STREAM: Transfer completed');
-              return;
-            }
             
             if (value) {
               const newBuffer = new Uint8Array(buffer.length + value.length);
@@ -197,7 +185,21 @@ export const useAdaptiveMultiStreamTransfer = () => {
               buffer = newBuffer;
             }
             
-            if (done && buffer.length === 0) break;
+            if (done) {
+              streamDone = true;
+              if (buffer.length === 0) {
+                // All data sent, close connection
+                conn.send({
+                  type: 'multi_stream_complete',
+                  bytesTransferred,
+                  fileSize,
+                  timestamp: Date.now()
+                });
+                channels.forEach(ch => ch.close());
+                console.log('🎉 MULTI-STREAM: Transfer completed');
+                return;
+              }
+            }
           }
           
           // Process one chunk
@@ -280,20 +282,58 @@ export const useAdaptiveMultiStreamTransfer = () => {
     setIsTransferring(true);
     startTime.current = Date.now();
 
-    const chunks = new Map<number, Uint8Array>();
     let fileSize = 0;
     let bytesReceived = 0;
     let expectedStreams = 0;
+    let fileName = 'download';
+    
+    // Try to use File System Access API for progressive disk writes
+    let fileHandle: any = null;
+    let writableStream: any = null;
+    let useFileSystemAPI = false;
+    
+    // Check if File System Access API is supported (Chrome/Edge)
+    if ('showSaveFilePicker' in window) {
+      try {
+        console.log('📁 File System Access API available, prompting for save location...');
+        // This will be set when we get the filename from metadata
+        useFileSystemAPI = true;
+      } catch (err) {
+        console.log('⚠️ File System Access API not available, using RAM buffer');
+      }
+    }
+    
+    const chunks = new Map<number, Uint8Array>();
+    let nextExpectedChunk = 0;
 
     return new Promise((resolve) => {
       // Listen on main connection for metadata
-      const handleMainMessage = (data: any) => {
+      const handleMainMessage = async (data: any) => {
         console.log('📨 Main connection message:', data.type);
 
         if (data.type === 'multi_stream_start') {
           fileSize = data.fileSize;
           expectedStreams = data.streamCount;
+          fileName = data.fileName || 'download';
           console.log(`📊 Expecting ${(fileSize/1024/1024).toFixed(2)}MB across ${expectedStreams} streams`);
+          
+          // Prompt for save location if using File System API
+          if (useFileSystemAPI) {
+            try {
+              fileHandle = await (window as any).showSaveFilePicker({
+                suggestedName: fileName,
+                types: [{
+                  description: 'All Files',
+                  accept: {'*/*': []}
+                }]
+              });
+              writableStream = await fileHandle.createWritable();
+              console.log('✅ Writing directly to disk');
+            } catch (err) {
+              console.log('⚠️ User cancelled or error, falling back to RAM');
+              useFileSystemAPI = false;
+            }
+          }
         } else if (data.type === 'multi_stream_complete') {
           console.log('✅ Transfer complete signal received');
         }
@@ -308,7 +348,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           const channel = event.channel;
           console.log(`📥 Incoming DataChannel: ${channel.label}`);
 
-          channel.onmessage = (event) => {
+          channel.onmessage = async (event) => {
             try {
               if (event.data instanceof ArrayBuffer) {
                 // Parse binary message with header
@@ -321,8 +361,28 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 // Extract chunk data (skip 8-byte header)
                 const chunkData = message.slice(8);
                 
-                chunks.set(chunkIndex, chunkData);
                 bytesReceived += chunkData.length;
+                
+                if (useFileSystemAPI && writableStream) {
+                  // Write directly to disk
+                  if (chunkIndex === nextExpectedChunk) {
+                    await writableStream.write(chunkData);
+                    nextExpectedChunk++;
+                    
+                    // Write any buffered chunks that are now in order
+                    while (chunks.has(nextExpectedChunk)) {
+                      await writableStream.write(chunks.get(nextExpectedChunk)!);
+                      chunks.delete(nextExpectedChunk);
+                      nextExpectedChunk++;
+                    }
+                  } else {
+                    // Out of order, buffer it
+                    chunks.set(chunkIndex, chunkData);
+                  }
+                } else {
+                  // RAM buffer (fallback)
+                  chunks.set(chunkIndex, chunkData);
+                }
 
                 // Update progress
                 const now = Date.now();
@@ -344,18 +404,28 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
                 // Check if complete (based on bytes, not chunk count)
                 if (bytesReceived >= fileSize && fileSize > 0) {
-                  console.log(`🎉 All data received (${bytesReceived}/${fileSize} bytes), assembling file`);
-                  console.log(`📦 Received ${chunks.size} chunks total`);
+                  console.log(`🎉 All data received (${bytesReceived}/${fileSize} bytes)`);
                   
-                  // Reassemble file
-                  const sortedChunks = Array.from(chunks.entries())
-                    .sort((a, b) => a[0] - b[0])
-                    .map(([, data]) => data);
+                  if (useFileSystemAPI && writableStream) {
+                    // Close the file stream
+                    await writableStream.close();
+                    console.log('✅ File written to disk');
+                    setIsTransferring(false);
+                    conn.off('data', handleMainMessage);
+                    // Return empty blob since file is already on disk
+                    resolve(new Blob([]));
+                  } else {
+                    // Assemble from RAM
+                    console.log(`📦 Assembling ${chunks.size} chunks from RAM`);
+                    const sortedChunks = Array.from(chunks.entries())
+                      .sort((a, b) => a[0] - b[0])
+                      .map(([, data]) => data);
 
-                  const blob = new Blob(sortedChunks as BlobPart[]);
-                  setIsTransferring(false);
-                  conn.off('data', handleMainMessage);
-                  resolve(blob);
+                    const blob = new Blob(sortedChunks as BlobPart[]);
+                    setIsTransferring(false);
+                    conn.off('data', handleMainMessage);
+                    resolve(blob);
+                  }
                 }
               }
             } catch (error) {

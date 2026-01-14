@@ -350,22 +350,33 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   
                   if (useFileSystemAPI && writableStream) {
                     // Chrome/Edge: Write directly to disk
+                    console.log(`💾 DISK WRITE: chunk ${chunkIndex}, useFileSystemAPI=${useFileSystemAPI}, writableStream=${!!writableStream}`);
                     if (chunkIndex === nextExpectedChunk) {
-                      await writableStream.write(chunkData);
-                      nextExpectedChunk++;
-                      
-                      // Write any buffered chunks that are now in order
-                      while (chunks.has(nextExpectedChunk)) {
-                        await writableStream.write(chunks.get(nextExpectedChunk)!);
-                        chunks.delete(nextExpectedChunk);
+                      try {
+                        await writableStream.write(chunkData);
+                        console.log(`✅ Wrote chunk ${chunkIndex} to disk (${chunkData.length} bytes)`);
                         nextExpectedChunk++;
+                        
+                        // Write any buffered chunks that are now in order
+                        while (chunks.has(nextExpectedChunk)) {
+                          await writableStream.write(chunks.get(nextExpectedChunk)!);
+                          console.log(`✅ Wrote buffered chunk ${nextExpectedChunk} to disk`);
+                          chunks.delete(nextExpectedChunk);
+                          nextExpectedChunk++;
+                        }
+                      } catch (error) {
+                        console.error(`❌ DISK WRITE FAILED for chunk ${chunkIndex}:`, error);
+                        // Fall back to RAM on write error
+                        chunks.set(chunkIndex, chunkData);
                       }
                     } else {
-                      // Out of order, buffer it
+                      // Out of order, buffer it temporarily
+                      console.log(`📋 Buffering out-of-order chunk ${chunkIndex} (expecting ${nextExpectedChunk})`);
                       chunks.set(chunkIndex, chunkData);
                     }
                   } else {
                     // Firefox: Buffer in RAM for traditional download
+                    console.log(`📥 RAM BUFFER: chunk ${chunkIndex}, useFileSystemAPI=${useFileSystemAPI}, writableStream=${!!writableStream}`);
                     chunks.set(chunkIndex, chunkData);
                   }
 

@@ -354,9 +354,12 @@ export const useAdaptiveMultiStreamTransfer = () => {
                       // Calculate file position for this chunk
                       const position = chunkIndex * CHUNK_SIZE;
                       
-                      // Seek to position and write
-                      await writableStream.seek(position);
-                      await writableStream.write(chunkData);
+                      // Write with position parameter (File System Access API)
+                      await writableStream.write({
+                        type: 'write',
+                        position: position,
+                        data: chunkData
+                      });
                       
                       if (chunkIndex % 100 === 0) {
                         console.log(`💾 Wrote chunk ${chunkIndex} to disk at position ${position} (${chunkData.length} bytes)`);
@@ -470,7 +473,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 }]
               });
               console.log('✅ User selected save location:', fileHandle);
-              writableStream = await fileHandle.createWritable();
+              writableStream = await fileHandle.createWritable({ keepExistingData: false });
               useFileSystemAPI = true;
               console.log('✅ File System Access API ACTIVE: Writing directly to disk');
             } catch (err: any) {

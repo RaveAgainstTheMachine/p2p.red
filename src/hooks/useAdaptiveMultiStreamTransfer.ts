@@ -190,6 +190,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
         let bytesTransferred = 0;
         let lastSpeedCheck = Date.now();
         let senderCRC = 0xFFFFFFFF; // Initialize CRC32
+        let currentBytePosition = 0; // Track actual byte position in file
         console.log('🔐 Starting incremental CRC32 calculation...');
 
         // Get stream reader
@@ -273,17 +274,26 @@ export const useAdaptiveMultiStreamTransfer = () => {
               // Update CRC32 with this chunk
               senderCRC = updateCRC32(senderCRC, chunkData);
               
-              // Combine header + chunk data into single message
-              const header = new ArrayBuffer(8);
+              // Header: 16 bytes total
+              // Bytes 0-7: Byte position in file (uint64)
+              // Bytes 8-15: Chunk size (uint64)
+              const header = new ArrayBuffer(16);
               const headerView = new DataView(header);
-              headerView.setUint32(0, chunkIndex, true); // Low 32 bits
-              headerView.setUint32(4, 0, true); // High 32 bits (for future large files)
+              
+              // Write byte position (split into two 32-bit values for 64-bit support)
+              headerView.setUint32(0, currentBytePosition & 0xFFFFFFFF, true); // Low 32 bits
+              headerView.setUint32(4, Math.floor(currentBytePosition / 0x100000000), true); // High 32 bits
+              
+              // Write chunk size
+              headerView.setUint32(8, chunkData.length, true); // Low 32 bits
+              headerView.setUint32(12, 0, true); // High 32 bits (for future)
               
               const message = new Uint8Array(header.byteLength + chunkData.length);
               message.set(new Uint8Array(header), 0);
               message.set(chunkData, header.byteLength);
 
               channel.send(message.buffer);
+              currentBytePosition += chunkData.length; // Increment by actual chunk size
               chunkIndex++;
               bytesTransferred += message.buffer.byteLength;
 
@@ -354,7 +364,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
     let useFileSystemAPI = false;
     
     const chunks = new Map<number, Uint8Array>();
-    const CHUNK_SIZE = 262136; // Must match sender chunk size
 
     return new Promise((resolve) => {
       // Setup DataChannel handler factory (will be called after File System Access API)
@@ -369,15 +378,17 @@ export const useAdaptiveMultiStreamTransfer = () => {
             channel.onmessage = async (event) => {
               try {
                 if (event.data instanceof ArrayBuffer) {
-                  // Parse binary message with header
+                  // Parse binary message with header (16 bytes)
                   const message = new Uint8Array(event.data);
                   
-                  // Extract chunk index from first 8 bytes
-                  const headerView = new DataView(event.data, 0, 8);
-                  const chunkIndex = headerView.getUint32(0, true);
+                  // Extract byte position from first 8 bytes
+                  const headerView = new DataView(event.data, 0, 16);
+                  const positionLow = headerView.getUint32(0, true);
+                  const positionHigh = headerView.getUint32(4, true);
+                  const bytePosition = positionLow + (positionHigh * 0x100000000);
                   
-                  // Extract chunk data (skip 8-byte header)
-                  const chunkData = message.slice(8);
+                  // Extract chunk data (skip 16-byte header)
+                  const chunkData = message.slice(16);
                   
                   bytesReceived += chunkData.length;
                   
@@ -387,27 +398,24 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   if (useFileSystemAPI && writableStream) {
                     // Chrome/Edge: Write directly to disk at correct position
                     try {
-                      // Calculate file position for this chunk
-                      const position = chunkIndex * CHUNK_SIZE;
-                      
-                      // Write with position parameter (File System Access API)
+                      // Write with actual byte position from sender
                       await writableStream.write({
                         type: 'write',
-                        position: position,
+                        position: bytePosition,
                         data: chunkData
                       });
                       
-                      if (chunkIndex % 100 === 0) {
-                        console.log(`💾 Wrote chunk ${chunkIndex} to disk at position ${position} (${chunkData.length} bytes)`);
+                      if (Math.floor(bytePosition / (100 * 65536)) !== Math.floor((bytePosition - chunkData.length) / (100 * 65536))) {
+                        console.log(`💾 Wrote ${chunkData.length} bytes to disk at position ${bytePosition} (${(bytePosition/1024/1024).toFixed(1)}MB)`);
                       }
                     } catch (error) {
-                      console.error(`❌ DISK WRITE FAILED for chunk ${chunkIndex}:`, error);
+                      console.error(`❌ DISK WRITE FAILED at position ${bytePosition}:`, error);
                       // Fall back to RAM on write error
-                      chunks.set(chunkIndex, chunkData);
+                      chunks.set(bytePosition, chunkData);
                     }
                   } else {
                     // Firefox: Buffer in RAM for traditional download
-                    chunks.set(chunkIndex, chunkData);
+                    chunks.set(bytePosition, chunkData);
                   }
 
                   // Update progress

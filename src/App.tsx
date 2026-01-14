@@ -4,16 +4,17 @@ import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
 import { useAdaptiveMultiStreamTransfer } from './hooks/useAdaptiveMultiStreamTransfer';
 import { DropZone } from './components/DropZone';
-import { ShareLink } from './components/ShareLink';
-import { PinToggle } from './components/PinToggle';
-import { PinVerification } from './components/PinVerification';
+import { EnhancedProgressBar } from './components/EnhancedProgressBar';
+import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { FileTypeWarning } from './components/FileTypeWarning';
 import { CookieBanner } from './components/CookieBanner';
 import { Monitoring } from './components/Monitoring';
 import { PerformanceDebug } from './components/PerformanceDebug';
 import { FileStructure } from './components/FileStructure';
 import { Logo } from './components/Logo';
-import { EnhancedProgressBar } from './components/EnhancedProgressBar';
+import { PinVerification } from './components/PinVerification';
+import { PinToggle } from './components/PinToggle';
+import { ShareLink } from './components/ShareLink';
 import { Download, Share2, Shield, CheckCircle, File, Check } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
@@ -133,8 +134,8 @@ function App() {
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string; fileType?: string} | null>(null);
-  // const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
-  // const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
+  const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
+  const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [showPerformanceDebug, setShowPerformanceDebug] = useState<boolean>(false);
   const [pin, setPin] = useState<string>('');
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
@@ -543,8 +544,8 @@ function App() {
             console.log('Sender: Incoming connection from receiver:', conn.peer);
             conn.on('open', async () => {
               console.log('Sender: Connection open, starting multiple file transfer');
-              // setShowEncryptionIndicator(true);
-              // setIsEncryptedConnection(true);
+              setShowEncryptionIndicator(true);
+              setIsEncryptedConnection(true);
               setStatus('transferring');
               try {
                 // Send all files sequentially with adaptive multi-stream
@@ -891,10 +892,10 @@ function App() {
         </header>
 
         {/* Encryption Indicator */}
-        {/* <EncryptionIndicator
+        <EncryptionIndicator
+          isEncrypted={isEncryptedConnection}
           isVisible={showEncryptionIndicator}
-          transferProgress={transferProgress}
-        /> */}
+        />
 
         {/* Main Content */}
         {requiresPin ? (

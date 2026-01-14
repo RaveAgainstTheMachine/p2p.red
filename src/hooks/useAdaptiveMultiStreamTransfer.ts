@@ -152,33 +152,69 @@ export const useAdaptiveMultiStreamTransfer = () => {
       
       let chunkIndex = 0;
       let buffer = new Uint8Array(0);
-
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done && buffer.length === 0) break;
-
-        // Append to buffer
-        if (value) {
-          const newBuffer = new Uint8Array(buffer.length + value.length);
-          newBuffer.set(buffer);
-          newBuffer.set(value, buffer.length);
-          buffer = newBuffer;
-        }
-
-        // Process chunks from buffer
-        while (buffer.length >= chunkSize || (done && buffer.length > 0)) {
-          const chunkData = buffer.slice(0, Math.min(chunkSize, buffer.length));
-          buffer = buffer.slice(chunkData.length);
-
-          // Select channel (round-robin)
-          const channelIndex = chunkIndex % channels.length;
-          const channel = channels[channelIndex];
-
-          // Wait if buffer is too high (WebRTC backpressure)
-          while (channel.bufferedAmount > 16 * 1024 * 1024) {
-            await new Promise(resolve => setTimeout(resolve, 50));
+      let isPaused = false;
+      
+      // Set up event-driven flow control for each channel
+      const HIGH_WATER_MARK = 1 * 1024 * 1024; // 1MB - pause sending
+      const LOW_WATER_MARK = 256 * 1024; // 256KB - resume sending
+      
+      channels.forEach(channel => {
+        channel.bufferedAmountLowThreshold = LOW_WATER_MARK;
+        channel.addEventListener('bufferedamountlow', () => {
+          if (isPaused) {
+            isPaused = false;
+            console.log('📤 Buffer drained, resuming send');
+            processNextChunk();
           }
+        });
+      });
+      
+      const processNextChunk = async () => {
+        while (!isPaused) {
+          // Read more data if buffer is low
+          if (buffer.length < chunkSize) {
+            const { done, value } = await reader.read();
+            
+            if (done && buffer.length === 0) {
+              // Send completion signal
+              conn.send({
+                type: 'multi_stream_complete',
+                bytesTransferred,
+                fileSize,
+                timestamp: Date.now()
+              });
+              
+              // Close channels
+              channels.forEach(ch => ch.close());
+              console.log('🎉 MULTI-STREAM: Transfer completed');
+              return;
+            }
+            
+            if (value) {
+              const newBuffer = new Uint8Array(buffer.length + value.length);
+              newBuffer.set(buffer);
+              newBuffer.set(value, buffer.length);
+              buffer = newBuffer;
+            }
+            
+            if (done && buffer.length === 0) break;
+          }
+          
+          // Process one chunk
+          if (buffer.length > 0) {
+            const chunkData = buffer.slice(0, Math.min(chunkSize, buffer.length));
+            buffer = buffer.slice(chunkData.length);
+
+            // Select channel (round-robin)
+            const channelIndex = chunkIndex % channels.length;
+            const channel = channels[channelIndex];
+
+            // Check if we need to pause (high water mark)
+            if (channel.bufferedAmount > HIGH_WATER_MARK) {
+              isPaused = true;
+              console.log(`⏸️ Buffer high (${(channel.bufferedAmount/1024/1024).toFixed(1)}MB), pausing send`);
+              return; // Will resume via bufferedamountlow event
+            }
 
           // Send chunk as single binary message with header
           // Header: 8 bytes for chunkIndex (uint32 x2 for 64-bit support)
@@ -192,62 +228,44 @@ export const useAdaptiveMultiStreamTransfer = () => {
           message.set(new Uint8Array(header), 0);
           message.set(chunkData, 8);
           
-          const bytesSent = message.buffer.byteLength;
-          channel.send(message.buffer);
-          chunkIndex++;
-          
-          // Only count as transferred when it's actually sent (not just buffered)
-          // bytesTransferred will be updated based on actual send progress
-          bytesTransferred += bytesSent;
+            const bytesSent = message.buffer.byteLength;
+            channel.send(message.buffer);
+            chunkIndex++;
+            bytesTransferred += bytesSent;
 
-          // Update progress
-          const now = Date.now();
-          if (now - lastSpeedCheck > 1000) {
-            lastSpeedCheck = now;
-            
-            // Calculate actual bytes sent (not just buffered)
-            const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
-            const actualBytesSent = bytesTransferred - totalBuffered;
+            // Update progress
+            const now = Date.now();
+            if (now - lastSpeedCheck > 1000) {
+              lastSpeedCheck = now;
+              
+              // Calculate actual bytes sent (not just buffered)
+              const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
+              const actualBytesSent = bytesTransferred - totalBuffered;
 
-            // Update progress based on actual sent bytes
-            const totalElapsed = (now - startTime.current) / 1000;
-            const avgSpeed = actualBytesSent / totalElapsed;
-            const timeRemaining = avgSpeed > 0 ? (fileSize - actualBytesSent) / avgSpeed : 0;
-            
-            console.log(`📊 Sender: ${(actualBytesSent/1024/1024).toFixed(1)}MB sent, ${(totalBuffered/1024/1024).toFixed(1)}MB buffered, ${(bytesTransferred/1024/1024).toFixed(1)}MB total queued`);
+              // Update progress based on actual sent bytes
+              const totalElapsed = (now - startTime.current) / 1000;
+              const avgSpeed = actualBytesSent / totalElapsed;
+              const timeRemaining = avgSpeed > 0 ? (fileSize - actualBytesSent) / avgSpeed : 0;
+              
+              console.log(`📊 Sender: ${(actualBytesSent/1024/1024).toFixed(1)}MB sent, ${(totalBuffered/1024/1024).toFixed(1)}MB buffered, ${(bytesTransferred/1024/1024).toFixed(1)}MB total queued`);
 
-            setTransferProgress({
-              bytesTransferred: actualBytesSent,
-              totalBytes: fileSize,
-              percentage: (actualBytesSent / fileSize) * 100,
-              speed: avgSpeed,
-              timeRemaining,
-              activeStreams: channels.length,
-              networkQuality: quality,
-              adaptiveChunkSize: chunkSize
-            });
-
-            console.log(`📤 ${(bytesTransferred/1024/1024).toFixed(1)}MB / ${(fileSize/1024/1024).toFixed(1)}MB @ ${(avgSpeed/1024/1024).toFixed(2)} MB/s, Chunk: ${chunkSize/1024}KB`);
+              setTransferProgress({
+                bytesTransferred: actualBytesSent,
+                totalBytes: fileSize,
+                percentage: (actualBytesSent / fileSize) * 100,
+                speed: avgSpeed,
+                timeRemaining,
+                activeStreams: channels.length,
+                networkQuality: quality,
+                adaptiveChunkSize: chunkSize
+              });
+            }
           }
-
-          if (buffer.length < chunkSize && !done) break;
         }
-
-        if (done && buffer.length === 0) break;
-      }
-
-      // Send completion signal
-      conn.send({
-        type: 'multi_stream_complete',
-        bytesTransferred,
-        fileSize,
-        timestamp: Date.now()
-      });
-
-      // Close channels
-      channels.forEach(ch => ch.close());
-
-      console.log('🎉 MULTI-STREAM: Transfer completed');
+      };
+      
+      // Start processing
+      await processNextChunk();
 
     } finally {
       setIsTransferring(false);
@@ -318,7 +336,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   totalBytes: fileSize,
                   percentage: fileSize > 0 ? (bytesReceived / fileSize) * 100 : 0,
                   speed,
-                  timeRemaining
+                  timeRemaining,
+                  activeStreams: expectedStreams,
+                  networkQuality: detectNetworkQuality(conn),
+                  adaptiveChunkSize: 256 * 1024
                 }));
 
                 // Check if complete (based on bytes, not chunk count)

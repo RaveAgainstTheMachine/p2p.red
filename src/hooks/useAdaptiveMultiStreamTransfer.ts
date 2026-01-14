@@ -13,6 +13,30 @@ interface AdaptiveTransferProgress {
   adaptiveChunkSize: number;
 }
 
+// CRC32 implementation for incremental hashing
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let crc = i;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc & 1) ? (0xEDB88320 ^ (crc >>> 1)) : (crc >>> 1);
+    }
+    table[i] = crc;
+  }
+  return table;
+})();
+
+function updateCRC32(crc: number, data: Uint8Array): number {
+  for (let i = 0; i < data.length; i++) {
+    crc = CRC32_TABLE[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return crc;
+}
+
+function finalizeCRC32(crc: number): string {
+  return ((crc ^ 0xFFFFFFFF) >>> 0).toString(16).padStart(8, '0');
+}
+
 export const useAdaptiveMultiStreamTransfer = () => {
   const [transferProgress, setTransferProgress] = useState<AdaptiveTransferProgress>({
     bytesTransferred: 0,
@@ -133,18 +157,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
       console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks, ${name}`);
 
       try {
-        // Calculate SHA-256 hash of file for integrity verification (only for File objects)
-        let fileHash = '';
-        if (input instanceof File) {
-          console.log('🔐 Calculating file hash for integrity verification...');
-          const hashBuffer = await crypto.subtle.digest('SHA-256', await input.arrayBuffer());
-          const hashArray = Array.from(new Uint8Array(hashBuffer));
-          fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-          console.log(`✅ File hash (SHA-256): ${fileHash}`);
-        } else {
-          console.log('⚠️ Skipping hash calculation for ReadableStream (ZIP folder)');
-        }
-
         // Send metadata first and wait for receiver to be ready
         console.log('📤 Sending metadata and waiting for receiver ready signal...');
         conn.send({
@@ -152,7 +164,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
           fileName: name,
           fileSize,
           streamCount,
-          fileHash: fileHash || undefined,
           timestamp: Date.now()
         });
 
@@ -178,6 +189,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
         let bytesTransferred = 0;
         let lastSpeedCheck = Date.now();
+        let senderCRC = 0xFFFFFFFF; // Initialize CRC32
+        console.log('🔐 Starting incremental CRC32 calculation...');
 
         // Get stream reader
         const stream = input instanceof File ? input.stream() : input;
@@ -221,10 +234,15 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 streamDone = true;
                 if (buffer.length === 0) {
                   // All data sent, close connection
+                  // Finalize CRC32 and send with completion
+                  const finalCRC = finalizeCRC32(senderCRC);
+                  console.log(`✅ Sender CRC32: ${finalCRC}`);
+                  
                   conn.send({
                     type: 'multi_stream_complete',
                     bytesTransferred,
                     fileSize,
+                    crc32: finalCRC,
                     timestamp: Date.now()
                   });
                   channels.forEach(ch => ch.close());
@@ -252,22 +270,22 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 return; // Will resume via bufferedamountlow event
               }
 
-              // Send chunk as single binary message with header
-              // Header: 8 bytes for chunkIndex (uint32 x2 for 64-bit support)
+              // Update CRC32 with this chunk
+              senderCRC = updateCRC32(senderCRC, chunkData);
+              
+              // Combine header + chunk data into single message
               const header = new ArrayBuffer(8);
               const headerView = new DataView(header);
               headerView.setUint32(0, chunkIndex, true); // Low 32 bits
               headerView.setUint32(4, 0, true); // High 32 bits (for future large files)
               
-              // Combine header + chunk data into single message
-              const message = new Uint8Array(8 + chunkData.length);
+              const message = new Uint8Array(header.byteLength + chunkData.length);
               message.set(new Uint8Array(header), 0);
-              message.set(chunkData, 8);
-              
-              const bytesSent = message.buffer.byteLength;
+              message.set(chunkData, header.byteLength);
+
               channel.send(message.buffer);
               chunkIndex++;
-              bytesTransferred += bytesSent;
+              bytesTransferred += message.buffer.byteLength;
 
               // Update progress
               const now = Date.now();
@@ -327,7 +345,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
     let bytesReceived = 0;
     let expectedStreams = 0;
     let fileName = 'download';
-    let expectedHash = '';
+    let receiverCRC = 0xFFFFFFFF; // Initialize CRC32
+    let expectedCRC = '';
     
     // Try to use File System Access API for progressive disk writes
     let fileHandle: any = null;
@@ -361,6 +380,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   const chunkData = message.slice(8);
                   
                   bytesReceived += chunkData.length;
+                  
+                  // Update CRC32 with this chunk
+                  receiverCRC = updateCRC32(receiverCRC, chunkData);
                   
                   if (useFileSystemAPI && writableStream) {
                     // Chrome/Edge: Write directly to disk at correct position
@@ -411,33 +433,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     console.log(`🎉 All data received (${bytesReceived}/${fileSize} bytes)`);
                     
                     if (useFileSystemAPI && writableStream) {
-                      // Chrome/Edge: Close the file stream and verify hash
+                      // Chrome/Edge: Close the file stream
                       await writableStream.close();
                       console.log('✅ File written to disk');
-                      
-                      // Verify file integrity if hash was provided
-                      if (expectedHash && fileHandle) {
-                        console.log('🔐 Verifying file integrity...');
-                        try {
-                          const file = await fileHandle.getFile();
-                          const receivedHashBuffer = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
-                          const receivedHashArray = Array.from(new Uint8Array(receivedHashBuffer));
-                          const receivedHash = receivedHashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-                          
-                          if (receivedHash === expectedHash) {
-                            console.log('✅ File integrity verified - hashes match!');
-                            console.log(`   Expected: ${expectedHash}`);
-                            console.log(`   Received: ${receivedHash}`);
-                          } else {
-                            console.error('❌ FILE CORRUPTION DETECTED - hashes do not match!');
-                            console.error(`   Expected: ${expectedHash}`);
-                            console.error(`   Received: ${receivedHash}`);
-                            alert('⚠️ File transfer completed but integrity check FAILED!\n\nThe received file is corrupted and may not match the original.\n\nPlease try the transfer again.');
-                          }
-                        } catch (hashError) {
-                          console.error('⚠️ Failed to verify file hash:', hashError);
-                        }
-                      }
                       
                       setIsTransferring(false);
                       conn.off('data', handleMainMessage);
@@ -495,11 +493,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
           fileSize = data.fileSize;
           expectedStreams = data.streamCount;
           fileName = data.fileName || 'download';
-          expectedHash = data.fileHash || '';
           console.log(`📊 Expecting ${(fileSize/1024/1024).toFixed(2)}MB across ${expectedStreams} streams`);
-          if (expectedHash) {
-            console.log(`🔐 Expected file hash (SHA-256): ${expectedHash}`);
-          }
+          console.log('🔐 Starting incremental CRC32 calculation...');
           
           // Prompt for save location NOW (before chunks arrive)
           console.log('🔍 Checking for File System Access API support...');
@@ -586,6 +581,22 @@ export const useAdaptiveMultiStreamTransfer = () => {
           });
         } else if (data.type === 'multi_stream_complete') {
           console.log('✅ Transfer complete signal received');
+          
+          // Verify CRC32 if provided
+          if (data.crc32) {
+            expectedCRC = data.crc32;
+            const finalReceiverCRC = finalizeCRC32(receiverCRC);
+            console.log(`🔐 Verifying file integrity...`);
+            console.log(`   Sender CRC32:   ${expectedCRC}`);
+            console.log(`   Receiver CRC32: ${finalReceiverCRC}`);
+            
+            if (finalReceiverCRC === expectedCRC) {
+              console.log('✅ File integrity verified - CRC32 match!');
+            } else {
+              console.error('❌ FILE CORRUPTION DETECTED - CRC32 mismatch!');
+              alert('⚠️ File transfer completed but integrity check FAILED!\n\nThe received file is corrupted and may not match the original.\n\nPlease try the transfer again.');
+            }
+          }
         }
       };
 

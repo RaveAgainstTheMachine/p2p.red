@@ -133,12 +133,17 @@ export const useAdaptiveMultiStreamTransfer = () => {
       console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks, ${name}`);
 
       try {
-        // Calculate SHA-256 hash of file for integrity verification
-        console.log('🔐 Calculating file hash for integrity verification...');
-        const hashBuffer = await crypto.subtle.digest('SHA-256', await (input as File).arrayBuffer());
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        console.log(`✅ File hash (SHA-256): ${fileHash}`);
+        // Calculate SHA-256 hash of file for integrity verification (only for File objects)
+        let fileHash = '';
+        if (input instanceof File) {
+          console.log('🔐 Calculating file hash for integrity verification...');
+          const hashBuffer = await crypto.subtle.digest('SHA-256', await input.arrayBuffer());
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+          console.log(`✅ File hash (SHA-256): ${fileHash}`);
+        } else {
+          console.log('⚠️ Skipping hash calculation for ReadableStream (ZIP folder)');
+        }
 
         // Send metadata first and wait for receiver to be ready
         console.log('📤 Sending metadata and waiting for receiver ready signal...');
@@ -147,7 +152,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           fileName: name,
           fileSize,
           streamCount,
-          fileHash,
+          fileHash: fileHash || undefined,
           timestamp: Date.now()
         });
 

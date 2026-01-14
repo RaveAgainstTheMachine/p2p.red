@@ -482,6 +482,48 @@ export const useAdaptiveMultiStreamTransfer = () => {
             console.log('📥 File System Access API NOT SUPPORTED, using RAM buffer');
           }
           
+          // Check if RAM fallback is safe
+          if (!useFileSystemAPI) {
+            const fileSizeMB = fileSize / (1024 * 1024);
+            const fileSizeGB = fileSize / (1024 * 1024 * 1024);
+            
+            // Get available memory (if supported)
+            let availableMemoryMB = 0;
+            if ('memory' in performance && (performance as any).memory) {
+              const memory = (performance as any).memory;
+              availableMemoryMB = (memory.jsHeapSizeLimit - memory.usedJSHeapSize) / (1024 * 1024);
+              console.log(`💾 Available RAM: ${availableMemoryMB.toFixed(0)}MB, File size: ${fileSizeMB.toFixed(0)}MB`);
+            }
+            
+            // Warn if file is large
+            if (fileSizeGB > 2) {
+              const proceed = confirm(
+                `⚠️ WARNING: Large file (${fileSizeGB.toFixed(2)}GB) will be buffered in RAM!\n\n` +
+                `This may cause your browser to crash or freeze.\n\n` +
+                `Recommended: Use Chrome/Edge for direct disk writing.\n\n` +
+                `Continue anyway?`
+              );
+              if (!proceed) {
+                console.log('❌ User aborted RAM fallback for large file');
+                setIsTransferring(false);
+                return;
+              }
+            } else if (availableMemoryMB > 0 && fileSizeMB > availableMemoryMB * 0.8) {
+              const proceed = confirm(
+                `⚠️ WARNING: File (${fileSizeMB.toFixed(0)}MB) may exceed available RAM (${availableMemoryMB.toFixed(0)}MB)!\n\n` +
+                `This may cause your browser to crash.\n\n` +
+                `Continue anyway?`
+              );
+              if (!proceed) {
+                console.log('❌ User aborted RAM fallback due to insufficient memory');
+                setIsTransferring(false);
+                return;
+              }
+            }
+            
+            console.log('✅ RAM fallback check passed, proceeding with buffer');
+          }
+          
           // Send ready signal to sender
           console.log('📤 Sending receiver_ready signal to sender...');
           conn.send({

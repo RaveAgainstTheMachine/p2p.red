@@ -234,7 +234,25 @@ export const useAdaptiveMultiStreamTransfer = () => {
               if (done) {
                 streamDone = true;
                 if (buffer.length === 0) {
-                  // All data sent, close connection
+                  // All data queued, but WAIT for buffers to drain
+                  console.log('📤 All data queued, waiting for buffers to drain...');
+                  
+                  // Wait for all channels to drain their buffers
+                  const waitForDrain = async () => {
+                    const checkInterval = 100; // Check every 100ms
+                    while (true) {
+                      const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
+                      if (totalBuffered === 0) {
+                        break;
+                      }
+                      console.log(`⏳ Waiting for ${(totalBuffered/1024/1024).toFixed(1)}MB to drain from buffers...`);
+                      await new Promise(resolve => setTimeout(resolve, checkInterval));
+                    }
+                  };
+                  
+                  await waitForDrain();
+                  console.log('✅ All buffers drained, sending completion signal');
+                  
                   // Finalize CRC32 and send with completion
                   const finalCRC = finalizeCRC32(senderCRC);
                   console.log(`✅ Sender CRC32: ${finalCRC}`);
@@ -246,6 +264,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     crc32: finalCRC,
                     timestamp: Date.now()
                   });
+                  
+                  // Small delay to ensure completion message is sent
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  
                   channels.forEach(ch => ch.close());
                   console.log('🎉 MULTI-STREAM: Transfer completed - RESOLVING PROMISE');
                   setIsTransferring(false);

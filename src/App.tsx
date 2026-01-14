@@ -9,7 +9,6 @@ import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { FileTypeWarning } from './components/FileTypeWarning';
 import { CookieBanner } from './components/CookieBanner';
 import { Monitoring } from './components/Monitoring';
-import { PerformanceDebug } from './components/PerformanceDebug';
 import { FileStructure } from './components/FileStructure';
 import { Logo } from './components/Logo';
 import { PinVerification } from './components/PinVerification';
@@ -136,7 +135,6 @@ function App() {
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string; fileType?: string} | null>(null);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
-  const [showPerformanceDebug, setShowPerformanceDebug] = useState<boolean>(false);
   const [pin, setPin] = useState<string>('');
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [requiresPin, setRequiresPin] = useState<boolean>(false);
@@ -162,19 +160,6 @@ function App() {
     initializePeer();
   }, [initializePeer]);
 
-  // Add keyboard shortcut for performance debug
-  useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
-      // Ctrl+Shift+D to toggle performance debug
-      if (event.ctrlKey && event.shiftKey && event.key === 'D') {
-        event.preventDefault();
-        setShowPerformanceDebug(prev => !prev);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, []);
 
   // Update meta tags for rich link previews
   useEffect(() => {
@@ -845,17 +830,6 @@ function App() {
             Privacy-first file sharing with true peer-to-peer transfer
           </p>
           
-          {/* Performance Debug Toggle */}
-          <div className="mt-2 text-center">
-            <button
-              onClick={() => setShowPerformanceDebug(true)}
-              className="text-xs text-white/40 hover:text-white/60 transition-colors underline"
-              title="Press Ctrl+Shift+D to open performance monitor"
-            >
-              🔍 Performance Debug (Ctrl+Shift+D)
-            </button>
-          </div>
-          
           {/* Connection Status Alerts */}
           {!isOnline && (
             <div className="mt-4 bg-red-500/20 border-2 border-red-500 rounded-lg p-4 max-w-md mx-auto">
@@ -1203,12 +1177,6 @@ function App() {
           </div>
         </div>
       )}
-      
-      {/* Performance Debug Panel */}
-      <PerformanceDebug 
-        isVisible={showPerformanceDebug} 
-        onClose={() => setShowPerformanceDebug(false)} 
-      />
       
       {/* Under Construction Ribbon - Above Footer */}
       <div className="fixed bottom-16 left-0 right-0 z-40">

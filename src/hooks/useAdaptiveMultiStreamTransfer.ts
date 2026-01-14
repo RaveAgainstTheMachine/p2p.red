@@ -185,18 +185,19 @@ export const useAdaptiveMultiStreamTransfer = () => {
             continue;
           }
 
-          // Send chunk directly as binary (no JSON conversion for speed)
-          // First send metadata as JSON
-          channel.send(JSON.stringify({
-            type: 'multi_stream_chunk_meta',
-            chunkIndex,
-            streamId: channelIndex,
-            size: chunkData.length,
-            timestamp: Date.now()
-          }));
+          // Send chunk as single binary message with header
+          // Header: 8 bytes for chunkIndex (uint32 x2 for 64-bit support)
+          const header = new ArrayBuffer(8);
+          const headerView = new DataView(header);
+          headerView.setUint32(0, chunkIndex, true); // Low 32 bits
+          headerView.setUint32(4, 0, true); // High 32 bits (for future large files)
           
-          // Then send raw binary data
-          channel.send(chunkData.buffer);
+          // Combine header + chunk data into single message
+          const message = new Uint8Array(8 + chunkData.length);
+          message.set(new Uint8Array(header), 0);
+          message.set(chunkData, 8);
+          
+          channel.send(message.buffer);
 
           bytesTransferred += chunkData.length;
           chunkIndex++;
@@ -294,24 +295,21 @@ export const useAdaptiveMultiStreamTransfer = () => {
           const channel = event.channel;
           console.log(`📥 Incoming DataChannel: ${channel.label}`);
 
-          let pendingMeta: any = null;
-
           channel.onmessage = (event) => {
             try {
-              // Try to parse as JSON first (metadata)
-              if (typeof event.data === 'string') {
-                const data = JSON.parse(event.data);
+              if (event.data instanceof ArrayBuffer) {
+                // Parse binary message with header
+                const message = new Uint8Array(event.data);
                 
-                if (data.type === 'multi_stream_chunk_meta') {
-                  // Store metadata, wait for binary data
-                  pendingMeta = data;
-                }
-              } else if (event.data instanceof ArrayBuffer && pendingMeta) {
-                // Binary data received, combine with metadata
-                const chunkData = new Uint8Array(event.data);
-                chunks.set(pendingMeta.chunkIndex, chunkData);
+                // Extract chunk index from first 8 bytes
+                const headerView = new DataView(event.data, 0, 8);
+                const chunkIndex = headerView.getUint32(0, true);
+                
+                // Extract chunk data (skip 8-byte header)
+                const chunkData = message.slice(8);
+                
+                chunks.set(chunkIndex, chunkData);
                 bytesReceived += chunkData.length;
-                pendingMeta = null;
 
                 // Update progress
                 const elapsed = (Date.now() - startTime.current) / 1000;

@@ -120,9 +120,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
     const streamCount = quality === 'excellent' ? 8 : quality === 'good' ? 4 : quality === 'fair' ? 2 : 1;
     
     // Get adaptive chunk size (initial)
-    let chunkSize = getAdaptiveChunkSize(quality, 0);
-    let slowStartThreshold = 1024 * 1024; // 1MB threshold
-    let inSlowStart = true;
+    const chunkSize = 256 * 1024; // Fixed 256KB chunks
     
     const fileSize = totalSize || (input as File).size;
     const name = fileName || (input as File).name;
@@ -139,49 +137,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
       let bytesTransferred = 0;
       let lastSpeedCheck = Date.now();
-
-      // Listen for receiver feedback
-      let lastCongestionAdjust = Date.now();
-      const MIN_ADJUST_INTERVAL = 2000; // Minimum 2 seconds between adjustments
-      
-      const handleReceiverFeedback = (data: any) => {
-        if (data.type === 'receiver_feedback') {
-          const receiverSpeed = data.currentSpeed;
-          const senderSpeed = bytesTransferred / ((Date.now() - startTime.current) / 1000);
-          const now = Date.now();
-          
-          // Only adjust if enough time has passed (prevent oscillation)
-          if (now - lastCongestionAdjust < MIN_ADJUST_INTERVAL) {
-            return;
-          }
-          
-          // Congestion control: adjust chunk size based on receiver feedback
-          // Wider thresholds (0.6 instead of 0.8, 0.9 instead of 0.95) for stability
-          if (receiverSpeed < senderSpeed * 0.6) {
-            // Receiver significantly behind - multiplicative decrease
-            slowStartThreshold = Math.max(chunkSize / 2, 64 * 1024);
-            chunkSize = Math.max(64 * 1024, chunkSize * 0.75); // Less aggressive (0.75 instead of 0.5)
-            inSlowStart = false;
-            lastCongestionAdjust = now;
-            console.log(`⚠️ Congestion detected, reducing chunk size to ${chunkSize/1024}KB`);
-          } else if (receiverSpeed > senderSpeed * 0.9 && receiverSpeed > 10 * 1024 * 1024) {
-            // Receiver keeping up well - increase chunk size
-            if (inSlowStart) {
-              // Slow start: exponential increase
-              chunkSize = Math.min(2 * 1024 * 1024, chunkSize * 1.5); // Less aggressive (1.5 instead of 2)
-              if (chunkSize >= slowStartThreshold) {
-                inSlowStart = false;
-              }
-            } else {
-              // Congestion avoidance: additive increase
-              chunkSize = Math.min(2 * 1024 * 1024, chunkSize + 128 * 1024); // Larger steps (128KB)
-            }
-            lastCongestionAdjust = now;
-          }
-        }
-      };
-      
-      conn.on('data', handleReceiverFeedback);
 
       // Send metadata first on main connection
       conn.send({
@@ -220,11 +175,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
           const channelIndex = chunkIndex % channels.length;
           const channel = channels[channelIndex];
 
-          // Check buffer before sending
-          if (channel.bufferedAmount > 16 * 1024 * 1024) {
-            // Wait for buffer to drain
-            await new Promise(resolve => setTimeout(resolve, 10));
-            continue;
+          // Wait if buffer is too high (WebRTC backpressure)
+          while (channel.bufferedAmount > 16 * 1024 * 1024) {
+            await new Promise(resolve => setTimeout(resolve, 50));
           }
 
           // Send chunk as single binary message with header
@@ -244,17 +197,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
           bytesTransferred += chunkData.length;
           chunkIndex++;
 
-          // Adaptive chunk size adjustment (sender-side monitoring)
+          // Update progress
           const now = Date.now();
           if (now - lastSpeedCheck > 1000) {
-            // Monitor bufferedAmount for backpressure (higher threshold)
-            const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
-            if (totalBuffered > 128 * 1024 * 1024) {
-              // Too much buffered data, slow down
-              chunkSize = Math.max(64 * 1024, chunkSize * 0.75);
-              console.log(`⚠️ High buffer detected (${(totalBuffered/1024/1024).toFixed(1)}MB), reducing chunk size`);
-            }
-            
             lastSpeedCheck = now;
 
             // Update progress
@@ -312,9 +257,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
     let fileSize = 0;
     let bytesReceived = 0;
     let expectedStreams = 0;
-    let lastFeedbackTime = Date.now();
-    let lastFeedbackBytes = 0;
-    const FEEDBACK_INTERVAL = 500; // Send feedback every 500ms (was 100ms)
 
     return new Promise((resolve) => {
       // Listen on main connection for metadata
@@ -360,25 +302,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 const elapsed = (now - startTime.current) / 1000;
                 const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
                 const timeRemaining = speed > 0 ? (fileSize - bytesReceived) / speed : 0;
-
-                // Send feedback to sender periodically
-                if (now - lastFeedbackTime > FEEDBACK_INTERVAL) {
-                  const feedbackElapsed = (now - lastFeedbackTime) / 1000;
-                  const currentSpeed = feedbackElapsed > 0 ? (bytesReceived - lastFeedbackBytes) / feedbackElapsed : 0;
-                  const bufferUtilization = fileSize > 0 ? bytesReceived / fileSize : 0;
-                  
-                  conn.send({
-                    type: 'receiver_feedback',
-                    bytesReceived,
-                    currentSpeed,
-                    bufferUtilization,
-                    chunksInBuffer: chunks.size,
-                    timestamp: now
-                  });
-                  
-                  lastFeedbackTime = now;
-                  lastFeedbackBytes = bytesReceived;
-                }
 
                 setTransferProgress(prev => ({
                   ...prev,

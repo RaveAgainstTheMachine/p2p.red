@@ -38,7 +38,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
       const iceState = pc.iceConnectionState;
       const connectionState = pc.connectionState;
 
-      console.log('🌐 Network detection:', { iceState, connectionState });
+      // Network detection (called frequently, don't log)
 
       // Excellent: Direct connection (host or srflx)
       if (iceState === 'connected' && connectionState === 'connected') {
@@ -338,8 +338,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
               writableStream = await fileHandle.createWritable();
               useFileSystemAPI = true;
               console.log('✅ File System Access API ACTIVE: Writing directly to disk');
-            } catch (err) {
+            } catch (err: any) {
               console.error('⚠️ File System Access API failed:', err);
+              if (err.name === 'AbortError') {
+                console.log('❌ User CANCELLED save dialog - falling back to RAM buffer');
+              } else {
+                console.log('❌ File System Access API error:', err.name, err.message);
+              }
               console.log('Falling back to RAM buffer');
               useFileSystemAPI = false;
             }
@@ -410,7 +415,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   speed,
                   timeRemaining,
                   activeStreams: expectedStreams,
-                  networkQuality: detectNetworkQuality(conn),
+                  networkQuality: prev.networkQuality || 'good',
                   adaptiveChunkSize: 256 * 1024
                 }));
 

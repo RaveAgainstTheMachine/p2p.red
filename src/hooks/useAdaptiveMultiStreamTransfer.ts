@@ -133,7 +133,30 @@ export const useAdaptiveMultiStreamTransfer = () => {
       console.log(`🚀 ADAPTIVE MULTI-STREAM: ${streamCount} streams, ${chunkSize/1024}KB chunks, ${name}`);
 
       try {
-        // Create parallel channels (SENDER mode)
+        // Send metadata first and wait for receiver to be ready
+        console.log('📤 Sending metadata and waiting for receiver ready signal...');
+        conn.send({
+          type: 'multi_stream_start',
+          fileName: name,
+          fileSize,
+          streamCount,
+          timestamp: Date.now()
+        });
+
+        // Wait for receiver ready signal
+        await new Promise<void>((resolveReady) => {
+          const readyHandler = (data: any) => {
+            if (data.type === 'receiver_ready') {
+              console.log('✅ Receiver ready signal received, starting transfer...');
+              conn.off('data', readyHandler);
+              resolveReady();
+            }
+          };
+          conn.on('data', readyHandler);
+        });
+
+        // NOW create parallel channels (SENDER mode)
+        console.log('🔧 Creating DataChannels...');
         const channels = await createParallelChannels(conn, streamCount, true);
         
         if (channels.length === 0) {
@@ -142,15 +165,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
         let bytesTransferred = 0;
         let lastSpeedCheck = Date.now();
-
-        // Send metadata first on main connection
-        conn.send({
-          type: 'multi_stream_start',
-          fileName: name,
-          fileSize,
-          streamCount: channels.length,
-          timestamp: Date.now()
-        });
 
         // Get stream reader
         const stream = input instanceof File ? input.stream() : input;
@@ -467,6 +481,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
           } else {
             console.log('📥 File System Access API NOT SUPPORTED, using RAM buffer');
           }
+          
+          // Send ready signal to sender
+          console.log('📤 Sending receiver_ready signal to sender...');
+          conn.send({
+            type: 'receiver_ready',
+            timestamp: Date.now()
+          });
         } else if (data.type === 'multi_stream_complete') {
           console.log('✅ Transfer complete signal received');
         }

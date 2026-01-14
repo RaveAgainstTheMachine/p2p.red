@@ -109,7 +109,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
     fileName?: string,
     totalSize?: number
   ): Promise<void> => {
+    console.log('🚀 sendFileMultiStream STARTED');
     return new Promise<void>(async (resolve, reject) => {
+      console.log('📦 Promise wrapper created, setting up transfer...');
       setIsTransferring(true);
       startTime.current = Date.now();
 
@@ -199,7 +201,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     timestamp: Date.now()
                   });
                   channels.forEach(ch => ch.close());
-                  console.log('🎉 MULTI-STREAM: Transfer completed');
+                  console.log('🎉 MULTI-STREAM: Transfer completed - RESOLVING PROMISE');
+                  resolve();
                   return;
                 }
               }
@@ -270,11 +273,15 @@ export const useAdaptiveMultiStreamTransfer = () => {
         };
       
         // Start processing
+        console.log('⚡ Starting processNextChunk...');
         await processNextChunk();
+        console.log('✅ processNextChunk completed - RESOLVING PROMISE');
         resolve(); // Transfer complete
       } catch (error) {
+        console.error('❌ sendFileMultiStream ERROR:', error);
         reject(error);
       } finally {
+        console.log('🏁 sendFileMultiStream FINALLY block');
         setIsTransferring(false);
       }
     });
@@ -313,9 +320,12 @@ export const useAdaptiveMultiStreamTransfer = () => {
           console.log(`📊 Expecting ${(fileSize/1024/1024).toFixed(2)}MB across ${expectedStreams} streams`);
           
           // Prompt for save location NOW (before chunks arrive)
+          console.log('🔍 Checking for File System Access API support...');
+          console.log('showSaveFilePicker available:', 'showSaveFilePicker' in window);
+          
           if ('showSaveFilePicker' in window) {
             try {
-              console.log('📁 Prompting for save location...');
+              console.log('📁 PROMPTING USER for save location...');
               fileHandle = await (window as any).showSaveFilePicker({
                 suggestedName: fileName,
                 types: [{
@@ -323,15 +333,17 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   accept: {'*/*': []}
                 }]
               });
+              console.log('✅ User selected save location:', fileHandle);
               writableStream = await fileHandle.createWritable();
               useFileSystemAPI = true;
-              console.log('✅ File System Access API: Writing directly to disk');
+              console.log('✅ File System Access API ACTIVE: Writing directly to disk');
             } catch (err) {
-              console.log('⚠️ User cancelled or File System Access API unavailable, using RAM buffer');
+              console.error('⚠️ File System Access API failed:', err);
+              console.log('Falling back to RAM buffer');
               useFileSystemAPI = false;
             }
           } else {
-            console.log('📥 File System Access API not supported, using RAM buffer');
+            console.log('📥 File System Access API NOT SUPPORTED, using RAM buffer');
           }
         } else if (data.type === 'multi_stream_complete') {
           console.log('✅ Transfer complete signal received');

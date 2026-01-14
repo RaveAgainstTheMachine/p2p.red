@@ -120,7 +120,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
     const streamCount = quality === 'excellent' ? 8 : quality === 'good' ? 4 : quality === 'fair' ? 2 : 1;
     
     // Get adaptive chunk size (initial)
-    const chunkSize = 256 * 1024; // Fixed 256KB chunks
+    // Chrome DataChannel max message size: 262,144 bytes
+    // With 8-byte header, max chunk data: 262,136 bytes
+    const chunkSize = 262136; // Max chunk size to fit in DataChannel message limit
     
     const fileSize = totalSize || (input as File).size;
     const name = fileName || (input as File).name;

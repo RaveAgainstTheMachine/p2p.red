@@ -119,8 +119,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
     // Determine optimal stream count based on network quality
     const streamCount = quality === 'excellent' ? 8 : quality === 'good' ? 4 : quality === 'fair' ? 2 : 1;
     
-    // Get adaptive chunk size
+    // Get adaptive chunk size (initial)
     let chunkSize = getAdaptiveChunkSize(quality, 0);
+    let slowStartThreshold = 1024 * 1024; // 1MB threshold
+    let inSlowStart = true;
     
     const fileSize = totalSize || (input as File).size;
     const name = fileName || (input as File).name;
@@ -138,7 +140,37 @@ export const useAdaptiveMultiStreamTransfer = () => {
       const totalChunks = Math.ceil(fileSize / chunkSize);
       let bytesTransferred = 0;
       let lastSpeedCheck = Date.now();
-      let lastBytesTransferred = 0;
+
+      // Listen for receiver feedback
+      const handleReceiverFeedback = (data: any) => {
+        if (data.type === 'receiver_feedback') {
+          const receiverSpeed = data.currentSpeed;
+          const senderSpeed = bytesTransferred / ((Date.now() - startTime.current) / 1000);
+          
+          // Congestion control: adjust chunk size based on receiver feedback
+          if (receiverSpeed < senderSpeed * 0.8) {
+            // Receiver falling behind - multiplicative decrease
+            slowStartThreshold = Math.max(chunkSize / 2, 64 * 1024);
+            chunkSize = Math.max(64 * 1024, chunkSize / 2);
+            inSlowStart = false;
+            console.log(`⚠️ Congestion detected, reducing chunk size to ${chunkSize/1024}KB`);
+          } else if (receiverSpeed > senderSpeed * 0.95) {
+            // Receiver keeping up - increase chunk size
+            if (inSlowStart) {
+              // Slow start: exponential increase
+              chunkSize = Math.min(2 * 1024 * 1024, chunkSize * 2);
+              if (chunkSize >= slowStartThreshold) {
+                inSlowStart = false;
+              }
+            } else {
+              // Congestion avoidance: additive increase
+              chunkSize = Math.min(2 * 1024 * 1024, chunkSize + 64 * 1024);
+            }
+          }
+        }
+      };
+      
+      conn.on('data', handleReceiverFeedback);
 
       // Send metadata first on main connection
       conn.send({
@@ -202,17 +234,18 @@ export const useAdaptiveMultiStreamTransfer = () => {
           bytesTransferred += chunkData.length;
           chunkIndex++;
 
-          // Adaptive chunk size adjustment
+          // Adaptive chunk size adjustment (sender-side monitoring)
           const now = Date.now();
           if (now - lastSpeedCheck > 1000) {
-            const elapsed = (now - lastSpeedCheck) / 1000;
-            const currentSpeed = (bytesTransferred - lastBytesTransferred) / elapsed;
-            
-            // Adjust chunk size based on current speed
-            chunkSize = getAdaptiveChunkSize(quality, currentSpeed);
+            // Monitor bufferedAmount for backpressure
+            const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
+            if (totalBuffered > 32 * 1024 * 1024) {
+              // Too much buffered data, slow down
+              chunkSize = Math.max(64 * 1024, chunkSize / 2);
+              console.log(`⚠️ High buffer detected (${(totalBuffered/1024/1024).toFixed(1)}MB), reducing chunk size`);
+            }
             
             lastSpeedCheck = now;
-            lastBytesTransferred = bytesTransferred;
 
             // Update progress
             const totalElapsed = (now - startTime.current) / 1000;
@@ -270,6 +303,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
     let fileSize = 0;
     let bytesReceived = 0;
     let expectedStreams = 0;
+    let lastFeedbackTime = Date.now();
+    let lastFeedbackBytes = 0;
 
     return new Promise((resolve) => {
       // Listen on main connection for metadata
@@ -312,9 +347,29 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 bytesReceived += chunkData.length;
 
                 // Update progress
-                const elapsed = (Date.now() - startTime.current) / 1000;
+                const now = Date.now();
+                const elapsed = (now - startTime.current) / 1000;
                 const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
                 const timeRemaining = speed > 0 ? (fileSize - bytesReceived) / speed : 0;
+
+                // Send feedback to sender every 100ms
+                if (now - lastFeedbackTime > 100) {
+                  const feedbackElapsed = (now - lastFeedbackTime) / 1000;
+                  const currentSpeed = feedbackElapsed > 0 ? (bytesReceived - lastFeedbackBytes) / feedbackElapsed : 0;
+                  const bufferUtilization = chunks.size / (totalChunks || 1);
+                  
+                  conn.send({
+                    type: 'receiver_feedback',
+                    bytesReceived,
+                    currentSpeed,
+                    bufferUtilization,
+                    chunksInBuffer: chunks.size,
+                    timestamp: now
+                  });
+                  
+                  lastFeedbackTime = now;
+                  lastFeedbackBytes = bytesReceived;
+                }
 
                 setTransferProgress(prev => ({
                   ...prev,

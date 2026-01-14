@@ -192,25 +192,34 @@ export const useAdaptiveMultiStreamTransfer = () => {
           message.set(new Uint8Array(header), 0);
           message.set(chunkData, 8);
           
+          const bytesSent = message.buffer.byteLength;
           channel.send(message.buffer);
-
-          bytesTransferred += chunkData.length;
           chunkIndex++;
+          
+          // Only count as transferred when it's actually sent (not just buffered)
+          // bytesTransferred will be updated based on actual send progress
+          bytesTransferred += bytesSent;
 
           // Update progress
           const now = Date.now();
           if (now - lastSpeedCheck > 1000) {
             lastSpeedCheck = now;
+            
+            // Calculate actual bytes sent (not just buffered)
+            const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
+            const actualBytesSent = bytesTransferred - totalBuffered;
 
-            // Update progress
+            // Update progress based on actual sent bytes
             const totalElapsed = (now - startTime.current) / 1000;
-            const avgSpeed = bytesTransferred / totalElapsed;
-            const timeRemaining = avgSpeed > 0 ? (fileSize - bytesTransferred) / avgSpeed : 0;
+            const avgSpeed = actualBytesSent / totalElapsed;
+            const timeRemaining = avgSpeed > 0 ? (fileSize - actualBytesSent) / avgSpeed : 0;
+            
+            console.log(`📊 Sender: ${(actualBytesSent/1024/1024).toFixed(1)}MB sent, ${(totalBuffered/1024/1024).toFixed(1)}MB buffered, ${(bytesTransferred/1024/1024).toFixed(1)}MB total queued`);
 
             setTransferProgress({
-              bytesTransferred,
+              bytesTransferred: actualBytesSent,
               totalBytes: fileSize,
-              percentage: (bytesTransferred / fileSize) * 100,
+              percentage: (actualBytesSent / fileSize) * 100,
               speed: avgSpeed,
               timeRemaining,
               activeStreams: channels.length,

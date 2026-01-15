@@ -11,9 +11,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@p2p-file-share/shared": "file:../shared",
+    "@tauri-apps/api": "^2.2.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "@p2p-file-share/shared": "file:../shared"
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

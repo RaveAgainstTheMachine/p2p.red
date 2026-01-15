@@ -126,17 +126,22 @@ function App() {
   const { isEncrypting } = useEncryption();
   const { transferProgress, isTransferring, resumeTransfer } = useFileTransfer();
   const { transferProgress: adaptiveProgress, transferFileAdaptive } = useAdaptiveMultiStreamTransfer();
+ 
+  const isAssistedConnection = (() => {
+    const ct = (adaptiveProgress as any)?.candidateType;
+    return typeof ct === 'string' && ct.toLowerCase().includes('relay');
+  })();
   const [mode, setMode] = useState<'share' | 'receive'>('share');
   const [shareLink, setShareLink] = useState<string>('');
   const [status, setStatus] = useState<'idle' | 'encrypting' | 'waiting' | 'connecting' | 'transferring' | 'complete' | 'error'>('idle');
-  const [senderPeerId, setSenderPeerId] = useState<string>('');
+  const [selectedFiles, setSelectedFiles] = useState<File[] | null>(null);
+  const [pin, setPin] = useState<string>('');
+  const [senderPeerId, setSenderPeerId] = useState<string | null>(null);
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string; fileType?: string} | null>(null);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
-  const [pin, setPin] = useState<string>('');
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [requiresPin, setRequiresPin] = useState<boolean>(false);
   const [pinError, setPinError] = useState<string>('');
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
@@ -246,7 +251,7 @@ function App() {
   }, [window.location.hash, peer, isConnected]);
 
   const handleFileSelect = (files: File[]) => {
-    setSelectedFiles(files as any);
+    setSelectedFiles(files);
   };
 
   const handlePinVerification = async (enteredPin: string) => {
@@ -749,7 +754,7 @@ function App() {
         // Single file
         console.log('📂 Single file path - Starting adaptive multi-stream download');
         const received = await transferFileAdaptive(conn, null as any);
-        if (received instanceof Blob) {
+        if (received instanceof Blob && received.size > 0) {
           // Trigger download
           const url = URL.createObjectURL(received);
           const a = document.createElement('a');
@@ -971,6 +976,26 @@ function App() {
                 
                 {status === 'transferring' && (
                   <div className="w-full">
+                    {isAssistedConnection && (
+                      <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4 text-white/80">
+                        <div className="text-white/90 font-medium">Connection assistance enabled</div>
+                        <div className="mt-1 text-sm text-white/70">
+                          Your transfer is still end-to-end encrypted. We cannot read your files and we never store them.
+                          This mode can be slower on some networks.
+                        </div>
+                        <details className="mt-3">
+                          <summary className="cursor-pointer text-sm text-white/70 hover:text-white/90 transition-colors">
+                            Tips to improve speed
+                          </summary>
+                          <div className="mt-2 space-y-1 text-sm text-white/70">
+                            <div>Disable VPN/proxy and retry</div>
+                            <div>Try a different network (home Wi-Fi vs mobile hotspot)</div>
+                            <div>On home routers, enabling UPnP can help direct connections</div>
+                            <div>Ensure UDP/WebRTC is allowed by firewall/router</div>
+                          </div>
+                        </details>
+                      </div>
+                    )}
                     <EnhancedProgressBar 
                       progress={adaptiveProgress} 
                       label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`} 
@@ -1003,6 +1028,26 @@ function App() {
               
               {status === 'transferring' && (
                 <div className="mt-8 max-w-5xl mx-auto">
+                  {isAssistedConnection && (
+                    <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4 text-white/80">
+                      <div className="text-white/90 font-medium">Connection assistance enabled</div>
+                      <div className="mt-1 text-sm text-white/70">
+                        Your transfer is still end-to-end encrypted. We cannot read your files and we never store them.
+                        This mode can be slower on some networks.
+                      </div>
+                      <details className="mt-3">
+                        <summary className="cursor-pointer text-sm text-white/70 hover:text-white/90 transition-colors">
+                          Tips to improve speed
+                        </summary>
+                        <div className="mt-2 space-y-1 text-sm text-white/70">
+                          <div>Disable VPN/proxy and retry</div>
+                          <div>Try a different network (home Wi-Fi vs mobile hotspot)</div>
+                          <div>On home routers, enabling UPnP can help direct connections</div>
+                          <div>Ensure UDP/WebRTC is allowed by firewall/router</div>
+                        </div>
+                      </details>
+                    </div>
+                  )}
                   <EnhancedProgressBar 
                     progress={adaptiveProgress} 
                     label={`Receiving file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}

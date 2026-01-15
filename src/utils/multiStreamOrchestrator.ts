@@ -90,8 +90,7 @@ export class MultiStreamOrchestrator {
     for (let i = 0; i < streamCount; i++) {
       try {
         const channel = this.peerConnection!.createDataChannel(`stream_${i}`, {
-          ordered: false,
-          maxRetransmits: 0
+          ordered: true
         });
 
         const streamChannel: StreamChannel = {

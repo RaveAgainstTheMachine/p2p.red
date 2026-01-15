@@ -12,6 +12,22 @@ interface AdaptiveTransferProgress {
   networkQuality: 'excellent' | 'good' | 'fair' | 'poor';
   adaptiveChunkSize: number;
   shardProgress?: Map<number, ShardState>; // Per-shard progress tracking
+  rttMs?: number;
+  candidateType?: string;
+  receiverBackpressureLevel?: 'low' | 'high';
+  cachedShardBytes?: number;
+  maxCachedShardBytes?: number;
+}
+
+interface ReceiverDeviceProfile {
+  hardwareConcurrency?: number;
+  deviceMemoryGB?: number;
+  connection?: {
+    effectiveType?: string;
+    downlinkMbps?: number;
+    rttMs?: number;
+    saveData?: boolean;
+  };
 }
 
 interface ShardState {
@@ -148,25 +164,86 @@ export const useAdaptiveMultiStreamTransfer = () => {
       console.log(`🧩 Created ${shards.length} shards for ${(fileSize/1024/1024/1024).toFixed(2)}GB file`);
       
       // Adaptive channel count based on file size and network
-      const MAX_CHANNELS = 256;
-      const MIN_CHANNELS = 64;
+      const MAX_CHANNELS = 64;
+      const MIN_CHANNELS = 16;
       
       // Calculate optimal channels: more for larger files, fewer for smaller
       let numChannels = Math.min(
         Math.max(
-          Math.ceil(shards.length / 2), // At least half the shards
+          Math.ceil(shards.length / 8),
           MIN_CHANNELS
         ),
         MAX_CHANNELS,
-        shards.length // Never more than shards
+        shards.length
       );
       
       // For very large files, use more channels
       if (fileSize > 10 * 1024 * 1024 * 1024) { // > 10GB
-        numChannels = Math.min(MAX_CHANNELS, shards.length);
+        numChannels = Math.min(
+          MAX_CHANNELS,
+          shards.length,
+          Math.max(MIN_CHANNELS, Math.ceil(shards.length / 8))
+        );
       }
       
       console.log(`🔧 Using ${numChannels} adaptive channels for ${shards.length} shards`);
+
+      let networkQuality: AdaptiveTransferProgress['networkQuality'] = 'good';
+      let rttMs: number | undefined;
+      let candidateType: string | undefined;
+      const pc = (conn as any).peerConnection as RTCPeerConnection | undefined;
+      const updateQualityFromStats = async () => {
+        if (!pc || typeof pc.getStats !== 'function') return;
+        const stats = await pc.getStats();
+        let localCandidateType: string | undefined;
+        let remoteCandidateType: string | undefined;
+        let localCandidateId: string | undefined;
+        let remoteCandidateId: string | undefined;
+
+        stats.forEach((report: any) => {
+          if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+            if (typeof report.currentRoundTripTime === 'number') {
+              rttMs = report.currentRoundTripTime * 1000;
+            }
+            localCandidateId = report.localCandidateId;
+            remoteCandidateId = report.remoteCandidateId;
+          }
+        });
+
+        if (localCandidateId || remoteCandidateId) {
+          stats.forEach((report: any) => {
+            if (localCandidateId && report.id === localCandidateId) {
+              localCandidateType = report.candidateType;
+            }
+            if (remoteCandidateId && report.id === remoteCandidateId) {
+              remoteCandidateType = report.candidateType;
+            }
+          });
+        }
+
+        if (typeof rttMs === 'number') {
+          if (localCandidateType === 'host' && remoteCandidateType === 'host' && rttMs <= 5) {
+            networkQuality = 'excellent';
+          } else if (rttMs <= 30) {
+            networkQuality = 'good';
+          } else if (rttMs <= 120) {
+            networkQuality = 'fair';
+          } else {
+            networkQuality = 'poor';
+          }
+        } else {
+          networkQuality = pc.connectionState === 'connected' ? 'good' : 'poor';
+        }
+
+        if (localCandidateType && remoteCandidateType) {
+          candidateType = `${localCandidateType}/${remoteCandidateType}`;
+        } else if (localCandidateType || remoteCandidateType) {
+          candidateType = localCandidateType || remoteCandidateType;
+        }
+      };
+      const qualityInterval = setInterval(() => {
+        void updateQualityFromStats();
+      }, 1000);
 
       let receiverBackpressureLevel: string = 'low';
       const receiverBackpressureHandler = (data: any) => {
@@ -186,14 +263,18 @@ export const useAdaptiveMultiStreamTransfer = () => {
           streamCount: numChannels,
           shardSize: SHARD_SIZE,
           shardCount: shards.length,
+          protocolVersion: 2,
+          chunkHeaderBytes: 8,
           timestamp: Date.now()
         });
 
-        // Wait for receiver ready signal
+        let receiverProfile: ReceiverDeviceProfile | undefined;
         await new Promise<void>((resolveReady) => {
           const readyHandler = (data: any) => {
-            if (data.type === 'receiver_ready') {
-              console.log('✅ Receiver ready, starting shard transfer...');
+            if (data?.type === 'receiver_ready') {
+              if (data.receiverProfile && typeof data.receiverProfile === 'object') {
+                receiverProfile = data.receiverProfile as ReceiverDeviceProfile;
+              }
               conn.off('data', readyHandler);
               resolveReady();
             }
@@ -201,21 +282,234 @@ export const useAdaptiveMultiStreamTransfer = () => {
           conn.on('data', readyHandler);
         });
 
+        await updateQualityFromStats();
+
+        const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+        let adjustedChannels = numChannels;
+
+        const qualityMax = (() => {
+          const q = networkQuality as AdaptiveTransferProgress['networkQuality'];
+          if (q === 'excellent') return 64;
+          if (q === 'good') return 48;
+          if (q === 'fair') return 24;
+          return 12;
+        })();
+
+        let deviceMax = 64;
+        const cores = receiverProfile?.hardwareConcurrency ?? (navigator as any).hardwareConcurrency;
+        const mem = receiverProfile?.deviceMemoryGB;
+        if (typeof cores === 'number') {
+          if (cores <= 2) deviceMax = Math.min(deviceMax, 8);
+          else if (cores <= 4) deviceMax = Math.min(deviceMax, 16);
+          else if (cores <= 6) deviceMax = Math.min(deviceMax, 24);
+        }
+        if (typeof mem === 'number') {
+          if (mem <= 2) deviceMax = Math.min(deviceMax, 8);
+          else if (mem <= 4) deviceMax = Math.min(deviceMax, 16);
+          else if (mem <= 8) deviceMax = Math.min(deviceMax, 24);
+        }
+
+        const eff = receiverProfile?.connection?.effectiveType;
+        const saveData = receiverProfile?.connection?.saveData;
+        if (saveData) deviceMax = Math.min(deviceMax, 12);
+        if (eff === 'slow-2g') deviceMax = Math.min(deviceMax, 8);
+        if (eff === '2g') deviceMax = Math.min(deviceMax, 10);
+        if (eff === '3g') deviceMax = Math.min(deviceMax, 16);
+
+        adjustedChannels = clamp(adjustedChannels, 4, Math.min(qualityMax, deviceMax, MAX_CHANNELS, shards.length));
+
         // Create parallel channels
         console.log('🔧 Creating DataChannels...');
-        const channels = await createParallelChannels(conn, numChannels, true);
+        const channels = await createParallelChannels(conn, adjustedChannels, true);
         
         if (channels.length === 0) {
           throw new Error('Failed to create any parallel channels');
         }
 
+        const CHANNEL_BUFFER_HIGH_WATERMARK = 16 * 1024 * 1024;
+        const CHANNEL_BUFFER_LOW_WATERMARK = 8 * 1024 * 1024;
+        for (const ch of channels) {
+          try {
+            ch.bufferedAmountLowThreshold = CHANNEL_BUFFER_LOW_WATERMARK;
+          } catch {
+            // ignore
+          }
+        }
+
+        const waitForChannelBufferRoom = async (channel: RTCDataChannel) => {
+          while (channel.bufferedAmount > CHANNEL_BUFFER_HIGH_WATERMARK) {
+            await new Promise<void>((resolve) => {
+              let done = false;
+              const onLow = () => {
+                if (done) return;
+                done = true;
+                channel.removeEventListener('bufferedamountlow', onLow);
+                resolve();
+              };
+              channel.addEventListener('bufferedamountlow', onLow);
+              setTimeout(() => {
+                if (done) return;
+                done = true;
+                channel.removeEventListener('bufferedamountlow', onLow);
+                resolve();
+              }, 50);
+            });
+          }
+        };
+
+        conn.send({
+          type: 'stream_count_update',
+          streamCount: channels.length,
+          timestamp: Date.now()
+        });
+
         let totalBytesTransferred = 0;
         const CHUNK_SIZE = 252 * 1024; // 252KB chunks (4 bytes reserved for shard ID header)
         let lastLoggedPercentage = 0;
+        let lastUiProgressUpdateTs = 0;
+        const UI_PROGRESS_UPDATE_INTERVAL_MS = 250;
 
         // Cache for ReadableStream shards (enables retransmission)
         const shardCache = new Map<number, Uint8Array>();
         const shardAttemptIds = new Map<number, number>();
+
+        let cachedShardBytes = 0;
+        const MAX_CACHED_SHARD_BYTES = 512 * 1024 * 1024;
+        const cacheWaiters: Array<() => void> = [];
+        const waitForCacheRoom = async (needBytes: number) => {
+          while (cachedShardBytes + needBytes > MAX_CACHED_SHARD_BYTES) {
+            await new Promise<void>(resolveWait => cacheWaiters.push(resolveWait));
+          }
+        };
+        const notifyCacheWaiters = () => {
+          while (cacheWaiters.length > 0) {
+            const resolveWait = cacheWaiters.shift();
+            if (resolveWait) resolveWait();
+          }
+        };
+
+        // Handle shard confirmations and retransmission requests (must be active during transfer
+        // so ReadableStream cache can drain and not stall at MAX_CACHED_SHARD_BYTES)
+        const messageHandler = async (data: any) => {
+          if (data.type === 'shard_confirmed') {
+            // Receiver confirmed shard is good, clear from cache
+            const shardId = data.shardId;
+            if (shardCache.has(shardId)) {
+              const cached = shardCache.get(shardId);
+              shardCache.delete(shardId);
+              if (cached) {
+                cachedShardBytes = Math.max(0, cachedShardBytes - cached.length);
+              }
+              notifyCacheWaiters();
+              console.log(`✅ Shard ${shardId} confirmed, cleared from cache (${shardCache.size} shards cached)`);
+            }
+          } else if (data.type === 'request_shard_meta') {
+            if (!Array.isArray(data.shardIds)) return;
+            for (const shardId of data.shardIds) {
+              const shard = shards[shardId];
+              if (!shard) continue;
+
+              let shardData: Uint8Array;
+              if (isFile) {
+                const shardBlob = (input as File).slice(shard.offset, shard.offset + shard.size);
+                shardData = new Uint8Array(await shardBlob.arrayBuffer());
+              } else {
+                const cached = shardCache.get(shardId);
+                if (!cached) {
+                  console.error(`❌ Shard ${shardId} not in cache, cannot resend metadata`);
+                  continue;
+                }
+                shardData = cached;
+              }
+
+              const attemptId = shardAttemptIds.get(shard.id) ?? 0;
+              const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
+
+              conn.send({
+                type: 'shard_start',
+                shardId: shard.id,
+                offset: shard.offset,
+                size: shardData.length,
+                channelId: shard.channelId,
+                attemptId,
+                crc32: shardCRC
+              });
+            }
+          } else if (data.type === 'retransmit_shards') {
+            console.log(`📡 Retransmit request for ${data.shardIds.length} shards`);
+            
+            for (const shardId of data.shardIds) {
+              const shard = shards[shardId];
+              if (!shard) continue;
+              const channel = channels[shard.channelId];
+              
+              if (channel.readyState !== 'open') {
+                console.error(`❌ Channel ${shard.channelId} closed, cannot retransmit shard ${shardId}`);
+                continue;
+              }
+              
+              console.log(`🔄 Retransmitting shard ${shardId} (${(shard.size/1024/1024).toFixed(1)}MB)`);
+              
+              // Get shard data from File or cache
+              let shardData: Uint8Array;
+              if (isFile) {
+                const shardBlob = (input as File).slice(shard.offset, shard.offset + shard.size);
+                shardData = new Uint8Array(await shardBlob.arrayBuffer());
+              } else {
+                // Use cached shard data from stream
+                const cached = shardCache.get(shardId);
+                if (!cached) {
+                  console.error(`❌ Shard ${shardId} not in cache, cannot retransmit`);
+                  continue;
+                }
+                shardData = cached;
+              }
+
+              const attemptId = (shardAttemptIds.get(shard.id) ?? 0) + 1;
+              shardAttemptIds.set(shard.id, attemptId);
+
+              // Calculate per-shard CRC32 (needed so receiver can verify retransmits)
+              const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
+              
+              conn.send({
+                type: 'shard_start',
+                shardId: shard.id,
+                offset: shard.offset,
+                size: shardData.length,
+                channelId: shard.channelId,
+                attemptId,
+                crc32: shardCRC
+              });
+
+              let sentBytes = 0;
+              while (sentBytes < shardData.length) {
+                const chunkData = shardData.subarray(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+
+                while (receiverBackpressureLevel === 'high') {
+                  await new Promise(resolve => setTimeout(resolve, 10));
+                }
+
+                await waitForChannelBufferRoom(channel);
+                
+                const message = new Uint8Array(8 + chunkData.length);
+                const view = new DataView(message.buffer);
+                view.setUint32(0, shard.id, true);
+                view.setUint32(4, attemptId, true);
+                message.set(chunkData, 8);
+                
+                channel.send(message.buffer);
+                sentBytes += chunkData.length;
+              }
+            }
+            
+            conn.send({
+              type: 'retransmit_complete',
+              timestamp: Date.now()
+            });
+          }
+        };
+
+        conn.on('data', messageHandler);
 
         // For Files: Use parallel shard sending
         if (isFile) {
@@ -262,9 +556,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 }
                 
                 // Wait if buffer is full
-                while (channel.bufferedAmount > 1 * 1024 * 1024) {
-                  await new Promise(resolve => setTimeout(resolve, 10));
-                }
+                await waitForChannelBufferRoom(channel);
                 
                 // Send chunk with shard ID
                 const message = new Uint8Array(8 + chunkData.length);
@@ -289,17 +581,25 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   console.log(`📤 ${currentPercentage}% sent (${(totalBytesTransferred/1024/1024/1024).toFixed(2)}GB / ${(fileSize/1024/1024/1024).toFixed(2)}GB) @ ${(speed/1024/1024).toFixed(1)}MB/s`);
                   lastLoggedPercentage = currentPercentage;
                 }
-                
-                setTransferProgress({
-                  bytesTransferred: totalBytesTransferred,
-                  totalBytes: fileSize,
-                  percentage: (totalBytesTransferred / fileSize) * 100,
-                  speed,
-                  timeRemaining: speed > 0 ? (fileSize - totalBytesTransferred) / speed : 0,
-                  activeStreams: channels.length,
-                  networkQuality: 'good',
-                  adaptiveChunkSize: CHUNK_SIZE
-                });
+
+                if (now - lastUiProgressUpdateTs >= UI_PROGRESS_UPDATE_INTERVAL_MS || currentPercentage >= 100) {
+                  lastUiProgressUpdateTs = now;
+                  setTransferProgress({
+                    bytesTransferred: totalBytesTransferred,
+                    totalBytes: fileSize,
+                    percentage: (totalBytesTransferred / fileSize) * 100,
+                    speed,
+                    timeRemaining: speed > 0 ? (fileSize - totalBytesTransferred) / speed : 0,
+                    activeStreams: channels.length,
+                    networkQuality,
+                    adaptiveChunkSize: CHUNK_SIZE,
+                    rttMs,
+                    candidateType,
+                    receiverBackpressureLevel: receiverBackpressureLevel === 'high' ? 'high' : 'low',
+                    cachedShardBytes,
+                    maxCachedShardBytes: MAX_CACHED_SHARD_BYTES
+                  });
+                }
               }
               
               shard.status = 'complete';
@@ -366,7 +666,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   const shardData = currentShardBuffer.slice(0, currentShardFilled);
                   
                   // Cache shard until confirmed by receiver
+                  await waitForCacheRoom(shardData.length);
                   shardCache.set(shard.id, shardData);
+                  cachedShardBytes += shardData.length;
                   
                   // Calculate per-shard CRC32
                   const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
@@ -394,10 +696,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     while (receiverBackpressureLevel === 'high') {
                       await new Promise(resolve => setTimeout(resolve, 10));
                     }
-                    
-                    while (channel.bufferedAmount > 1 * 1024 * 1024) {
-                      await new Promise(resolve => setTimeout(resolve, 10));
-                    }
+
+                    await waitForChannelBufferRoom(channel);
                     
                     const message = new Uint8Array(8 + chunkData.length);
                     const view = new DataView(message.buffer);
@@ -422,17 +722,25 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     console.log(`📤 ${currentPercentage}% sent (${(totalBytesTransferred/1024/1024/1024).toFixed(2)}GB / ${(fileSize/1024/1024/1024).toFixed(2)}GB) @ ${(speed/1024/1024).toFixed(1)}MB/s`);
                     lastLoggedPercentage = currentPercentage;
                   }
-                  
-                  setTransferProgress({
-                    bytesTransferred: totalBytesTransferred,
-                    totalBytes: fileSize,
-                    percentage: (totalBytesTransferred / fileSize) * 100,
-                    speed,
-                    timeRemaining: speed > 0 ? (fileSize - totalBytesTransferred) / speed : 0,
-                    activeStreams: channels.length,
-                    networkQuality: 'good',
-                    adaptiveChunkSize: CHUNK_SIZE
-                  });
+
+                  if (now - lastUiProgressUpdateTs >= UI_PROGRESS_UPDATE_INTERVAL_MS || currentPercentage >= 100) {
+                    lastUiProgressUpdateTs = now;
+                    setTransferProgress({
+                      bytesTransferred: totalBytesTransferred,
+                      totalBytes: fileSize,
+                      percentage: (totalBytesTransferred / fileSize) * 100,
+                      speed,
+                      timeRemaining: speed > 0 ? (fileSize - totalBytesTransferred) / speed : 0,
+                      activeStreams: channels.length,
+                      networkQuality,
+                      adaptiveChunkSize: CHUNK_SIZE,
+                      rttMs,
+                      candidateType,
+                      receiverBackpressureLevel: receiverBackpressureLevel === 'high' ? 'high' : 'low',
+                      cachedShardBytes,
+                      maxCachedShardBytes: MAX_CACHED_SHARD_BYTES
+                    });
+                  }
                   
                   // Move to next shard
                   currentShardIndex++;
@@ -455,7 +763,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 const shardData = currentShardBuffer.slice(0, currentShardFilled);
                 
                 // Cache final shard until confirmed
+                await waitForCacheRoom(shardData.length);
                 shardCache.set(shard.id, shardData);
+                cachedShardBytes += shardData.length;
                 
                 // Calculate per-shard CRC32
                 const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
@@ -521,91 +831,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
           timestamp: Date.now()
         });
 
-        // Handle shard confirmations and retransmission requests
-        const messageHandler = async (data: any) => {
-          if (data.type === 'shard_confirmed') {
-            // Receiver confirmed shard is good, clear from cache
-            const shardId = data.shardId;
-            if (shardCache.has(shardId)) {
-              shardCache.delete(shardId);
-              console.log(`✅ Shard ${shardId} confirmed, cleared from cache (${shardCache.size} shards cached)`);
-            }
-          } else if (data.type === 'retransmit_shards') {
-            console.log(`📡 Retransmit request for ${data.shardIds.length} shards`);
-            
-            for (const shardId of data.shardIds) {
-              const shard = shards[shardId];
-              if (!shard) continue;
-              const channel = channels[shard.channelId];
-              
-              if (channel.readyState !== 'open') {
-                console.error(`❌ Channel ${shard.channelId} closed, cannot retransmit shard ${shardId}`);
-                continue;
-              }
-              
-              console.log(`🔄 Retransmitting shard ${shardId} (${(shard.size/1024/1024).toFixed(1)}MB)`);
-              
-              // Get shard data from File or cache
-              let shardData: Uint8Array;
-              if (isFile) {
-                const shardBlob = (input as File).slice(shard.offset, shard.offset + shard.size);
-                shardData = new Uint8Array(await shardBlob.arrayBuffer());
-              } else {
-                // Use cached shard data from stream
-                const cached = shardCache.get(shardId);
-                if (!cached) {
-                  console.error(`❌ Shard ${shardId} not in cache, cannot retransmit`);
-                  continue;
-                }
-                shardData = cached;
-              }
-
-              const attemptId = (shardAttemptIds.get(shard.id) ?? 0) + 1;
-              shardAttemptIds.set(shard.id, attemptId);
-
-              // Calculate per-shard CRC32 (needed so receiver can verify retransmits)
-              const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
-              
-              conn.send({
-                type: 'shard_start',
-                shardId: shard.id,
-                offset: shard.offset,
-                size: shardData.length,
-                channelId: shard.channelId,
-                attemptId,
-                crc32: shardCRC
-              });
-
-              let sentBytes = 0;
-              while (sentBytes < shardData.length) {
-                const chunkData = shardData.subarray(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
-
-                while (receiverBackpressureLevel === 'high') {
-                  await new Promise(resolve => setTimeout(resolve, 10));
-                }
-                
-                while (channel.bufferedAmount > 1 * 1024 * 1024) {
-                  await new Promise(resolve => setTimeout(resolve, 10));
-                }
-                
-                const message = new Uint8Array(8 + chunkData.length);
-                const view = new DataView(message.buffer);
-                view.setUint32(0, shard.id, true);
-                view.setUint32(4, attemptId, true);
-                message.set(chunkData, 8);
-                
-                channel.send(message.buffer);
-                sentBytes += chunkData.length;
-              }
-            }
-            
-            conn.send({
-              type: 'retransmit_complete',
-              timestamp: Date.now()
-            });
-          }
-        };
-
         const waitForReceiverDone = () => new Promise<void>((resolveDone) => {
           const doneHandler = (data: any) => {
             if (data?.type === 'receiver_done') {
@@ -621,7 +846,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
           }, 10 * 60 * 1000);
         });
 
-        conn.on('data', messageHandler);
         await waitForReceiverDone();
         conn.off('data', messageHandler);
 
@@ -629,11 +853,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
         channels.forEach(ch => ch.close());
         setIsTransferring(false);
+        clearInterval(qualityInterval);
         resolve();
       } catch (error) {
         console.error('❌ Shard transfer error:', error);
         conn.off('data', receiverBackpressureHandler);
         setIsTransferring(false);
+        clearInterval(qualityInterval);
         reject(error);
       }
     });
@@ -654,8 +880,15 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let fileName = 'download';
       let shardSize = 0;
       let shardCount = 0;
+      let chunkHeaderBytes = 8;
+      let metaResendAttempts = 0;
+      const MAX_META_RESEND_ATTEMPTS = 3;
       let bytesReceived = 0;
       let lastLoggedPercentage = 0;
+
+      let networkQuality: AdaptiveTransferProgress['networkQuality'] = 'good';
+      let rttMs: number | undefined;
+      let candidateType: string | undefined;
 
       let completeSignalReceived = false;
       let finalizeStarted = false;
@@ -790,11 +1023,11 @@ export const useAdaptiveMultiStreamTransfer = () => {
             if (!(event.data instanceof ArrayBuffer)) return;
             
             const message = new Uint8Array(event.data);
-            if (message.byteLength < 8) return;
+            if (message.byteLength < chunkHeaderBytes) return;
             const view = new DataView(message.buffer);
             const shardId = view.getUint32(0, true);
-            const attemptId = view.getUint32(4, true);
-            const chunkData = message.subarray(8);
+            const attemptId = chunkHeaderBytes >= 8 ? view.getUint32(4, true) : 0;
+            const chunkData = message.subarray(chunkHeaderBytes);
             
             // Update shard state
             if (!shardStates.has(shardId)) {
@@ -869,8 +1102,11 @@ export const useAdaptiveMultiStreamTransfer = () => {
               speed,
               timeRemaining: speed > 0 ? (fileSize - bytesReceived) / speed : 0,
               activeStreams: expectedStreams,
-              networkQuality: 'good',
-              adaptiveChunkSize: 256 * 1024
+              networkQuality,
+              adaptiveChunkSize: 256 * 1024,
+              rttMs,
+              candidateType,
+              receiverBackpressureLevel
             });
 
             await finalizeIfReady();
@@ -880,24 +1116,31 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
       const handleMainMessage = async (data: any) => {
         if (data.type === 'multi_stream_start') {
+          console.log('📥 receiveFileMultiStream STARTED (SHARD-BASED)');
+          
+          fileName = data.fileName;
           fileSize = data.fileSize;
           expectedStreams = data.streamCount;
-          fileName = data.fileName || 'download';
           shardSize = data.shardSize;
           shardCount = data.shardCount;
+          chunkHeaderBytes = data.chunkHeaderBytes === 8 ? 8 : 4;
+          metaResendAttempts = 0;
           
           console.log(`📊 Expecting ${shardCount} shards of ${(shardSize/1024/1024).toFixed(0)}MB each`);
           
           // Initialize shard states
           for (let i = 0; i < shardCount; i++) {
+            const offset = i * shardSize;
+            const remaining = Math.max(0, fileSize - offset);
+            const total = Math.min(shardSize, remaining);
             shardStates.set(i, { 
               received: 0, 
-              total: shardSize, 
+              total,
               complete: false, 
               expectedCRC: '', 
               currentCRC: 0xFFFFFFFF,
               attemptId: 0,
-              offset: i * shardSize
+              offset
             });
           }
           
@@ -923,6 +1166,62 @@ export const useAdaptiveMultiStreamTransfer = () => {
               const pc = (conn as any).peerConnection;
               if (pc && pc.connectionState !== 'closed') {
                 console.log(`✅ PeerConnection ready (state: ${pc.connectionState})`);
+
+                const updateQualityFromStats = async () => {
+                  if (!pc || typeof pc.getStats !== 'function') return;
+                  const stats = await pc.getStats();
+                  let localCandidateType: string | undefined;
+                  let remoteCandidateType: string | undefined;
+                  let localCandidateId: string | undefined;
+                  let remoteCandidateId: string | undefined;
+
+                  stats.forEach((report: any) => {
+                    if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+                      if (typeof report.currentRoundTripTime === 'number') {
+                        rttMs = report.currentRoundTripTime * 1000;
+                      }
+                      localCandidateId = report.localCandidateId;
+                      remoteCandidateId = report.remoteCandidateId;
+                    }
+                  });
+
+                  if (localCandidateId || remoteCandidateId) {
+                    stats.forEach((report: any) => {
+                      if (localCandidateId && report.id === localCandidateId) {
+                        localCandidateType = report.candidateType;
+                      }
+                      if (remoteCandidateId && report.id === remoteCandidateId) {
+                        remoteCandidateType = report.candidateType;
+                      }
+                    });
+                  }
+
+                  if (typeof rttMs === 'number') {
+                    if (localCandidateType === 'host' && remoteCandidateType === 'host' && rttMs <= 5) {
+                      networkQuality = 'excellent';
+                    } else if (rttMs <= 30) {
+                      networkQuality = 'good';
+                    } else if (rttMs <= 120) {
+                      networkQuality = 'fair';
+                    } else {
+                      networkQuality = 'poor';
+                    }
+                  } else {
+                    networkQuality = pc.connectionState === 'connected' ? 'good' : 'poor';
+                  }
+
+                  if (localCandidateType && remoteCandidateType) {
+                    candidateType = `${localCandidateType}/${remoteCandidateType}`;
+                  } else if (localCandidateType || remoteCandidateType) {
+                    candidateType = localCandidateType || remoteCandidateType;
+                  }
+                };
+
+                void updateQualityFromStats();
+                setInterval(() => {
+                  void updateQualityFromStats();
+                }, 1000);
+
                 setupDataChannelHandlers();
                 resolve();
               } else {
@@ -932,9 +1231,24 @@ export const useAdaptiveMultiStreamTransfer = () => {
             };
             checkConnection();
           });
-          
+
+          const navAny = navigator as any;
+          const connInfo = navAny.connection || navAny.mozConnection || navAny.webkitConnection;
+
+          const receiverProfile: ReceiverDeviceProfile = {
+            hardwareConcurrency: typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : undefined,
+            deviceMemoryGB: typeof navAny.deviceMemory === 'number' ? navAny.deviceMemory : undefined,
+            connection: connInfo ? {
+              effectiveType: typeof connInfo.effectiveType === 'string' ? connInfo.effectiveType : undefined,
+              downlinkMbps: typeof connInfo.downlink === 'number' ? connInfo.downlink : undefined,
+              rttMs: typeof connInfo.rtt === 'number' ? connInfo.rtt : undefined,
+              saveData: typeof connInfo.saveData === 'boolean' ? connInfo.saveData : undefined
+            } : undefined
+          };
+
           conn.send({
             type: 'receiver_ready',
+            receiverProfile,
             timestamp: Date.now()
           });
         } else if (data.type === 'shard_start') {
@@ -979,9 +1293,24 @@ export const useAdaptiveMultiStreamTransfer = () => {
               return;
             }
 
+            if (shardsMissingMeta.length > 0 && metaResendAttempts < MAX_META_RESEND_ATTEMPTS) {
+              metaResendAttempts++;
+              conn.send({
+                type: 'request_shard_meta',
+                shardIds: shardsMissingMeta,
+                timestamp: Date.now()
+              });
+              setTimeout(() => requestMissingAfterSettle(0), 1000);
+              return;
+            }
+
             const missingShards = states
               .filter(([_, state]) => state.expectedCRC && !state.complete)
               .map(([id]) => id);
+
+            if (shardsMissingMeta.length > 0) {
+              missingShards.push(...shardsMissingMeta);
+            }
 
             if (missingShards.length > 0) {
               console.error(`❌ Missing ${missingShards.length} shards:`, missingShards.slice(0, 10));
@@ -1002,6 +1331,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
           console.log('✅ Retransmission complete');
 
           await finalizeIfReady();
+        } else if (data.type === 'stream_count_update') {
+          if (typeof data.streamCount === 'number') {
+            expectedStreams = data.streamCount;
+          }
         }
       };
 

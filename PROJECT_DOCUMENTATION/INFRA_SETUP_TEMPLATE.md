@@ -56,7 +56,7 @@ Fill in the details per host. Add extra notes as needed (custom SSH port, intern
 - OS Version: Ubuntu 24.04
 - Disk Size: 160GB
 - RAM: 12GB
-- Notes: lan ip 10.10.10.77
+- Notes: lan ip 10.10.10.77 dev-ssh.p2p.red
 
 ## 3) SSH Keys (add our public key, this key is from the ubuntu user on the dev vm)
 Paste the public key you want added to each host:

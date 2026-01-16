@@ -20,12 +20,12 @@ interface EnvironmentConfig {
 
 export const environments: Record<string, EnvironmentConfig> = {
   development: {
-    apiUrl: 'http://localhost:5173',
+    apiUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:5173',
     peerJsConfig: {
-      host: 'localhost',
-      port: 9000,
+      host: import.meta.env.VITE_PEERJS_HOST ?? 'localhost',
+      port: Number(import.meta.env.VITE_PEERJS_PORT ?? 9000),
       path: '/peerjs',
-      secure: false,
+      secure: String(import.meta.env.VITE_PEERJS_SECURE ?? 'false') === 'true',
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },

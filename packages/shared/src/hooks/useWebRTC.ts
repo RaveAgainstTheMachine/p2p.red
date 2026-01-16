@@ -210,10 +210,13 @@ export const useWebRTC = () => {
     }
   }, []);
 
+  const activeConnections = Array.from(connections.values());
+
   return {
     peer,
     peerId,
     connections,
+    activeConnections,
     isConnected,
     connectionState,
     isOnline,

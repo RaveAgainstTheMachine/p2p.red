@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { useWebRTC } from '@p2p-file-share/shared'
 import './App.css'
 
 type NatTraversalSummary = {
@@ -74,6 +75,15 @@ const seedApprovals: Approval[] = [
 type NavTab = 'dashboard' | 'approvals' | 'diagnostics' | 'settings'
 
 function App() {
+  const {
+    peerId,
+    connectionState,
+    isConnected,
+    connectToPeer,
+    connections,
+    activeConnections,
+    initializePeer
+  } = useWebRTC()
   const [shares] = useState<Share[]>(seedShares)
   const [approvals] = useState<Approval[]>(seedApprovals)
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard')
@@ -83,7 +93,10 @@ function App() {
   const [probeError, setProbeError] = useState<string | null>(null)
   const [wipeStatus, setWipeStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [wipeError, setWipeError] = useState<string | null>(null)
-  const [diagnostics] = useState({
+  const [remotePeerId, setRemotePeerId] = useState('')
+  const [connectError, setConnectError] = useState<string | null>(null)
+  const [connectStatus, setConnectStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+  const [diagnostics, setDiagnostics] = useState({
     candidateType: 'unknown', // host / srflx / prflx / relay
     transport: 'unknown', // udp / tcp / tls
     relayAssisted: false, // true if relay observed
@@ -110,6 +123,146 @@ function App() {
     }
   }, [consented])
 
+  const activeConnection = useMemo(() => activeConnections[0] ?? null, [activeConnections])
+  const dataChannelStatus = activeConnections.length > 0 ? 'connected' : 'idle'
+
+  useEffect(() => {
+    initializePeer()
+  }, [initializePeer])
+
+  useEffect(() => {
+    if (connectStatus === 'connecting' && dataChannelStatus === 'connected') {
+      setConnectStatus('connected')
+    }
+  }, [connectStatus, dataChannelStatus])
+
+  useEffect(() => {
+    let isCancelled = false
+
+    type LocalCandidateReport = RTCStats & {
+      candidateType?: string
+      protocol?: string
+    }
+    type CandidatePairReport = RTCStats & {
+      localCandidateId?: string
+      state?: string
+      nominated?: boolean
+      currentRoundTripTime?: number
+      packetsSent?: number
+      packetsReceived?: number
+      packetsDiscardedOnSend?: number
+    }
+
+    const isLocalCandidate = (report: RTCStats): report is LocalCandidateReport => report.type === 'local-candidate'
+    const isCandidatePair = (report: RTCStats): report is CandidatePairReport => report.type === 'candidate-pair'
+
+    const updateDiagnostics = async () => {
+      if (!activeConnection?.peerConnection) {
+        if (!isCancelled) {
+          setDiagnostics((prev) => ({
+            ...prev,
+            candidateType: 'unknown',
+            transport: 'unknown',
+            relayAssisted: false,
+            rttMs: null,
+            packetLoss: null,
+            activeStreams: connections.size,
+          }))
+        }
+        return
+      }
+
+      try {
+        const stats = await activeConnection.peerConnection.getStats()
+        const localCandidates = new Map<string, LocalCandidateReport>()
+        let selectedPair: CandidatePairReport | null = null
+
+        stats.forEach((report) => {
+          if (isLocalCandidate(report)) {
+            localCandidates.set(report.id, report)
+          }
+          if (isCandidatePair(report) && report.state === 'succeeded' && report.nominated) {
+            selectedPair = report
+          }
+        })
+
+        if (!selectedPair) {
+          stats.forEach((report) => {
+            if (!selectedPair && isCandidatePair(report) && report.state === 'succeeded') {
+              selectedPair = report
+            }
+          })
+        }
+
+        if (!selectedPair) {
+          if (!isCancelled) {
+            setDiagnostics((prev) => ({
+              ...prev,
+              candidateType: 'unknown',
+              transport: 'unknown',
+              relayAssisted: false,
+              rttMs: null,
+              packetLoss: null,
+              activeStreams: connections.size,
+            }))
+          }
+          return
+        }
+
+        const pair = selectedPair as CandidatePairReport
+        const localCandidateId = pair.localCandidateId ?? ''
+        const localCandidate = localCandidateId ? localCandidates.get(localCandidateId) : undefined
+        const candidateType = localCandidate?.candidateType ?? 'unknown'
+        const transport = localCandidate?.protocol ?? 'unknown'
+        const relayAssisted = candidateType === 'relay'
+        const rttMs = typeof pair.currentRoundTripTime === 'number'
+          ? Math.round(pair.currentRoundTripTime * 1000)
+          : null
+        let packetLoss: number | null = null
+        if (
+          typeof pair.packetsSent === 'number' &&
+          typeof pair.packetsReceived === 'number' &&
+          typeof pair.packetsDiscardedOnSend === 'number'
+        ) {
+          const total = pair.packetsSent + pair.packetsReceived
+          if (total > 0) {
+            packetLoss = Math.round((pair.packetsDiscardedOnSend / total) * 100)
+          }
+        }
+
+        if (!isCancelled) {
+          setDiagnostics({
+            candidateType,
+            transport,
+            relayAssisted,
+            rttMs,
+            packetLoss,
+            activeStreams: connections.size,
+          })
+        }
+      } catch {
+        if (!isCancelled) {
+          setDiagnostics((prev) => ({
+            ...prev,
+            candidateType: 'unknown',
+            transport: 'unknown',
+            relayAssisted: false,
+            rttMs: null,
+            packetLoss: null,
+            activeStreams: connections.size,
+          }))
+        }
+      }
+    }
+
+    updateDiagnostics()
+    const interval = setInterval(updateDiagnostics, 2000)
+    return () => {
+      isCancelled = true
+      clearInterval(interval)
+    }
+  }, [activeConnection, connections.size])
+
   const runSecureWipe = useCallback(async () => {
     if (!window.confirm('This will remove local app data/cache. Continue?')) return
     setWipeStatus('running')
@@ -122,6 +275,30 @@ function App() {
       setWipeError(err instanceof Error ? err.message : 'Unknown error')
     }
   }, [])
+
+  const handleConnect = useCallback(() => {
+    const trimmed = remotePeerId.trim()
+    if (!trimmed) {
+      setConnectError('Enter a peer ID to connect.')
+      return
+    }
+    setConnectError(null)
+    setConnectStatus('connecting')
+    const conn = connectToPeer(trimmed)
+    if (!conn) {
+      setConnectStatus('error')
+      setConnectError('Failed to initiate connection.')
+      return
+    }
+    conn.on('open', () => setConnectStatus('connected'))
+    conn.on('error', () => {
+      setConnectStatus('error')
+      setConnectError('Connection error. Check the peer ID and network.')
+    })
+    conn.on('close', () => {
+      setConnectStatus('idle')
+    })
+  }, [connectToPeer, remotePeerId])
 
   const statusLabel = (share: Share) => {
     switch (share.status) {
@@ -308,6 +485,47 @@ function App() {
                   <div><div className="label">External IP</div><div>{probeResult.external_ip ?? 'Unknown'}</div></div>
                 </div>
               )}
+            </section>
+
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <div className="panel-title">WebRTC connection</div>
+                  <div className="panel-sub">Use a peer ID to establish a direct DataChannel connection.</div>
+                </div>
+                <div className="panel-actions">
+                  <button className="ghost" onClick={() => navigator.clipboard.writeText(peerId || '')}>
+                    Copy my ID
+                  </button>
+                </div>
+              </div>
+              <div className="diag-grid">
+                <div>
+                  <div className="label">My Peer ID</div>
+                  <div>{peerId || 'Initializing…'}</div>
+                </div>
+                <div>
+                  <div className="label">Signaling state</div>
+                  <div>{connectionState}</div>
+                </div>
+                <div>
+                  <div className="label">DataChannel</div>
+                  <div>{isConnected ? 'Connected' : 'Idle'}</div>
+                </div>
+              </div>
+              <div className="panel-actions" style={{ marginTop: '12px' }}>
+                <input
+                  className="input"
+                  placeholder="Enter remote peer ID"
+                  value={remotePeerId}
+                  onChange={(event) => setRemotePeerId(event.target.value)}
+                />
+                <button className="primary" onClick={handleConnect}>
+                  {connectStatus === 'connecting' ? 'Connecting…' : 'Connect'}
+                </button>
+                <span className="row-sub">Status: {connectStatus}</span>
+              </div>
+              {connectError && <div className="alert error">{connectError}</div>}
             </section>
 
             <section className="panel">

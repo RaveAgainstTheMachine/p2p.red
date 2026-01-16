@@ -9,13 +9,15 @@
 ## Current State
 - Tauri desktop scaffold in monorepo; shared package alias wired.
 - NAT-PMP/UPnP consent-based probe implemented in Rust + UI.
+- Security hygiene: secure wipe command + UI, zeroize helper, release hardening (LTO/strip).
 - Desktop lint/build clean; Tailwind removed for now.
-- UI shell showing shares dashboard (mock data), download caps, approvals, presence, and NAT probe.
+- Native single-window UI: nav rail + top strip, tabbed panels (Dashboard, Approvals, Diagnostics, Settings).
+- ICE/relay diagnostics placeholders in UI (non-identifying).
 
 ## UI/UX Direction
-- Clean, modern card layout on dark background with subtle gradients and logo watermark.
-- Consistent typography (Inter/SF/Segoe stack), accent blue, status chips.
-- Sections: header (logo, status badges), create share wizard entry, connection assistance, active shares list, diagnostics, approvals.
+- Native desktop layout with nav rail and compact table views (no web-page feel).
+- Dark slate palette, subtle borders, system UI font stack (Segoe/SF).
+- Tabs for Dashboard, Approvals, Diagnostics, Settings; top strip for global actions.
 
 ## Features (Phased)
 ### Implementable Now (client-side, minimal backend)

@@ -4,11 +4,24 @@
 # Prevents service restart issues by proper container management
 # Includes cache-busting to ensure latest code is served
 
-set -e
+set -euo pipefail
+
+DEPLOY_ENV=${DEPLOY_ENV:-prod}
+SITE_URL=${SITE_URL:-""}
+
+if [ -z "$SITE_URL" ]; then
+    if [ "$DEPLOY_ENV" = "dev" ]; then
+        SITE_URL="http://localhost:5173"
+    else
+        SITE_URL="https://p2p.red"
+    fi
+fi
 
 APP_DIR="/opt/p2p-file-share"
 
 echo "🚀 Starting streamlined build & deploy..."
+echo "🧭 Deploy environment: $DEPLOY_ENV"
+echo "🌐 Site URL: $SITE_URL"
 
 # Generate build timestamp for cache busting
 BUILD_TIMESTAMP=$(date +%s)
@@ -97,7 +110,7 @@ echo "🔍 Verifying latest build is served..."
 sleep 2
 
 # Check if the new build hash appears in the served HTML
-SERVED_HASH=$(curl -s https://p2p.red/ | grep -oP 'index-\K[0-9]+(?=\.js)' | head -1 || echo "unknown")
+SERVED_HASH=$(curl -s "$SITE_URL" | grep -oP 'index-\K[0-9]+(?=\.js)' | head -1 || echo "unknown")
 echo "📡 Served hash: $SERVED_HASH"
 
 if [ "$BUILD_HASH" != "unknown" ] && [ "$SERVED_HASH" != "unknown" ]; then
@@ -120,6 +133,6 @@ echo "   - Nginx configured with no-cache headers"
 echo "   - Users should hard refresh: Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+R (Mac)"
 echo "   - Or clear browser cache for p2p.red"
 echo ""
-echo "🌐 Site: https://p2p.red"
+echo "🌐 Site: $SITE_URL"
 echo "📊 Status: docker-compose ps"
 echo "🔑 Build: $BUILD_HASH @ $BUILD_TIMESTAMP"

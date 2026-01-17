@@ -3,9 +3,14 @@
 # P2P File Share - Metadata API Deployment Script
 # Deploys PostgreSQL, Redis, and Metadata API server
 
-set -e
+set -euo pipefail
+
+DEPLOY_ENV=${DEPLOY_ENV:-prod}
+METADATA_HEALTH_URL=${METADATA_HEALTH_URL:-"http://localhost:3001/health"}
 
 echo "🚀 P2P Metadata API Deployment"
+echo "🧭 Deploy environment: $DEPLOY_ENV"
+echo "🩺 Metadata health URL: $METADATA_HEALTH_URL"
 echo "================================"
 
 # Check if .env file exists
@@ -47,7 +52,7 @@ echo "✅ Redis is healthy"
 # Check API server
 echo "🔍 Checking Metadata API..."
 sleep 5
-curl -f http://localhost:3001/health || {
+curl -f "$METADATA_HEALTH_URL" || {
     echo "❌ Metadata API is not responding"
     docker-compose -f docker-compose.metadata.yml logs metadata-api
     exit 1
@@ -68,5 +73,5 @@ echo "   - Stop services: docker-compose -f docker-compose.metadata.yml down"
 echo "   - Restart:      docker-compose -f docker-compose.metadata.yml restart"
 echo ""
 echo "🔍 Test the API:"
-echo "   curl http://localhost:3001/health"
+echo "   curl $METADATA_HEALTH_URL"
 echo ""

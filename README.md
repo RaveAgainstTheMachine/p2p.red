@@ -52,8 +52,18 @@ npm install
 npm run dev
 
 # Deploy to VPS
-./deploy.sh
+make deploy-all
 ```
+
+### Automation
+
+- Scripts and usage: [`automation/README.md`](automation/README.md)
+- Make targets:
+  - `make deploy-all`
+  - `make deploy-and-test`
+  - `make public-sync PUBLIC_REPO=/path/to/public-repo`
+- Public repo dry run:
+  - `PUBLIC_SYNC_DRY_RUN=1 make public-sync PUBLIC_REPO=/path/to/public-repo`
 
 ## 🌐 **Environments**
 

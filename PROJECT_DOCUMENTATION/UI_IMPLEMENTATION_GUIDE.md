@@ -286,7 +286,7 @@ function App() {
               <FeatureCard
                 icon={<Zap className="text-accent-400" size={32} />}
                 title="Lightning Fast"
-                description="Direct P2P transfers using QUIC protocol"
+                description="Direct P2P transfers using WebRTC DataChannels"
               />
               <FeatureCard
                 icon={<Lock className="text-green-400" size={32} />}
@@ -325,7 +325,7 @@ function Header() {
             <div className="w-10 h-10 bg-gradient-to-br from-primary-400 to-accent-400 rounded-xl flex items-center justify-center">
               <Shield className="text-white" size={24} />
             </div>
-            <h1 className="text-xl font-bold text-white">QUIC P2P Share</h1>
+            <h1 className="text-xl font-bold text-white">P2P File Share</h1>
           </div>
           
           <div className="flex items-center gap-4">
@@ -349,7 +349,7 @@ function Footer() {
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="text-white/60 text-sm">
-            © 2026 QUIC P2P Share. Privacy-first file sharing.
+            © 2026 P2P File Share. Privacy-first file sharing.
           </div>
           <div className="flex items-center gap-6 text-white/60 text-sm">
             <a href="#" className="hover:text-white transition-colors">Privacy</a>

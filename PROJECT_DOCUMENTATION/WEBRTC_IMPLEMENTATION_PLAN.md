@@ -2,7 +2,7 @@
 
 ## 📋 **PROJECT OVERVIEW**
 
-Building a **privacy-first P2P file sharing service** using WebRTC DataChannels. This replaces the failed QUIC/WebTransport approach with a working, browser-compatible solution.
+Building a **privacy-first P2P file sharing service** using WebRTC DataChannels and self-hosted PeerJS signaling.
 
 ## 🎯 **WEEKLY SCHEDULE**
 
@@ -85,9 +85,9 @@ Building a **privacy-first P2P file sharing service** using WebRTC DataChannels.
 - [ ] Battery efficiency improvements
 
 #### **Day 26-28: Deployment**
-- [ ] Set up Vercel/Netlify deployment
-- [ ] Configure custom domain
-- [ ] Test production deployment
+- [ ] Set up OVH VPS deployment (Docker + Nginx)
+- [ ] Configure domains + TLS
+- [ ] Test production deployment on VPS
 - [ ] User acceptance testing
 
 ## 🛠️ **TECHNICAL IMPLEMENTATION**

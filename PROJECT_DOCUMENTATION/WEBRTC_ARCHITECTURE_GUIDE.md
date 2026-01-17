@@ -72,9 +72,8 @@ This guide details the **100% working architecture** for browser-to-browser P2P 
 - **Crypto API**: Browser-native encryption
 
 ### **Signaling Options**
-- **PeerJS Cloud** (Free): 50 concurrent connections
-- **Self-hosted PeerJS** ($5/month): Unlimited connections
-- **Custom signaling** (Advanced): WebSocket-based
+- **Self-hosted PeerJS**: Default signaling service (VPS)
+- **Custom signaling**: WebSocket-based (advanced)
 
 ### **NAT Traversal**
 - **STUN Servers** (Free): Google, Mozilla public STUN
@@ -89,7 +88,7 @@ This guide details the **100% working architecture** for browser-to-browser P2P 
 - **Corporate Networks**: 40-60% success
 - **Overall**: ~70-80% success rate
 
-### **STUN + TURN (Premium Setup)**
+### **STUN + TURN (Full Setup)**
 - **Home Networks**: 95-98% success
 - **Mobile Networks**: 90-95% success
 - **Corporate Networks**: 80-90% success
@@ -280,26 +279,6 @@ File (Browser A) → AES-GCM Encrypt → WebRTC Transfer → AES-GCM Decrypt →
 - Mobile usability score > 90%
 - Error recovery success rate > 80%
 
-## 🔄 **ALTERNATIVE APPROACHES**
-
-### **Why Not WebTransport?**
-- Limited browser support (Chrome/Edge only)
-- Server-client only, not true P2P
-- More complex setup required
-- Still experimental in some aspects
-
-### **Why Not WebSockets?**
-- Server relay required (not P2P)
-- Higher latency than WebRTC
-- No built-in NAT traversal
-- TCP overhead vs UDP efficiency
-
-### **Why Not WebTorrent?**
-- Designed for swarming, not 1-to-1
-- More complex than needed
-- BitTorrent protocol overhead
-- Less control over UI/UX
-
 ## 💡 **KEY INSIGHTS**
 
 ### **WebRTC is the Answer**
@@ -310,7 +289,7 @@ File (Browser A) → AES-GCM Encrypt → WebRTC Transfer → AES-GCM Decrypt →
 
 ### **Simplicity Wins**
 - PeerJS abstracts WebRTC complexity
-- Static hosting eliminates server maintenance
+- VPS + Docker keeps the stack predictable
 - Direct transfers reduce infrastructure costs
 - Browser-native encryption is secure and fast
 

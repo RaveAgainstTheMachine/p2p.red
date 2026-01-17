@@ -12,29 +12,28 @@ Build a **working P2P file sharing system** with:
 - **Beautiful glassmorphism UI** with theme switching
 - **Production-ready implementation** (no experimental code)
 
-## 📚 **MANDATORY PRE-READING**
+## 📚 **REQUIRED READING**
 
-Before writing ANY code, you MUST read all documentation in `/PROJECT_DOCUMENTATION/` folder in this order:
+Before writing ANY code, read the current documentation in `/PROJECT_DOCUMENTATION/` in this order:
 
-1. **LESSONS_LEARNED.md** - Understand what failed and why
-2. **WEBRTC_ARCHITECTURE_GUIDE.md** - Study the P2P WebRTC solution
-3. **UI_THEME_DOCUMENTATION.md** - UI design specifications
-4. **UI_IMPLEMENTATION_GUIDE.md** - UI implementation guide
+1. **WEBRTC_ARCHITECTURE_GUIDE.md** - Study the P2P WebRTC solution
+2. **UI_THEME_DOCUMENTATION.md** - UI design specifications
+3. **UI_IMPLEMENTATION_GUIDE.md** - UI implementation guide
 
 ## 🏗️ **TECHNOLOGY STACK (NON-NEGOTIABLE)**
 
 ### **Frontend Client**
 - **Framework**: React + TypeScript
 - **P2P Transport**: WebRTC DataChannels via PeerJS
-- **Signaling**: PeerJS Cloud (free) or self-hosted PeerJS server
+- **Signaling**: Self-hosted PeerJS server (VPS)
 - **Encryption**: Browser-native AES-GCM
 - **UI**: Glassmorphism design with 11 themes
 - **Icons**: Lucide React
 
 ### **Deployment**
-- **Hosting**: Static (Vercel/Netlify/Cloudflare Pages)
-- **Signaling**: PeerJS Cloud (free) or optional self-hosted
-- **TURN**: Optional TURN server for 95%+ NAT traversal success
+- **Hosting**: OVH VPS + Docker + Nginx
+- **Signaling**: Self-hosted PeerJS server
+- **TURN**: Self-hosted TURN servers (coturn) for NAT traversal
 
 ### **Architecture Pattern**
 ```
@@ -87,7 +86,7 @@ Browser A (WebRTC) ←── Direct P2P Connection ──→ Browser B (WebRTC)
 - Optimize for mobile devices
 - Add accessibility features
 - Performance testing and optimization
-- Deploy to static hosting
+- Deploy to VPS (Docker + Nginx)
 
 ## ✅ **SUCCESS CRITERIA**
 
@@ -143,31 +142,16 @@ Browser A (WebRTC) ←── Direct P2P Connection ──→ Browser B (WebRTC)
 
 ## 🚀 **DEPLOYMENT STRATEGY**
 
-### **Free Option (Recommended for MVP)**
-- **Hosting**: Vercel/Netlify (free static hosting)
-- **Signaling**: PeerJS Cloud (free, 50 concurrent connections)
-- **STUN**: Google/Mozilla STUN servers (free)
-- **TURN**: Not included (70-80% success rate acceptable)
+- **Hosting**: OVH VPS with Docker + Nginx reverse proxy
+- **Signaling**: Self-hosted PeerJS container
+- **STUN**: Public STUN servers (e.g., Google/Mozilla) or self-hosted
+- **TURN**: Self-hosted coturn (two VPS instances for redundancy)
 
-### **Premium Option (For production)**
-- **Hosting**: Vercel Pro ($20/month)
-- **Signaling**: Self-hosted PeerJS server ($5/month VPS)
-- **STUN**: Self-hosted or public STUN
-- **TURN**: Coturn server ($5/month VPS)
+## 💰 **COST BREAKDOWN (REFERENCE)**
 
-## 💰 **COST BREAKDOWN**
-
-### **MVP (Free Tier)**
-- Hosting: $0/month
-- Signaling: $0/month
-- STUN/TURN: $0/month
-- **Total: $0/month**
-
-### **Production (Premium)**
-- Hosting: $20/month
-- Signaling: $5/month
-- TURN: $5/month
-- **Total: $30/month**
+- OVH VPS (web + signaling): $5–15/month
+- TURN VPS (x2): $5–15/month each
+- Domain + SSL: $10–15/year (SSL free via Let's Encrypt)
 
 ## 🎨 **UI REQUIREMENTS**
 

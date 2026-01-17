@@ -46,6 +46,20 @@ cloudbuild.yaml
 # Google Cloud
 .gcloudignore
 
+# Documentation (private/sensitive)
+PROJECT_DOCUMENTATION/INFRA_SETUP_PRIVATE.md
+PROJECT_DOCUMENTATION/PRIVATE/
+PROJECT_DOCUMENTATION/*_PRIVATE.md
+PROJECT_DOCUMENTATION/*_SENSITIVE.md
+PROJECT_DOCUMENTATION/INTERNAL_*.md
+**/MONETIZATION_STRATEGIES.md
+**/ADVERTISING_PLAN.md
+
 # Temporary files
 tmp/
 temp/
+
+# Sensitive configs/keys
+metadata-api/.env
+turnserver.conf
+p2p.red_ecdsa.pub

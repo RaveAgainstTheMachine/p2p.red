@@ -3,98 +3,98 @@
 Use this template to provide the details needed to set up dev/prod signaling, TURN, monitoring, and dashboards.
 
 ## 1) Access Details
-- Primary contact name: Steven Frost
-- Timezone: Americas/Toronto
-- Preferred maintenance window: 1am - 3am
+- Primary contact name: <fill>
+- Timezone: <fill>
+- Preferred maintenance window: <fill>
 
 ## 2) Servers (SSH)
 Fill in the details per host. Add extra notes as needed (custom SSH port, internal IP, etc.).
 
 ### PROD-SIGNAL-WEB (Production signaling + web)
-- Hostname/FQDN: p2pred01
-- Provider: OVH
-- Region: Beauharnois, QC
-- Public IP: 149.56.131.26
-- SSH Port: 22
-- SSH User: root
-- OS Version: Debian 12
-- Disk Size: 100GB
-- RAM: 12GB
-- Notes: currently developing on this server, will move dev to local dev vm.
+- Hostname/FQDN: <fill>
+- Provider: <fill>
+- Region: <fill>
+- Public IP: <fill>
+- SSH Port: <fill>
+- SSH User: <fill>
+- OS Version: <fill>
+- Disk Size: <fill>
+- RAM: <fill>
+- Notes: <fill>
 
 ### TURN-1 (Primary TURN)
-- Hostname/FQDN: turn1p2pred / turn1.p2p.red
-- Provider: InterServer
-- Region: New Jersey
-- Public IP: 163.245.208.229
-- SSH Port: 22
-- SSH User: root
-- OS Version: Debian 12
-- Disk Size: 160GB
-- RAM: 12GB
-- Notes: primary TURN
+- Hostname/FQDN: <fill>
+- Provider: <fill>
+- Region: <fill>
+- Public IP: <fill>
+- SSH Port: <fill>
+- SSH User: <fill>
+- OS Version: <fill>
+- Disk Size: <fill>
+- RAM: <fill>
+- Notes: <fill>
 
 ### TURN-2 (Secondary TURN)
-- Hostname/FQDN: turn2p2pred / turn2.p2p.red
-- Provider: InterServer
-- Region: New Jersey
-- Public IP: 163.245.208.141
-- SSH Port: 22
-- SSH User: root
-- OS Version: Debian 12
-- Disk Size: 160GB
-- RAM: 12GB
-- Notes: secondary TURN
+- Hostname/FQDN: <fill>
+- Provider: <fill>
+- Region: <fill>
+- Public IP: <fill>
+- SSH Port: <fill>
+- SSH User: <fill>
+- OS Version: <fill>
+- Disk Size: <fill>
+- RAM: <fill>
+- Notes: <fill>
 
 ### DEV (Local dev VM)
-- Hostname/FQDN: ubuntu2404dev
-- Provider: HomeLab Proxmox VE
-- Region: Repentigny, QC
-- Public IP: 184.145.229.164 (dynamic)
-- SSH Port: 22
-- SSH User: frosty or root
-- OS Version: Ubuntu 24.04
-- Disk Size: 160GB
-- RAM: 12GB
-- Notes: lan ip 10.10.10.77 dev-ssh.p2p.red
+- Hostname/FQDN: <fill>
+- Provider: <fill>
+- Region: <fill>
+- Public IP: <fill>
+- SSH Port: <fill>
+- SSH User: <fill>
+- OS Version: <fill>
+- Disk Size: <fill>
+- RAM: <fill>
+- Notes: <fill>
 
 ## 3) SSH Keys (add our public key, this key is from the ubuntu user on the dev vm)
 Paste the public key you want added to each host:
 
 ```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHLsqEbUZSn5Q/jUARiiwWE92eNc0aJEmC63He9wAnYp p2p-deploy
+<paste public key>
 ```
 
 Where should this key be added (roles):
-- [x] PROD-SIGNAL
-- [x] TURN-1
-- [x] TURN-2
+- [ ] PROD-SIGNAL
+- [ ] TURN-1
+- [ ] TURN-2
 - [ ] DEV
 
 ## 4) Domains / Subdomains (you will set DNS)
 Fill in desired hostnames:
 
 - Production web + signaling: 
-  - web: p2p.red
-  - signal: signal.p2p.red
+  - web: <fill>
+  - signal: <fill>
 - TURN:
-  - turn1: turn1.p2p.red
-  - turn2: turn2.p2p.red
+  - turn1: <fill>
+  - turn2: <fill>
 - Dev:
-  - dev web: dev.p2p.red
-  - dev signaling: dev-signal.p2p.red
-  - dev TURN (optional): dev-turn.p2p.red
+  - dev web: <fill>
+  - dev signaling: <fill>
+  - dev TURN (optional): <fill>
 
 ## 5) TLS / Certificates
-- Preferred email for Let’s Encrypt: admin@p2p.red
+- Preferred email for Let’s Encrypt: <fill>
 - Where should certs live (Nginx reverse proxy)?
-  - [x] PROD-SIGNAL
-  - [x] TURN-1
-  - [x] TURN-2
-  - [X] DEV (using existing nginxpm reverse proxy,No need for certs)
+  - [ ] PROD-SIGNAL
+  - [ ] TURN-1
+  - [ ] TURN-2
+  - [ ] DEV
 
 ## 6) Networking / Firewall (Must check and configure firewall on each host)
-- UFW enabled? (Y/N) Y
+- UFW enabled? (Y/N) <fill>
 - Open ports allowed: 
   - Web/Signal: 80, 443
   - TURN: 3478 (UDP/TCP), 5349 (TLS), + relay range:
@@ -113,9 +113,9 @@ Choose which you want:
 ## 8) Single Pane of Glass (One Portal)
 We can expose a single admin domain (e.g. `ops.p2p.red`) and route to dashboards.
 
-- Admin domain: ops.p2p.red
-- Auth method (Basic Auth / SSO / VPN-only): Basic Auth + VPN-only (wireguard preferred. Cloudflare tunnel an option. must be set up)
-- Allowed IPs (optional): 184.145.229.164 (dev vm, frosty-cachyos), 
+- Admin domain: <fill>
+- Auth method (Basic Auth / SSO / VPN-only): <fill>
+- Allowed IPs (optional): <fill>
 
 ## 9) Environment & Runtime (Must check and configure on each host)
 - Node version:
@@ -123,9 +123,9 @@ We can expose a single admin domain (e.g. `ops.p2p.red`) and route to dashboards
 - OS version (Ubuntu, etc):
 
 ## 10) Notes / Constraints
-- Any provider restrictions or compliance constraints? InterServer's connection is 10Gb/s per VPS but it's shared.
-- Backup requirements? Rotating backups daily. Keep our data for 7 days. No client data.
-- Preferred log retention? 7 days.
+- Any provider restrictions or compliance constraints? <fill>
+- Backup requirements? <fill>
+- Preferred log retention? <fill>
 
 ---
 

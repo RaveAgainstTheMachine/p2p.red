@@ -50,8 +50,8 @@
 - Enforce download caps/expiry server-side to survive restarts.
 - Ephemeral TURN credentials if moving off static creds (never stored in client binaries).
 
-### Future/Premium Hooks
-- Perma shares and higher limits/geo rules as gated features.
+### Future Enhancements
+- Perma shares and higher limits/geo rules.
 - Multi-share management with bulk actions across member shares.
 - Advanced rate limits and geoblocking policies.
 

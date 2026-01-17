@@ -9,7 +9,7 @@ This guide covers deploying the P2P File Share application on an OVH VPS with di
 ```
 ┌─────────────────┐
 │   OVH VPS       │
-│   p2p.red       │
+│   <domain>      │
 │                 │
 │ • Ubuntu Server │
 │ • Docker        │
@@ -21,7 +21,7 @@ This guide covers deploying the P2P File Share application on an OVH VPS with di
          │
     ┌────────┐
     │ Domain │
-    │ p2p.red│
+    │ <domain> │
     └────────┘
 ```
 
@@ -29,9 +29,9 @@ This guide covers deploying the P2P File Share application on an OVH VPS with di
 
 ### **Server Specs**
 - **Provider**: OVH
-- **Domain**: p2p.red
+- **Domain**: <domain>
 - **OS**: Ubuntu Server
-- **Access**: SSH (ubuntu@p2p.red)
+- **Access**: SSH (<user>@<host>)
 - **Security**: UFW firewall (port 22 only initially)
 
 ### **Software Stack**
@@ -66,7 +66,7 @@ p2p-file-share/
 
 ```bash
 # Connect to VPS
-ssh ubuntu@p2p.red
+ssh <user>@<host>
 
 # Update system
 sudo apt update && sudo apt upgrade -y
@@ -109,7 +109,7 @@ sudo ufw enable
 
 ```bash
 # Obtain SSL certificate
-sudo certbot --nginx -d p2p.red -d www.p2p.red
+sudo certbot --nginx -d <domain> -d www.<domain>
 
 # Setup auto-renewal
 sudo crontab -e
@@ -129,7 +129,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - PEERJS_HOST=p2p.red
+      - PEERJS_HOST=<domain>
       - PEERJS_PORT=443
       - PEERJS_PATH=/peerjs
     restart: unless-stopped
@@ -145,7 +145,7 @@ services:
       - "9000:9000"
     environment:
       - PEERJS_PORT=9000
-      - PEERJS_HOST=p2p.red
+      - PEERJS_HOST=<domain>
     restart: unless-stopped
 
   turnserver:
@@ -218,8 +218,8 @@ http {
     default_type  application/octet-stream;
 
     # SSL configuration
-    ssl_certificate /etc/letsencrypt/live/p2p.red/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/p2p.red/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/<domain>/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/<domain>/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512;
 
@@ -233,19 +233,19 @@ http {
 
     server {
         listen 80;
-        server_name p2p.red www.p2p.red;
+        server_name <domain> www.<domain>;
         return 301 https://$server_name$request_uri;
     }
 
     server {
         listen 443 ssl http2;
-        server_name p2p.red www.p2p.red;
+        server_name <domain> www.<domain>;
 
         # Security headers
         add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-XSS-Protection "1; mode=block" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss://p2p.red; font-src 'self'; object-src 'none';" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss://<domain>; font-src 'self'; object-src 'none';" always;
 
         # Main application
         location / {
@@ -310,11 +310,11 @@ listening-ip=0.0.0.0
 # Authentication
 use-auth-secret
 static-auth-secret=your-secret-key-here
-realm=p2p.red
+realm=<domain>
 
 # SSL certificates
-cert=/etc/letsencrypt/live/p2p.red/fullchain.pem
-pkey=/etc/letsencrypt/live/p2p.red/privkey.pem
+cert=/etc/letsencrypt/live/<domain>/fullchain.pem
+pkey=/etc/letsencrypt/live/<domain>/privkey.pem
 
 # Logging
 log-file=/var/log/turnserver.log
@@ -337,7 +337,7 @@ max-bps=64000
 
 set -e
 
-VPS_HOST="ubuntu@p2p.red"
+VPS_HOST="<user>@<host>"
 APP_DIR="/opt/p2p-file-share"
 
 echo "🚀 Deploying P2P File Share to VPS..."
@@ -384,7 +384,7 @@ ssh $VPS_HOST "
 rm deploy.tar.gz
 
 echo "✅ Deployment complete!"
-echo "🌐 https://p2p.red"
+echo "🌐 https://<domain>"
 ```
 
 ## 🔐 **Security Configuration**
@@ -395,10 +395,10 @@ echo "🌐 https://p2p.red"
 ssh-keygen -t ed25519 -C "p2p-deploy"
 
 # Copy key to VPS
-ssh-copy-id ubuntu@p2p.red
+ssh-copy-id <user>@<host>
 
 # Test connection
-ssh ubuntu@p2p.red
+ssh <user>@<host>
 ```
 
 ### **Application Security**
@@ -413,21 +413,21 @@ ssh ubuntu@p2p.red
 ### **Application Monitoring**
 ```bash
 # View logs
-ssh ubuntu@p2p.red "sudo docker-compose logs -f"
+ssh <user>@<host> "sudo docker-compose logs -f"
 
 # Check service status
-ssh ubuntu@p2p.red "sudo docker-compose ps"
+ssh <user>@<host> "sudo docker-compose ps"
 
 # System monitoring
-ssh ubuntu@p2p.red "htop"
-ssh ubuntu@p2p.red "df -h"
-ssh ubuntu@p2p.red "free -h"
+ssh <user>@<host> "htop"
+ssh <user>@<host> "df -h"
+ssh <user>@<host> "free -h"
 ```
 
 ### **Log Rotation**
 ```bash
 # Setup log rotation
-ssh ubuntu@p2p.red "
+ssh <user>@<host> "
 sudo tee /etc/logrotate.d/p2p-file-share << EOF
 /opt/p2p-file-share/logs/*.log {
     daily
@@ -461,7 +461,7 @@ EOF
 ### **Regular Tasks**
 ```bash
 # Update system packages
-ssh ubuntu@p2p.red "sudo apt update && sudo apt upgrade -y"
+ssh <user>@<host> "sudo apt update && sudo apt upgrade -y"
 
 # Update Docker containers
 ./deploy.sh
@@ -470,13 +470,13 @@ ssh ubuntu@p2p.red "sudo apt update && sudo apt upgrade -y"
 sudo certbot renew
 
 # Backup data
-ssh ubuntu@p2p.red "sudo tar -czf /backup/p2p-$(date +%Y%m%d).tar.gz /opt/p2p-file-share"
+ssh <user>@<host> "sudo tar -czf /backup/p2p-$(date +%Y%m%d).tar.gz /opt/p2p-file-share"
 ```
 
 ### **Backup Strategy**
 ```bash
 # Setup automated backups
-ssh ubuntu@p2p.red "
+ssh <user>@<host> "
 sudo crontab -e
 # Add: 0 2 * * * tar -czf /backup/p2p-$(date +\%Y\%m\%d).tar.gz /opt/p2p-file-share
 "
@@ -503,7 +503,7 @@ git pull origin main
 ### **Manual Deployment**
 ```bash
 # Connect to VPS
-ssh ubuntu@p2p.red
+ssh <user>@<host>
 
 # Navigate to app directory
 cd /opt/p2p-file-share

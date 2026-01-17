@@ -42,11 +42,11 @@ services:
 
   # Metadata API Server
   metadata-api:
-    build:
-      context: ./metadata-api
-      dockerfile: Dockerfile
+    image: ${METADATA_API_IMAGE:-p2p-metadata-api:latest}
     container_name: p2p-metadata-api
     restart: unless-stopped
+    env_file:
+      - ${METADATA_API_ENV_FILE:-./metadata-api/.env}
     depends_on:
       postgres:
         condition: service_healthy

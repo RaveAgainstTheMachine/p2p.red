@@ -109,6 +109,19 @@ Response:
 }
 ```
 
+### TURN Credentials
+
+**GET** `/api/turn-credentials`
+
+Response:
+```json
+{
+  "username": "1700000000:p2p",
+  "credential": "base64-hmac",
+  "ttl": 3600
+}
+```
+
 ## Performance Targets
 
 - **Read Latency**: <10ms (Redis cache hit)
@@ -138,19 +151,21 @@ CREATE TABLE short_links (
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | API server port | 3001 |
-| `POSTGRES_HOST` | PostgreSQL host | postgres |
-| `POSTGRES_PORT` | PostgreSQL port | 5432 |
-| `POSTGRES_DB` | Database name | p2p_metadata |
-| `POSTGRES_USER` | Database user | p2p_api_user |
-| `POSTGRES_PASSWORD` | Database password | (required) |
-| `REDIS_HOST` | Redis host | redis |
-| `REDIS_PORT` | Redis port | 6379 |
-| `LINK_EXPIRY_HOURS` | Link expiration time | 24 |
-| `CLEANUP_INTERVAL_MINUTES` | Cleanup job interval | 60 |
-| `RATE_LIMIT_MAX_REQUESTS` | Max requests per window | 100 |
+| Variable                 | Description                              | Default    |
+|--------------------------|------------------------------------------|------------|
+| `PORT`                   | API server port                           | 3001       |
+| `POSTGRES_HOST`          | PostgreSQL host                           | postgres   |
+| `POSTGRES_PORT`          | PostgreSQL port                           | 5432       |
+| `POSTGRES_DB`            | Database name                             | p2p_metadata |
+| `POSTGRES_USER`          | Database user                             | p2p_api_user |
+| `POSTGRES_PASSWORD`      | Database password                         | (required) |
+| `REDIS_HOST`             | Redis host                                | redis      |
+| `REDIS_PORT`             | Redis port                                | 6379       |
+| `LINK_EXPIRY_HOURS`      | Link expiration time                      | 24         |
+| `CLEANUP_INTERVAL_MINUTES` | Cleanup job interval                    | 60         |
+| `RATE_LIMIT_MAX_REQUESTS` | Max requests per window                  | 100        |
+| `TURN_SECRET`            | TURN REST HMAC secret (server-side only)  | (required) |
+| `TURN_TTL_SECONDS`       | TURN credential TTL in seconds            | 3600       |
 
 ## Monitoring
 

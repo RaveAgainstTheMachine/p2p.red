@@ -11,6 +11,17 @@ Current documentation for the WebRTC + PeerJS + VPS deployment stack.
 - **UI_IMPLEMENTATION_GUIDE.md** — UI implementation patterns (web).
 - **UI_THEME_DOCUMENTATION.md** — current UI theme and palette details.
 
+## Additional Docs (moved from repo root)
+- **ARCHITECTURE.md** — production architecture and scaling plan.
+- **SCALING-PLAN.md** — scaling notes and capacity planning.
+- **PROJECT_OVERVIEW.md** — high-level product summary.
+- **PRODUCTION_ZERO_DOWNTIME_PLAN.md** — blue/green deployment process.
+- **LARGE-FILE-TRANSFER.md** — large file transfer design notes.
+- **MALWARE_SCANNING_PLAN.md** — security scanning roadmap.
+- **MEMORY-OPTIMIZATION.md** — memory/streaming optimizations.
+- **LESSONS_DEP_UPGRADE.md** — dependency upgrade lessons.
+- **DESKTOP_APP_PROJECT_PLAN.md** — extended desktop app plan.
+
 ## Recommended Reading Order
 1) **WEBRTC_ARCHITECTURE_GUIDE.md**
 2) **INFRA_SETUP_TEMPLATE.md**

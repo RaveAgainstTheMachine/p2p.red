@@ -16,6 +16,10 @@
 - Repo cloned to `/opt/p2p-file-share` and ownership set to `<user>:<group>`.
 - Git pull done as `<user>` (credential helper set to store).
 - SSH reachability: `ssh -p <port> <user>@<ssh-host>` works.
+- Dev services running:
+  - Web (Vite) on 5173
+  - PeerJS on 5174 (Docker)
+  - TURN on 5175 (Docker)
 
 ## Code Updates Just Pushed
 - **Dev PeerJS env overrides** added so dev domains can configure PeerJS + API without code changes.
@@ -58,9 +62,26 @@
    ```
 
 ## Next Steps (Infra)
-- **Prod server**: audit and remove/disable TURN config from prod compose.
+- **Prod server**: TURN removal TBD (currently still running on prod).
 - **TURN-1/2**: deploy coturn with TLS and firewall rules.
 - **Ops stack**: Portainer CE, Uptime Kuma, Grafana/Prometheus/Loki, Netdata behind `ops.p2p.red` with VPN/Basicauth.
+
+## Prod Cleanup + Blue/Green Status
+- **Metadata server disabled** on prod:
+  - `metadata-server` service removed from `docker-compose.yml`
+  - `p2p-metadata-server` container stopped/removed (was unhealthy)
+  - Rich previews now served by metadata API (`/api/metadata/:key?html=true`)
+- **Dev artifacts removed** from prod:
+  - `dev.log`, `build-output.log`
+- **Blue/green assets synced to prod**:
+  - `docker-compose.blue-green.yml`
+  - `nginx.blue-green.conf`
+  - `automation/deploy-zero-downtime.sh`
+  - `automation/switch-upstream.sh`
+  - `PRODUCTION_ZERO_DOWNTIME_PLAN.md`
+- **Blue/green deployment executed**:
+  - Nginx upstream now points to `p2p-app-green`
+  - `p2p-app` (old) stopped/removed; green is now the only app container
 
 ## Automation (Build/Deploy + Public Sync)
 Decision: **implement now**. Automation scripts added to `automation/`:

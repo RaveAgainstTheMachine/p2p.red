@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Blue environment (current production)
+  app-blue:
+    image: ${APP_IMAGE_BLUE:-p2p-app-blue:latest}
+    container_name: p2p-app-blue
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PEERJS_HOST=p2p.red
+      - PEERJS_PORT=443
+      - PEERJS_PATH=/peerjs
+      - VITE_HOST=0.0.0.0
+      - HOST_CHECK_DISABLED=true
+    networks:
+      - p2p-network
+    labels:
+      - "version=blue"
+      - "traefik.enable=true"
+      - "traefik.http.routers.app-blue.rule=Host(`p2p.red`)"
+      - "traefik.http.routers.app-blue.entrypoints=websecure"
+
+  # Green environment (new deployment)
+  app-green:
+    image: ${APP_IMAGE_GREEN:-p2p-app-green:latest}
+    container_name: p2p-app-green
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PEERJS_HOST=p2p.red
+      - PEERJS_PORT=443
+      - PEERJS_PATH=/peerjs
+      - VITE_HOST=0.0.0.0
+      - HOST_CHECK_DISABLED=true
+    networks:
+      - p2p-network
+    labels:
+      - "version=green"
+      - "traefik.enable=true"
+      - "traefik.http.routers.app-green.rule=Host(`p2p.red`)"
+      - "traefik.http.routers.app-green.entrypoints=websecure"
+
+networks:
+  p2p-network:
+    driver: bridge

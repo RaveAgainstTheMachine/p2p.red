@@ -42,6 +42,7 @@ cloudbuild.yaml
 
 # Docker
 .dockerignore
+images/
 
 # Google Cloud
 .gcloudignore

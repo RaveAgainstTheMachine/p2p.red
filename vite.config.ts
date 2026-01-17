@@ -12,8 +12,8 @@ export default defineConfig({
           return `assets/${chunkInfo.name}-${Date.now()}.js`;
         },
         chunkFileNames: (chunkInfo) => {
-          const facadeModuleId = chunkInfo.facadeModuleId ? chunkInfo.facadeModuleId.replace(/\\/g, '_') : undefined;
-          return `assets/${facadeModuleId || chunkInfo.name}-${Date.now()}.js`;
+          const safeName = (chunkInfo.name || 'chunk').replace(/[^a-zA-Z0-9_-]/g, '_');
+          return `assets/${safeName}-${Date.now()}.js`;
         },
         assetFileNames: (assetInfo) => {
           const ext = assetInfo.name.split('.').pop() || 'bin';

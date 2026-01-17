@@ -980,15 +980,29 @@ export const useAdaptiveMultiStreamTransfer = () => {
           .filter(([_, state]) => !state.complete)
           .map(([id]) => id);
         if (missingShards.length > 0) return;
-        if (!useFileSystemAPI || !writableStream) return;
         finalizeStarted = true;
-        while (queuedOrInFlightBytes > 0 || inFlightWrites > 0 || writeQueue.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+
+        if (useFileSystemAPI && writableStream) {
+          while (queuedOrInFlightBytes > 0 || inFlightWrites > 0 || writeQueue.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+          await writableStream.close();
+          conn.send({ type: 'receiver_done', timestamp: Date.now() });
+          setIsTransferring(false);
+          resolve(new Blob([]));
+          return;
         }
-        await writableStream.close();
+
+        const orderedShardIds = Array.from(shardStates.keys()).sort((a, b) => a - b);
+        const blobParts = orderedShardIds.map((id) => {
+          const state = shardStates.get(id);
+          const buffer = shardBuffers.get(id);
+          if (!state || !buffer) return new ArrayBuffer(0);
+          return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + state.total) as ArrayBuffer;
+        });
         conn.send({ type: 'receiver_done', timestamp: Date.now() });
         setIsTransferring(false);
-        resolve(new Blob([]));
+        resolve(new Blob(blobParts, { type: 'application/octet-stream' }));
       };
       
       // Shard tracking with CRC32 verification and immediate writes
@@ -1001,6 +1015,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
         attemptId: number,
         offset: number // Shard offset in file
       }>();
+      const shardBuffers = new Map<number, Uint8Array>();
       
       let fileHandle: any = null;
       let writableStream: any = null;
@@ -1069,6 +1084,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
             if (useFileSystemAPI && writableStream) {
               const chunkOffset = shardState.offset + prevReceived;
               await enqueueWrite(chunkOffset, accepted);
+            } else {
+              let shardBuffer = shardBuffers.get(shardId);
+              if (!shardBuffer || shardBuffer.byteLength !== shardState.total) {
+                shardBuffer = new Uint8Array(shardState.total);
+                shardBuffers.set(shardId, shardBuffer);
+              }
+              shardBuffer.set(accepted, prevReceived);
             }
             
             // Shard complete? Verify CRC32
@@ -1158,6 +1180,14 @@ export const useAdaptiveMultiStreamTransfer = () => {
               console.log('⚠️ File System Access API failed, using RAM');
               useFileSystemAPI = false;
             }
+          }
+
+          if (!useFileSystemAPI) {
+            shardStates.forEach((state, id) => {
+              if (!shardBuffers.has(id)) {
+                shardBuffers.set(id, new Uint8Array(state.total));
+              }
+            });
           }
           
           // Wait for peerConnection to be ready before setting up handlers
@@ -1275,6 +1305,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
             state.total = data.size; // Update with actual shard size
             if (data.crc32) state.expectedCRC = data.crc32;
             state.offset = data.offset || state.offset;
+
+            if (!useFileSystemAPI) {
+              const existing = shardBuffers.get(data.shardId);
+              if (!existing || existing.byteLength !== state.total) {
+                shardBuffers.set(data.shardId, new Uint8Array(state.total));
+              }
+            }
 
             if (!state.complete && state.expectedCRC && state.received >= state.total) {
               verifyAndConfirmShard(data.shardId, state);

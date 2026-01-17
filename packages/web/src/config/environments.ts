@@ -51,12 +51,7 @@ export const environments: Record<string, EnvironmentConfig> = {
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { 
-            urls: 'turn:p2p.red:3478',
-            username: 'p2puser',
-            credential: 'p2ppass123'
-          }
+          { urls: 'stun:stun1.l.google.com:19302' }
         ],
         sdpSemantics: 'unified-plan'
       }

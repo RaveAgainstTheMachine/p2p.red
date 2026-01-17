@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
@@ -11,6 +12,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const TURN_TTL_SECONDS = parseInt(process.env.TURN_TTL_SECONDS, 10) || 3600;
 
 // ============================================================================
 // Database & Cache Configuration
@@ -144,9 +146,35 @@ function getCacheKey(shortKey) {
   return `link:${shortKey}`;
 }
 
+function buildTurnCredentials() {
+  if (!process.env.TURN_SECRET) {
+    throw new Error('TURN secret not configured');
+  }
+
+  const expiry = Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS;
+  const username = `${expiry}:p2p`;
+  const credential = crypto
+    .createHmac('sha1', process.env.TURN_SECRET)
+    .update(username)
+    .digest('base64');
+
+  return { username, credential, ttl: TURN_TTL_SECONDS };
+}
+
 // ============================================================================
 // API Endpoints
 // ============================================================================
+
+// TURN REST credentials (short-lived)
+app.get('/api/turn-credentials', (req, res) => {
+  try {
+    const credentials = buildTurnCredentials();
+    res.json(credentials);
+  } catch (error) {
+    console.error('Error generating TURN credentials:', error);
+    res.status(503).json({ error: 'TURN credentials unavailable' });
+  }
+});
 
 // Health check
 app.get('/health', async (req, res) => {

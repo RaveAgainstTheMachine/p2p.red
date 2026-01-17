@@ -46,10 +46,10 @@ A privacy-first, browser-to-browser file sharing service using WebRTC DataChanne
 # Clone and install
 git clone https://github.com/yourusername/p2p-file-share
 cd p2p-file-share
-npm install
+pnpm install
 
 # Run development server
-npm run dev
+pnpm dev -- --host 0.0.0.0 --port 5173
 
 # Deploy to VPS
 make deploy-all
@@ -61,26 +61,27 @@ make deploy-all
 - Make targets:
   - `make deploy-all`
   - `make deploy-and-test`
+  - `./automation/deploy-zero-downtime.sh` (blue/green)
   - `make public-sync PUBLIC_REPO=/path/to/public-repo`
 - Public repo dry run:
   - `PUBLIC_SYNC_DRY_RUN=1 make public-sync PUBLIC_REPO=/path/to/public-repo`
 
 ## 🌐 **Environments**
 
-| Environment | URL | Purpose | Cost |
-|-------------|-----|---------|------|
-| Development | localhost:5173 | Local development | Free |
-| Production | [p2p.red](https://p2p.red) | Live service | $5-15/month |
+| Environment | URL                        | Purpose            | Cost        |
+|-------------|----------------------------|--------------------|-------------|
+| Development | localhost:5173             | Local development  | Free        |
+| Production  | [p2p.red](https://p2p.red) | Live service       | $5-15/month |
 
 ## 📊 **Browser Support**
 
-| Browser | Support | Notes |
-|---------|---------|-------|
-| Chrome | ✅ Full | All versions |
-| Firefox | ✅ Full | All versions |
-| Safari | ✅ Full | All versions |
-| Edge | ✅ Full | All versions |
-| Mobile | ✅ Full | iOS Safari, Android Chrome |
+| Browser | Support | Notes                      |
+|---------|---------|----------------------------|
+| Chrome  | ✅ Full | All versions               |
+| Firefox | ✅ Full | All versions               |
+| Safari  | ✅ Full | All versions               |
+| Edge    | ✅ Full | All versions               |
+| Mobile  | ✅ Full | iOS Safari, Android Chrome |
 
 ## 🔐 **Privacy & Security**
 
@@ -101,24 +102,24 @@ make deploy-all
 
 ### Current (Single VPS)
 ```
-Sender Browser                                    Receiver Browser
-      │                                                  │
-      │ 1. Create short link                           │
-      ├──────────────────────────────────────────────► │
-      │    POST /api/metadata                           │
-      │    (peerId, fileName, fileSize)                 │
-      │                                                  │
-      │ 2. Share link: p2p.red#aB3xK9mP12345678        │
-      │ ──────────────────────────────────────────────► │
-      │                                                  │
-      │                                                  │ 3. Retrieve metadata
-      │                                                  ├──────────────────►
-      │                                                  │ GET /api/metadata/:key
-      │                                                  │
-      │ 4. Direct P2P WebRTC Connection (file data)    │
-      │ ◄═══════════════════════════════════════════► │
-      │         (No server relay - true P2P)            │
-      ▼                                                  ▼
+Sender Browser                               Receiver Browser
+      |                                             |
+      | 1. Create short link                        |
+      |-------------------------------------------> |
+      |    POST /api/metadata                       |
+      |    (peerId, fileName, fileSize)             |
+      |                                             |
+      | 2. Share link: p2p.red#aB3xK9mP12345678     |
+      |-------------------------------------------> |
+      |                                             |
+      |                                             | 3. Retrieve metadata
+      |                                             |-------------------->
+      |                                             | GET /api/metadata/:key
+      |                                             |
+      | 4. Direct P2P WebRTC Connection (file data) |
+      |<------------------------------------------->|
+      |        (No server relay - true P2P)         |
+      v                                             v
       
       Metadata API (PostgreSQL + Redis)
            │
@@ -128,7 +129,7 @@ Sender Browser                                    Receiver Browser
 ```
 
 ### Production Target (Multi-VPS)
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed scaling plan to thousands of concurrent users.
+See [ARCHITECTURE.md](PROJECT_DOCUMENTATION/ARCHITECTURE.md) for detailed scaling plan to thousands of concurrent users.
 
 ## 📁 **Project Structure**
 
@@ -195,7 +196,10 @@ sudo ufw enable
 ./deploy-metadata-api.sh
 
 # Deploy frontend and main services
-./quick-update.sh
+./deploy.sh
+
+# Zero-downtime blue/green deploy
+./automation/deploy-zero-downtime.sh
 ```
 
 ### Full Stack Deployment
@@ -209,7 +213,7 @@ docker exec -i p2p-postgres psql -U p2p_api_user -d p2p_metadata < metadata-api/
 
 # 3. Build and deploy frontend
 npm run build
-./quick-update.sh
+./deploy.sh
 ```
 
 ### Manual Deployment
@@ -285,7 +289,7 @@ docker exec -it p2p-redis redis-cli INFO stats
 - **Monitoring VPS**: $10-15/month
 - **Total**: $75-120/month (~$900-1,440/year)
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed scaling costs.
+See [ARCHITECTURE.md](PROJECT_DOCUMENTATION/ARCHITECTURE.md) for detailed scaling costs.
 
 ### Benefits
 - **Full control**: Complete server administration
@@ -302,7 +306,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed scaling costs.
 - `turnserver.conf` - TURN server settings
 - `metadata-api/.env` - API configuration
 - `deploy-metadata-api.sh` - Metadata stack deployment
-- `quick-update.sh` - Frontend deployment script
+- `deploy.sh` - Frontend deployment script
 
 ## 🤝 **Contributing**
 

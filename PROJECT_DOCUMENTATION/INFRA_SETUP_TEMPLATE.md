@@ -23,28 +23,28 @@ Fill in the details per host. Add extra notes as needed (custom SSH port, intern
 - Notes: <fill>
 
 ### TURN-1 (Primary TURN)
-- Hostname/FQDN: <fill>
+- Hostname/FQDN: turn1p2pred / turn1.p2p.red
 - Provider: <fill>
 - Region: <fill>
-- Public IP: <fill>
-- SSH Port: <fill>
-- SSH User: <fill>
-- OS Version: <fill>
-- Disk Size: <fill>
-- RAM: <fill>
-- Notes: <fill>
+- Public IP: 163.245.208.229
+- SSH Port: 22
+- SSH User: root
+- OS Version: Debian GNU/Linux 12 (bookworm)
+- Disk Size: 156G
+- RAM: 8GB
+- Notes: SSH key already added; TURN realm/secret = new
 
 ### TURN-2 (Secondary TURN)
-- Hostname/FQDN: <fill>
+- Hostname/FQDN: turn2p2pred / turn2.p2p.red
 - Provider: <fill>
 - Region: <fill>
-- Public IP: <fill>
-- SSH Port: <fill>
-- SSH User: <fill>
-- OS Version: <fill>
-- Disk Size: <fill>
-- RAM: <fill>
-- Notes: <fill>
+- Public IP: 163.245.208.141
+- SSH Port: 22
+- SSH User: root
+- OS Version: Debian GNU/Linux 12 (bookworm)
+- Disk Size: 156G
+- RAM: 8GB
+- Notes: SSH key already added; TURN realm/secret = new
 
 ### DEV (Local dev VM)
 - Hostname/FQDN: <fill>
@@ -86,7 +86,7 @@ Fill in desired hostnames:
   - dev TURN (optional): <fill>
 
 ## 5) TLS / Certificates
-- Preferred email for Let’s Encrypt: <fill>
+- Preferred email for Let’s Encrypt: admin@p2p.red
 - Where should certs live (Nginx reverse proxy)?
   - [ ] PROD-SIGNAL
   - [ ] TURN-1
@@ -99,7 +99,7 @@ Fill in desired hostnames:
   - Web/Signal: 80, 443
   - TURN: 3478 (UDP/TCP), 5349 (TLS), + relay range:
   - SSH: 22 (or custom)
-- Preferred TURN relay port range (e.g. 49152-65535):
+- Preferred TURN relay port range (e.g. 49152-65535): 49152-65535
 
 ## 7) Monitoring & Dashboards
 Choose which you want:

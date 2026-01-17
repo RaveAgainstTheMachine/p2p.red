@@ -240,7 +240,7 @@ const themes = {
 ### **Development**
 ```bash
 # Local development
-npm run dev
+pnpm dev -- --host 0.0.0.0 --port 5173
 
 # Testing
 npm run test

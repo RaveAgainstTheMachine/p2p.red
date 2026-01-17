@@ -1,6 +1,70 @@
 import { useState, useCallback, useRef } from 'react';
 import Peer, { DataConnection } from 'peerjs';
 
+const TURN_HOSTS = ['turn1.p2p.red', 'turn2.p2p.red'];
+const TURN_TCP_PORT = 3478;
+const TURN_TLS_PORT = 5349;
+const TURN_REALM = 'p2p.red';
+
+const shuffleArray = <T,>(items: T[]): T[] => {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+};
+
+const getApiBaseUrl = (): string => {
+  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env : undefined;
+  const metaUrl = metaEnv?.VITE_API_URL;
+  if (metaUrl) {
+    return metaUrl;
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return 'https://p2p.red';
+};
+
+const createTurnCredentials = async () => {
+  const baseUrl = getApiBaseUrl().replace(/\/$/, '');
+  const response = await fetch(`${baseUrl}/api/turn-credentials`, {
+    credentials: 'omit'
+  });
+
+  if (!response.ok) {
+    throw new Error(`TURN credentials request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data?.username || !data?.credential) {
+    throw new Error('TURN credentials response missing username or credential');
+  }
+
+  return { username: data.username, credential: data.credential };
+};
+
+const buildIceServers = (username: string, credential: string) => {
+  const turnHosts = shuffleArray(TURN_HOSTS);
+  const turnServers = turnHosts.flatMap((host) => [
+    { urls: `turn:${host}:${TURN_TCP_PORT}` },
+    { urls: `turn:${host}:${TURN_TCP_PORT}?transport=tcp` },
+    { urls: `turns:${host}:${TURN_TLS_PORT}` }
+  ]);
+
+  return [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    ...turnServers.map((server) => ({
+      ...server,
+      username,
+      credential,
+      realm: TURN_REALM
+    }))
+  ];
+};
+
 export const useWebRTC = () => {
   const [peer, setPeer] = useState<Peer | null>(null);
   const [peerId, setPeerId] = useState<string>('');
@@ -11,38 +75,34 @@ export const useWebRTC = () => {
   const peerRef = useRef<Peer | null>(null);
 
   const initializePeer = useCallback(() => {
-    // Simple static TURN credentials
-    const turnUsername = 'p2puser';
-    const turnCredential = 'p2ppass123';
+    let cleanup: (() => void) | undefined;
 
-    const newPeer = new Peer({
-      host: 'p2p.red',
-      port: 443,
-      path: '/peerjs',
-      secure: true,
-      config: {
-        iceServers: [
-          // Public STUN servers for NAT discovery
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          // Self-hosted TURN server with static credentials
-          { 
-            urls: 'turn:p2p.red:3478',
-            username: turnUsername,
-            credential: turnCredential
-          },
-          {
-            urls: 'turn:p2p.red:3478?transport=tcp',
-            username: turnUsername,
-            credential: turnCredential
-          }
-        ],
-        iceCandidatePoolSize: 10,
-        iceTransportPolicy: 'all',
-        bundlePolicy: 'max-bundle',
-        rtcpMuxPolicy: 'require'
+    const setupPeer = async () => {
+      let iceServers = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ];
+
+      try {
+        const { username, credential } = await createTurnCredentials();
+        iceServers = buildIceServers(username, credential);
+      } catch (error) {
+        console.warn('⚠️ TURN credentials unavailable, using STUN only.', error);
       }
-    });
+
+      const newPeer = new Peer({
+        host: 'p2p.red',
+        port: 443,
+        path: '/peerjs',
+        secure: true,
+        config: {
+          iceServers,
+          iceCandidatePoolSize: 10,
+          iceTransportPolicy: 'all',
+          bundlePolicy: 'max-bundle',
+          rtcpMuxPolicy: 'require'
+        }
+      });
 
       newPeer.on('open', (id) => {
         console.log('✅ Peer connected with ID:', id);
@@ -106,10 +166,17 @@ export const useWebRTC = () => {
       window.addEventListener('offline', handleOffline);
 
       // Cleanup
-      return () => {
+      cleanup = () => {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
       };
+    };
+
+    void setupPeer();
+
+    return () => {
+      cleanup?.();
+    };
   }, []);
 
   const handleConnection = useCallback((conn: DataConnection) => {

@@ -38,11 +38,11 @@ services:
 
   # Metadata API - Short link generation
   metadata-api:
-    build:
-      context: ./metadata-api
-      dockerfile: Dockerfile
+    image: ${METADATA_API_IMAGE:-p2p-metadata-api:latest}
     container_name: p2p-metadata-api
     restart: unless-stopped
+    env_file:
+      - ${METADATA_API_ENV_FILE:-./metadata-api/.env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,31 +74,9 @@ services:
       retries: 3
       start_period: 40s
 
-  # Metadata server - Rich link previews
-  metadata-server:
-    build:
-      context: .
-      dockerfile: Dockerfile.metadata-server
-    container_name: p2p-metadata-server
-    restart: unless-stopped
-    depends_on:
-      - metadata-api
-    environment:
-      - NODE_ENV=production
-      - METADATA_PORT=3002
-      - METADATA_API_URL=http://metadata-api:3001
-    networks:
-      - p2p-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
   # Frontend app (React)
   app:
-    build: .
+    image: ${APP_IMAGE:-p2p-app:latest}
     container_name: p2p-app
     restart: unless-stopped
     environment:
@@ -116,9 +94,7 @@ services:
 
   # PeerJS signaling server
   peerjs-server:
-    build:
-      context: .
-      dockerfile: Dockerfile.peerjs
+    image: ${PEERJS_IMAGE:-p2p-peerjs:latest}
     container_name: p2p-peerjs
     restart: unless-stopped
     environment:
@@ -127,34 +103,9 @@ services:
     networks:
       - p2p-network
 
-  # TURN server (NAT traversal)
-  turnserver:
-    image: coturn/coturn:latest
-    container_name: p2p-turn
-    restart: unless-stopped
-    network_mode: "host"
-    command:
-      - "-n"
-      - "--log-file=stdout"
-      - "--listening-port=3478"
-      - "--listening-ip=0.0.0.0"
-      - "--relay-ip=149.56.131.26"
-      - "--external-ip=149.56.131.26"
-      - "--realm=p2p.red"
-      - "--lt-cred-mech"
-      - "--user=p2puser:p2ppass123"
-      - "--no-tls"
-      - "--no-dtls"
-      - "--fingerprint"
-      - "--min-port=49152"
-      - "--max-port=65535"
-      - "-v"
-
   # Nginx reverse proxy
   nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile.nginx
+    image: ${NGINX_IMAGE:-p2p-nginx:latest}
     container_name: p2p-nginx
     restart: unless-stopped
     ports:
@@ -168,6 +119,7 @@ services:
       - metadata-api
     networks:
       - p2p-network
+      - p2p-bluegreen-network
 
 volumes:
   postgres_data:
@@ -178,3 +130,6 @@ volumes:
 networks:
   p2p-network:
     driver: bridge
+  p2p-bluegreen-network:
+    external: true
+    name: p2p-bluegreen_p2p-network

@@ -21,6 +21,10 @@
 - **Dev PeerJS env overrides** added so dev domains can configure PeerJS + API without code changes.
   - `src/config/environments.ts`
   - `packages/web/src/config/environments.ts`
+ - **Automation + CI + docs cleanup committed**:
+   - `e634de5` chore(automation): add deploy-and-test, env-aware deploys, dry-run sync, CI stub
+   - `95955d7` docs: consolidate infra and WebRTC guidance
+   - `8f7a6d1` chore: remove deprecated private status docs
 
 ## Next Steps (Dev)
 1) Create `.env` for dev web (suggested):

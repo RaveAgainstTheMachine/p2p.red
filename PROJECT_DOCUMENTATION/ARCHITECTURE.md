@@ -19,7 +19,7 @@
                  │  - PeerJS   :5174            │
                  │  - Metadata :3001            │
                  └──────────────────────────────┘
-
+      -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
                  ┌──────────────────────────────┐
                  │        p2p.red (prod)        │
                  │   Nginx (OVH VPS)            │
@@ -42,8 +42,8 @@
                 ┌──────────────┴──────────────┐
                 ▼                             ▼
       ┌──────────────────┐         ┌──────────────────┐
-      │ turn1.p2p.red     │         │ turn2.p2p.red     │
-      │ InterServer       │         │ InterServer       │
+      │ turn1.p2p.red    │         │ turn2.p2p.red    │
+      │ InterServer      │         │ InterServer      │
       └──────────────────┘         └──────────────────┘
 
                  ┌──────────────────────────────┐
@@ -92,9 +92,14 @@
                     ┌─────────────┴─────────────┐
                     ▼                           ▼
            ┌──────────────────┐        ┌──────────────────┐
-           │ turn1.p2p.red     │        │ turn2.p2p.red     │
-           │ InterServer       │        │ InterServer       │
+           │ turn1.p2p.red    │        │ turn2.p2p.red    │
+           │ InterServer      │        │ InterServer      │
            └──────────────────┘        └──────────────────┘
+
+                    ┌──────────────────────────────┐
+                    │    OpenBao + WG Bastion      │
+                    │      bao.p2p.red (OVH)       │
+                    └──────────────────────────────┘
 ```
 
 ### VPS Specifications & Costs
@@ -136,6 +141,12 @@
 - **Cost:** $10-15/month
 - **Purpose:** Metrics collection, alerting, dashboards
 - **Software:** Prometheus, Grafana, Alertmanager
+
+#### 6. OpenBao + WireGuard Bastion VPS
+- **Provider:** OVH
+- **Specs:** 2 vCPU, 4GB RAM, 40GB SSD
+- **Cost:** already provisioned (bao.p2p.red)
+- **Purpose:** Secrets management + secure SSH/WG hub
 
 ### Total Infrastructure Cost
 

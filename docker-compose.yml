@@ -6,10 +6,11 @@ services:
     image: postgres:16-alpine
     container_name: p2p-postgres
     restart: unless-stopped
+    env_file:
+      - /run/secrets/metadata.env
     environment:
       POSTGRES_DB: p2p_metadata
       POSTGRES_USER: p2p_api_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-P2P_Secure_Pass_2024!}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -43,6 +44,7 @@ services:
     restart: unless-stopped
     env_file:
       - ${METADATA_API_ENV_FILE:-./metadata-api/.env}
+      - /run/secrets/metadata.env
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,11 +53,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
+      METADATA_ENV_FILE: /run/secrets/metadata.env
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: p2p_metadata
       POSTGRES_USER: p2p_api_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-P2P_Secure_Pass_2024!}
       POSTGRES_MAX_CONNECTIONS: 20
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -73,6 +75,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    volumes:
+      - /run/secrets:/run/secrets:ro
 
   # Frontend app (React)
   app:

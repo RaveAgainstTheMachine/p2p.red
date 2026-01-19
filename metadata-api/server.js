@@ -8,7 +8,15 @@ const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
 const redis = require('redis');
 const bcrypt = require('bcryptjs');
-require('dotenv').config();
+const fs = require('fs');
+const dotenv = require('dotenv');
+
+const metadataEnvFile = process.env.METADATA_ENV_FILE || '/run/secrets/metadata.env';
+if (fs.existsSync(metadataEnvFile)) {
+  dotenv.config({ path: metadataEnvFile });
+} else {
+  dotenv.config();
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;

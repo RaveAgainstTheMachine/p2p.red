@@ -36,12 +36,18 @@
                                │
                                ▼
                  ┌──────────────────────────────┐
-                 │      TURN VPS Pool           │
-                 │   turn1/turn2 (InterServer)  │
-                 └──────────────────────────────┘
+                 │        TURN VPS Pool         │
+                 └─────────────┬────────────────┘
+                               │
+                ┌──────────────┴──────────────┐
+                ▼                             ▼
+      ┌──────────────────┐         ┌──────────────────┐
+      │ turn1.p2p.red     │         │ turn2.p2p.red     │
+      │ InterServer       │         │ InterServer       │
+      └──────────────────┘         └──────────────────┘
 
                  ┌──────────────────────────────┐
-                 │   bao.p2p.red (OVH)           │
+                 │   bao.p2p.red (OVH)          │
                  │  - OpenBao                   │
                  │  - WireGuard Bastion         │
                  └──────────────────────────────┘
@@ -81,8 +87,14 @@
                                   ▼
                     ┌──────────────────────────────┐
                     │        TURN VPS Pool         │
-                    │        turn1/turn2           │
-                    └──────────────────────────────┘
+                    └─────────────┬────────────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    ▼                           ▼
+           ┌──────────────────┐        ┌──────────────────┐
+           │ turn1.p2p.red     │        │ turn2.p2p.red     │
+           │ InterServer       │        │ InterServer       │
+           └──────────────────┘        └──────────────────┘
 ```
 
 ### VPS Specifications & Costs
@@ -162,6 +174,7 @@
 - **Capacity:** 50,000+ concurrent users
 - **Cost:** $500+/month (multiple OVH/InterServer nodes)
 - **Changes:**
+  - Kubernetes cluster (self-hosted)
   - More Web VPS (auto-scaling via scripts)
   - PostgreSQL replicas (self-hosted)
   - Redis cluster (self-hosted)

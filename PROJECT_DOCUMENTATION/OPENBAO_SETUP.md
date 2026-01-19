@@ -177,6 +177,43 @@ POSTGRES_PASSWORD=...
 TURN_SECRET=...
 ```
 
+## OpenBao Agent (service hosts)
+The agent container runs as the OpenBao image user (`uid=100`, `gid=1000`). The host paths must be readable/writable by that UID/GID or the agent will fail with `permission denied` when reading `/agent/role_id`.
+
+### Required paths
+- Config + AppRole files: `/var/lib/openbao-agent/`
+  - `agent.hcl`, `metadata.env.tpl`, `role_id`, `secret_id`
+- Output secrets (tmpfs): `/run/secrets/metadata.env`
+
+### Required ownership + permissions
+```bash
+sudo chown -R 100:1000 /var/lib/openbao-agent
+sudo chmod 750 /var/lib/openbao-agent
+sudo chmod 640 /var/lib/openbao-agent/agent.hcl /var/lib/openbao-agent/metadata.env.tpl \
+  /var/lib/openbao-agent/role_id /var/lib/openbao-agent/secret_id
+
+sudo chown 100:1000 /run/secrets
+sudo chmod 770 /run/secrets
+```
+
+### Systemd unit (dev/prod)
+Run the container with the matching UID/GID:
+```ini
+ExecStart=/usr/bin/docker run --rm --name openbao-agent \
+  --user 100:1000 \
+  -v /var/lib/openbao-agent:/agent:ro \
+  -v /run/secrets:/run/secrets \
+  -v /etc/ssl/certs:/etc/ssl/certs:ro \
+  openbao/openbao:latest agent -config=/agent/agent.hcl
+```
+
+### Troubleshooting
+- Error: `open /agent/role_id: permission denied`
+  - Fix ownership/mode using the commands above, then restart the unit.
+- Verify rendering:
+  - `sudo systemctl status openbao-agent.service --no-pager -l`
+  - Log should show: `rendered "/agent/metadata.env.tpl" => "/run/secrets/metadata.env"`
+
 ## Operations
 - Status: `docker exec -it openbao bao status`
 - Seal: `docker exec -it openbao bao operator seal`

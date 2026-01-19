@@ -7,27 +7,58 @@ set -euo pipefail
 
 DEPLOY_ENV=${DEPLOY_ENV:-prod}
 METADATA_HEALTH_URL=${METADATA_HEALTH_URL:-"http://localhost:3001/health"}
+SECRETS_ENV_FILE=${SECRETS_ENV_FILE:-"/run/secrets/metadata.env"}
 
 echo "🚀 P2P Metadata API Deployment"
 echo "🧭 Deploy environment: $DEPLOY_ENV"
 echo "🩺 Metadata health URL: $METADATA_HEALTH_URL"
 echo "================================"
 
-# Check if .env file exists
+# Ensure metadata-api/.env exists (non-secret defaults)
 if [ ! -f metadata-api/.env ]; then
-    echo "⚠️  Creating .env file from template..."
-    cp metadata-api/.env.example metadata-api/.env
-    echo "📝 Please edit metadata-api/.env with your configuration"
-    echo "   Especially set a secure POSTGRES_PASSWORD"
-    read -p "Press enter to continue after editing .env file..."
+    echo "⚠️  metadata-api/.env missing; creating non-secret defaults..."
+    mkdir -p metadata-api
+    cat > metadata-api/.env <<'EOF'
+# Metadata API Configuration - Non-secret defaults
+NODE_ENV=production
+PORT=3001
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_DB=p2p_metadata
+POSTGRES_USER=p2p_api_user
+POSTGRES_PASSWORD=
+POSTGRES_MAX_CONNECTIONS=20
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+LINK_EXPIRY_HOURS=24
+CLEANUP_INTERVAL_MINUTES=60
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX_REQUESTS=100
+CORS_ORIGIN=https://p2p.red
+TURN_SECRET=
+TURN_TTL_SECONDS=3600
+EOF
 fi
+
+if [ ! -s "$SECRETS_ENV_FILE" ]; then
+    echo "❌ Secrets env file missing: $SECRETS_ENV_FILE"
+    echo "   Ensure OpenBao Agent is running and writing metadata.env"
+    exit 1
+fi
+
+export METADATA_API_ENV_FILE="$SECRETS_ENV_FILE"
 
 # Build and start services
 echo "📦 Building Docker images..."
-docker-compose -f docker-compose.metadata.yml build
+docker compose --env-file "$SECRETS_ENV_FILE" -f docker-compose.metadata.yml build
+
+echo "🧹 Recreating metadata-api to avoid compose cache issues..."
+docker compose --env-file "$SECRETS_ENV_FILE" -f docker-compose.metadata.yml rm -f -s metadata-api || true
 
 echo "🚀 Starting services..."
-docker-compose -f docker-compose.metadata.yml up -d
+docker compose --env-file "$SECRETS_ENV_FILE" -f docker-compose.metadata.yml up -d --no-build postgres redis metadata-api
 
 # Wait for services to be healthy
 echo "⏳ Waiting for services to be healthy..."
@@ -35,7 +66,7 @@ sleep 10
 
 # Check PostgreSQL
 echo "🔍 Checking PostgreSQL..."
-docker-compose -f docker-compose.metadata.yml exec -T postgres pg_isready -U p2p_api_user -d p2p_metadata || {
+docker compose --env-file "$SECRETS_ENV_FILE" -f docker-compose.metadata.yml exec -T postgres pg_isready -U p2p_api_user -d p2p_metadata || {
     echo "❌ PostgreSQL is not ready"
     exit 1
 }
@@ -43,7 +74,7 @@ echo "✅ PostgreSQL is healthy"
 
 # Check Redis
 echo "🔍 Checking Redis..."
-docker-compose -f docker-compose.metadata.yml exec -T redis redis-cli ping || {
+docker compose --env-file "$SECRETS_ENV_FILE" -f docker-compose.metadata.yml exec -T redis redis-cli ping || {
     echo "❌ Redis is not ready"
     exit 1
 }
@@ -54,7 +85,7 @@ echo "🔍 Checking Metadata API..."
 sleep 5
 curl -f "$METADATA_HEALTH_URL" || {
     echo "❌ Metadata API is not responding"
-    docker-compose -f docker-compose.metadata.yml logs metadata-api
+    docker compose --env-file "$SECRETS_ENV_FILE" -f docker-compose.metadata.yml logs metadata-api
     exit 1
 }
 echo "✅ Metadata API is healthy"
@@ -68,9 +99,9 @@ echo "   - PostgreSQL:   localhost:5432"
 echo "   - Redis:        localhost:6379"
 echo ""
 echo "📝 Useful commands:"
-echo "   - View logs:    docker-compose -f docker-compose.metadata.yml logs -f"
-echo "   - Stop services: docker-compose -f docker-compose.metadata.yml down"
-echo "   - Restart:      docker-compose -f docker-compose.metadata.yml restart"
+echo "   - View logs:    docker compose -f docker-compose.metadata.yml logs -f"
+echo "   - Stop services: docker compose -f docker-compose.metadata.yml down"
+echo "   - Restart:      docker compose -f docker-compose.metadata.yml restart"
 echo ""
 echo "🔍 Test the API:"
 echo "   curl $METADATA_HEALTH_URL"

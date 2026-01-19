@@ -1,69 +1,101 @@
 # P2P File Share - Production Architecture
 
-## Current Status: Single VPS (Development/Testing)
+## Current Status: Dev + Prod (Active)
 
-**Reality Check:** We're running everything on one VPS. This is fine for testing and small-scale use (<100 concurrent users), but it's a single point of failure and won't scale to thousands of users.
+**Reality Check:** Prod runs on a single OVH VPS with separate TURN hosts. Dev runs on a LAN VM behind external NginxPM. This is stable for current testing but remains a single-point-of-failure on the prod VPS.
 
-## Production Architecture (Thousands of Concurrent Users)
+### Current Architecture Overview
+
+```
+                 ┌──────────────────────────────┐
+                 │        dev.p2p.red           │
+                 │   NginxPM (LAN, external)    │
+                 └─────────────┬────────────────┘
+                               │
+                               ▼
+                 ┌──────────────────────────────┐
+                 │      Dev VM (10.10.10.77)    │
+                 │  - Vite web :5173            │
+                 │  - PeerJS   :5174            │
+                 │  - Metadata :3001            │
+                 └──────────────────────────────┘
+
+                 ┌──────────────────────────────┐
+                 │        p2p.red (prod)        │
+                 │   Nginx (OVH VPS)            │
+                 └─────────────┬────────────────┘
+                               │
+                               ▼
+                 ┌──────────────────────────────┐
+                 │   p2pred01 (OVH)             │
+                 │  - Frontend                  │
+                 │  - PeerJS                    │
+                 │  - Metadata API              │
+                 │  - Postgres + Redis          │
+                 └─────────────┬────────────────┘
+                               │
+                               ▼
+                 ┌──────────────────────────────┐
+                 │      TURN VPS Pool           │
+                 │   turn1/turn2 (InterServer)  │
+                 └──────────────────────────────┘
+
+                 ┌──────────────────────────────┐
+                 │   bao.p2p.red (OVH)           │
+                 │  - OpenBao                   │
+                 │  - WireGuard Bastion         │
+                 └──────────────────────────────┘
+```
+
+## Planned Scaling Architecture (Multi-VPS)
 
 ### Infrastructure Overview
 
 ```
-                    ┌─────────────────────────────────┐
-                    │   CLOUDFLARE (CDN + DDoS)       │
-                    │   - Static asset caching        │
-                    │   - DDoS protection             │
-                    │   - DNS management              │
-                    └─────────────────────────────────┘
-                                    │
-                                    ▼
-                    ┌─────────────────────────────────┐
-                    │   LOAD BALANCER VPS             │
-                    │   - Nginx reverse proxy         │
-                    │   - SSL termination             │
-                    │   - Health checks               │
-                    │   - Rate limiting               │
-                    └─────────────────────────────────┘
-                                    │
-        ┌───────────────────────────┼───────────────────────────┐
-        ▼                           ▼                           ▼
-┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│   WEB VPS 1      │    │   WEB VPS 2      │    │   WEB VPS 3      │
-│   - Frontend     │    │   - Frontend     │    │   - Frontend     │
-│   - PeerJS       │    │   - PeerJS       │    │   - PeerJS       │
-│   - Node exporter│    │   - Node exporter│    │   - Node exporter│
-└──────────────────┘    └──────────────────┘    └──────────────────┘
-        │                           │                           │
-        └───────────────────────────┼───────────────────────────┘
-                                    ▼
-                    ┌─────────────────────────────────┐
-                    │   DATABASE VPS                  │
-                    │   - PostgreSQL (primary)        │
-                    │   - Redis (cache)               │
-                    │   - Metadata API                │
-                    └─────────────────────────────────┘
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-        ┌──────────────────┐            ┌──────────────────┐
-        │   TURN VPS       │            │   MONITORING VPS │
-        │   - coturn       │            │   - Prometheus   │
-        │   - STUN         │            │   - Grafana      │
-        └──────────────────┘            │   - Alertmanager │
-                                        └──────────────────┘
+                     ┌──────────────────────────────┐
+                     │        DNS + TLS             │
+                     │   (OVH VPS + Nginx)          │
+                     └─────────────┬────────────────┘
+                                   │
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │     Load Balancer VPS        │
+                    │  - Nginx reverse proxy       │
+                    │  - Health checks             │
+                    └─────────────┬────────────────┘
+          ┌───────────────────────┼───────────────────────┐
+          ▼                       ▼                       ▼
+┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+│   WEB VPS 1      │   │   WEB VPS 2      │   │   WEB VPS 3      │
+│ - Frontend       │   │ - Frontend       │   │ - Frontend       │
+│ - PeerJS         │   │ - PeerJS         │   │ - PeerJS         │
+└──────────────────┘   └──────────────────┘   └──────────────────┘
+          └───────────────────────┼───────────────────────┘
+                                  ▼
+                    ┌──────────────────────────────┐
+                    │     Database + Metadata      │
+                    │  - PostgreSQL                │
+                    │  - Redis                     │
+                    │  - Metadata API              │
+                    └─────────────┬────────────────┘
+                                  ▼
+                    ┌──────────────────────────────┐
+                    │        TURN VPS Pool         │
+                    │        turn1/turn2           │
+                    └──────────────────────────────┘
 ```
 
 ### VPS Specifications & Costs
 
 #### 1. Load Balancer VPS
-- **Provider:** OVH, Hetzner, or DigitalOcean
+- **Provider:** OVH
 - **Specs:** 1 vCPU, 2GB RAM, 20GB SSD
 - **Cost:** $5-10/month
 - **Purpose:** Single entry point, SSL termination, traffic distribution
 - **Software:** Nginx, Certbot, UFW
 
 #### 2. Web VPS x3 (Horizontal Scaling)
-- **Provider:** OVH, Hetzner, or DigitalOcean
+- **Provider:** OVH
 - **Specs:** 2 vCPU, 4GB RAM, 40GB SSD
 - **Cost:** $10-15/month each ($30-45 total)
 - **Capacity:** ~500-1,000 concurrent connections each
@@ -71,7 +103,7 @@
 - **Software:** Docker, Nginx, PeerJS server, Node.js
 
 #### 3. Database VPS
-- **Provider:** OVH, Hetzner (better I/O)
+- **Provider:** OVH
 - **Specs:** 4 vCPU, 8GB RAM, 80GB SSD
 - **Cost:** $20-30/month
 - **Purpose:** PostgreSQL, Redis, Metadata API
@@ -79,7 +111,7 @@
 - **Backup:** Daily automated backups to object storage
 
 #### 4. TURN Server VPS
-- **Provider:** Hetzner (better bandwidth)
+- **Provider:** InterServer (current TURN hosts)
 - **Specs:** 2 vCPU, 4GB RAM, 40GB SSD, **HIGH BANDWIDTH**
 - **Cost:** $10-20/month
 - **Purpose:** NAT traversal for P2P connections
@@ -87,7 +119,7 @@
 - **Note:** Bandwidth is critical here
 
 #### 5. Monitoring VPS
-- **Provider:** Any (low priority)
+- **Provider:** OVH (or existing host)
 - **Specs:** 2 vCPU, 4GB RAM, 40GB SSD
 - **Cost:** $10-15/month
 - **Purpose:** Metrics collection, alerting, dashboards
@@ -101,11 +133,11 @@
 
 ## Scaling Strategy
 
-### Phase 1: Single VPS (Current - Testing)
+### Phase 1: Current (Dev + Single Prod VPS)
 - **Capacity:** <100 concurrent users
-- **Cost:** $15/month
+- **Cost:** current OVH + TURN VPS costs
 - **Status:** ✅ Deployed
-- **Purpose:** Prove the concept works
+- **Purpose:** Prove the end-to-end P2P flow works
 
 ### Phase 2: Multi-VPS (Production Launch)
 - **Capacity:** 1,000-3,000 concurrent users
@@ -126,15 +158,14 @@
   - Redis cluster (3 nodes)
   - Multiple TURN servers
 
-### Phase 4: Enterprise Scale
+### Phase 4: High Scale (Self-Hosted)
 - **Capacity:** 50,000+ concurrent users
-- **Cost:** $500+/month
+- **Cost:** $500+/month (multiple OVH/InterServer nodes)
 - **Changes:**
-  - Kubernetes cluster
-  - Managed PostgreSQL (AWS RDS, etc.)
-  - Managed Redis (ElastiCache, etc.)
-  - CDN for all static assets
-  - Multi-region deployment
+  - More Web VPS (auto-scaling via scripts)
+  - PostgreSQL replicas (self-hosted)
+  - Redis cluster (self-hosted)
+  - More TURN VPS in multiple regions
 
 ## Performance Targets
 
@@ -183,7 +214,6 @@
 ### 4. Frontend Serving (Least Concern)
 **Problem:** Static asset delivery
 **Solution:**
-- Cloudflare CDN (free tier)
 - Nginx caching
 - Gzip/Brotli compression
 
@@ -278,20 +308,15 @@
 ### Step 6: Optimize & Scale
 - Tune database queries
 - Implement read replicas
-- Add CDN for static assets
 - Monitor and scale as needed
 
 ## Cost Optimization
 
 ### Free Tier Services
-- **Cloudflare:** CDN, DDoS protection, DNS
 - **Let's Encrypt:** SSL certificates
-- **GitHub:** Code repository, CI/CD
 
 ### Paid Services to Consider
-- **Managed PostgreSQL:** If database becomes bottleneck
-- **Managed Redis:** For distributed caching
-- **Object Storage:** Backups (S3, Backblaze B2)
+- **Object Storage:** Backups (self-hosted or provider with S3-compatible storage)
 
 ### When to Upgrade
 - CPU usage >70% sustained
@@ -300,18 +325,29 @@
 - Network bandwidth >80% of limit
 - API latency >100ms p95
 
-## Current Architecture (Single VPS)
+## Current Architecture (Dev + Prod)
 
 ### What's Running Now
 ```
-p2p.red VPS (OVH)
+prod (p2pred01, OVH)
 ├── Nginx (reverse proxy, SSL)
 ├── Frontend (React app)
 ├── PeerJS Server (WebRTC signaling)
-├── TURN Server (coturn)
+├── Metadata API (Node.js)
 ├── PostgreSQL (metadata storage)
-├── Redis (cache)
-└── Metadata API (Node.js)
+└── Redis (cache)
+
+turn1/turn2 (InterServer)
+└── coturn (STUN/TURN)
+
+bao.p2p.red (OVH)
+├── OpenBao (secrets)
+└── WireGuard hub + SSH bastion
+
+dev (LAN VM + NginxPM)
+├── Vite dev web (5173)
+├── PeerJS dev (5174)
+└── Metadata API dev (3001)
 ```
 
 ### Current Limitations

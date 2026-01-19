@@ -4,6 +4,8 @@
 Current documentation for the WebRTC + PeerJS + VPS deployment stack.
 
 ## Primary Docs
+- **INFRASTRUCTURE.md** — dev/prod infra, domains, IPs, WireGuard, OpenBao.
+- **BUILD_DEPLOY.md** — dev/prod build and deployment workflows.
 - **INFRA_SETUP_TEMPLATE.md** — authoritative infra intake (hosts, DNS, TLS, ports).
 - **VPS_DEPLOYMENT_GUIDE.md** — deployment guide (needs alignment with multi-host setup).
 - **WEBRTC_ARCHITECTURE_GUIDE.md** — WebRTC P2P architecture and security.
@@ -24,11 +26,13 @@ Current documentation for the WebRTC + PeerJS + VPS deployment stack.
 
 ## Recommended Reading Order
 1) **WEBRTC_ARCHITECTURE_GUIDE.md**
-2) **INFRA_SETUP_TEMPLATE.md**
-3) **VPS_DEPLOYMENT_GUIDE.md**
-4) **DESKTOP_APP_PLAN.md**
-5) **UI_IMPLEMENTATION_GUIDE.md**
-6) **UI_THEME_DOCUMENTATION.md**
+2) **INFRASTRUCTURE.md**
+3) **BUILD_DEPLOY.md**
+4) **INFRA_SETUP_TEMPLATE.md**
+5) **VPS_DEPLOYMENT_GUIDE.md**
+6) **DESKTOP_APP_PLAN.md**
+7) **UI_IMPLEMENTATION_GUIDE.md**
+8) **UI_THEME_DOCUMENTATION.md**
 
 ## Current Architecture Rules
 - WebRTC DataChannels only (true P2P).

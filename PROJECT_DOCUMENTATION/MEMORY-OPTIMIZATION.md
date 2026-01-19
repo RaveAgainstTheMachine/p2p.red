@@ -98,8 +98,8 @@ if (!fileHandle) {
 |---------|------------------------|-----------------|
 | Chrome 86+ | ✅ Full support | ✅ Yes |
 | Edge 86+ | ✅ Full support | ✅ Yes |
-| Firefox | ❌ Not yet | ❌ Falls back to memory |
-| Safari | ❌ Not yet | ❌ Falls back to memory |
+| Firefox | ❌ Not yet | ✅ IndexedDB + StreamSaver (no RAM blowup) |
+| Safari | ❌ Not yet | ⚠️ IndexedDB fallback, download at end |
 
 ---
 
@@ -191,7 +191,8 @@ File System Access denied, falling back to memory
 
 ### Browser Compatibility
 - **Chrome/Edge 86+:** Full streaming support
-- **Firefox/Safari:** Falls back to memory (limited by RAM)
+- **Firefox:** Uses IndexedDB shard cache + StreamSaver (no RAM blowup)
+- **Safari:** IndexedDB fallback, then download at end
 - **Mobile browsers:** Limited File System Access support
 
 ### User Experience
@@ -224,9 +225,9 @@ File System Access denied, falling back to memory
 ### Test 2: Fallback (Firefox)
 ```bash
 # Browser: Firefox (no File System Access API)
-# Expected: Automatic fallback to memory
-# Memory: Increases with file size
-# Result: ✅ Falls back gracefully
+# Expected: IndexedDB + StreamSaver
+# Memory: Should remain low
+# Result: ✅ No RAM blowup
 ```
 
 ### Test 3: User Denies Permission

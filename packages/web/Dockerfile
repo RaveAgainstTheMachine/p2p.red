@@ -11,6 +11,17 @@ COPY . ./packages/web/
 # Install pnpm
 RUN npm install -g pnpm
 
+# Build-time env for Vite
+ARG VITE_API_URL
+ARG VITE_PEERJS_HOST
+ARG VITE_PEERJS_PORT
+ARG VITE_PEERJS_SECURE
+
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_PEERJS_HOST=$VITE_PEERJS_HOST
+ENV VITE_PEERJS_PORT=$VITE_PEERJS_PORT
+ENV VITE_PEERJS_SECURE=$VITE_PEERJS_SECURE
+
 # Install dependencies from workspace root
 WORKDIR /app
 RUN pnpm install

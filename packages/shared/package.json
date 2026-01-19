@@ -5,6 +5,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
-    "peerjs": "^1.5.0"
+    "peerjs": "^1.5.0",
+    "streamsaver": "^2.0.6"
   }
 }

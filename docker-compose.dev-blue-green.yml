@@ -4,8 +4,13 @@ services:
   # Blue environment (current)
   app-blue:
     build: 
-      context: ./packages/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: packages/web/Dockerfile
+      args:
+        VITE_API_URL: https://dev.p2p.red
+        VITE_PEERJS_HOST: dev-signal.p2p.red
+        VITE_PEERJS_PORT: 443
+        VITE_PEERJS_SECURE: "true"
     container_name: p2p-app-blue
     restart: unless-stopped
     ports:
@@ -26,8 +31,13 @@ services:
   # Green environment (new deployment)
   app-green:
     build: 
-      context: ./packages/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: packages/web/Dockerfile
+      args:
+        VITE_API_URL: https://dev.p2p.red
+        VITE_PEERJS_HOST: dev-signal.p2p.red
+        VITE_PEERJS_PORT: 443
+        VITE_PEERJS_SECURE: "true"
     container_name: p2p-app-green
     restart: unless-stopped
     ports:

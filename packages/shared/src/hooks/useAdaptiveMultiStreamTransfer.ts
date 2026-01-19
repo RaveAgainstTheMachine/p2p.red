@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
 import { DataConnection } from 'peerjs';
+import streamSaver from 'streamsaver';
 import { MultiStreamOrchestrator } from '../utils/multiStreamOrchestrator';
+import { deleteShard, getShard, putShard } from '../utils/shardStore';
 
 interface AdaptiveTransferProgress {
   bytesTransferred: number;
@@ -38,6 +40,15 @@ interface ShardState {
   status: 'pending' | 'sending' | 'complete' | 'failed';
   channelId: number;
 }
+
+const MAX_INDEXEDDB_CACHE_BYTES = 512 * 1024 * 1024;
+const LOW_INDEXEDDB_CACHE_BYTES = 384 * 1024 * 1024;
+
+const supportsStreamSaver = () =>
+  typeof window !== 'undefined' &&
+  typeof window.WritableStream !== 'undefined' &&
+  typeof window.ReadableStream !== 'undefined' &&
+  'serviceWorker' in navigator;
 
 // Calculate optimal shard size based on network speed
 function calculateShardSize(speed: number): number {
@@ -893,6 +904,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let completeSignalReceived = false;
       let finalizeStarted = false;
 
+      let useStreamSaver = false;
+      let streamWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
+      let transferId = '';
+      let cachedShardBytes = 0;
+      let nextShardToWrite = 0;
+      const storedShardIds = new Set<number>();
+
       const MAX_WRITE_BUFFER_BYTES = 512 * 1024 * 1024;
       const HIGH_WATERMARK_BYTES = 384 * 1024 * 1024;
       const LOW_WATERMARK_BYTES = 256 * 1024 * 1024;
@@ -928,12 +946,40 @@ export const useAdaptiveMultiStreamTransfer = () => {
       };
 
       const maybeSendBackpressure = () => {
-        if (queuedOrInFlightBytes >= HIGH_WATERMARK_BYTES && receiverBackpressureLevel !== 'high') {
+        const cachedBytes = useFileSystemAPI ? queuedOrInFlightBytes : cachedShardBytes;
+        const highWatermark = useFileSystemAPI ? HIGH_WATERMARK_BYTES : MAX_INDEXEDDB_CACHE_BYTES;
+        const lowWatermark = useFileSystemAPI ? LOW_WATERMARK_BYTES : LOW_INDEXEDDB_CACHE_BYTES;
+
+        if (cachedBytes >= highWatermark && receiverBackpressureLevel !== 'high') {
           receiverBackpressureLevel = 'high';
-          conn.send({ type: 'receiver_backpressure', level: 'high', bytes: queuedOrInFlightBytes, timestamp: Date.now() });
-        } else if (queuedOrInFlightBytes <= LOW_WATERMARK_BYTES && receiverBackpressureLevel !== 'low') {
+          conn.send({ type: 'receiver_backpressure', level: 'high', bytes: cachedBytes, timestamp: Date.now() });
+        } else if (cachedBytes <= lowWatermark && receiverBackpressureLevel !== 'low') {
           receiverBackpressureLevel = 'low';
-          conn.send({ type: 'receiver_backpressure', level: 'low', bytes: queuedOrInFlightBytes, timestamp: Date.now() });
+          conn.send({ type: 'receiver_backpressure', level: 'low', bytes: cachedBytes, timestamp: Date.now() });
+        }
+      };
+
+      const flushStreamWriter = async () => {
+        if (!useStreamSaver || !streamWriter) return;
+        while (true) {
+          const state = shardStates.get(nextShardToWrite);
+          if (!state || !state.complete) break;
+          let data: ArrayBuffer | null = null;
+
+          const buffer = shardBuffers.get(nextShardToWrite);
+          if (buffer) {
+            data = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + state.total) as ArrayBuffer;
+            shardBuffers.delete(nextShardToWrite);
+            cachedShardBytes = Math.max(0, cachedShardBytes - state.total);
+          } else {
+            data = await getShard(transferId, nextShardToWrite);
+          }
+
+          if (!data) break;
+          await streamWriter.write(new Uint8Array(data));
+          await deleteShard(transferId, nextShardToWrite);
+          storedShardIds.delete(nextShardToWrite);
+          nextShardToWrite += 1;
         }
       };
 
@@ -980,15 +1026,37 @@ export const useAdaptiveMultiStreamTransfer = () => {
           .filter(([_, state]) => !state.complete)
           .map(([id]) => id);
         if (missingShards.length > 0) return;
-        if (!useFileSystemAPI || !writableStream) return;
         finalizeStarted = true;
-        while (queuedOrInFlightBytes > 0 || inFlightWrites > 0 || writeQueue.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+        if (useFileSystemAPI && writableStream) {
+          while (queuedOrInFlightBytes > 0 || inFlightWrites > 0 || writeQueue.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+          await writableStream.close();
+          conn.send({ type: 'receiver_done', timestamp: Date.now() });
+          setIsTransferring(false);
+          resolve(new Blob([]));
+          return;
         }
-        await writableStream.close();
+
+        if (useStreamSaver && streamWriter) {
+          await flushStreamWriter();
+          await streamWriter.close();
+          conn.send({ type: 'receiver_done', timestamp: Date.now() });
+          setIsTransferring(false);
+          resolve(new Blob([]));
+          return;
+        }
+
+        const orderedShardIds = Array.from(shardStates.keys()).sort((a, b) => a - b);
+        const blobParts = orderedShardIds.map((id) => {
+          const state = shardStates.get(id);
+          const buffer = shardBuffers.get(id);
+          if (!state || !buffer) return new ArrayBuffer(0);
+          return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + state.total) as ArrayBuffer;
+        });
         conn.send({ type: 'receiver_done', timestamp: Date.now() });
         setIsTransferring(false);
-        resolve(new Blob([]));
+        resolve(new Blob(blobParts, { type: 'application/octet-stream' }));
       };
       
       // Shard tracking with CRC32 verification and immediate writes
@@ -1001,6 +1069,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
         attemptId: number,
         offset: number // Shard offset in file
       }>();
+      const shardBuffers = new Map<number, Uint8Array>();
       
       let fileHandle: any = null;
       let writableStream: any = null;
@@ -1069,6 +1138,18 @@ export const useAdaptiveMultiStreamTransfer = () => {
             if (useFileSystemAPI && writableStream) {
               const chunkOffset = shardState.offset + prevReceived;
               await enqueueWrite(chunkOffset, accepted);
+            } else {
+              let shardBuffer = shardBuffers.get(shardId);
+              if (!shardBuffer || shardBuffer.byteLength !== shardState.total) {
+                if (shardBuffer) {
+                  cachedShardBytes = Math.max(0, cachedShardBytes - shardBuffer.byteLength);
+                }
+                shardBuffer = new Uint8Array(shardState.total);
+                shardBuffers.set(shardId, shardBuffer);
+                cachedShardBytes += shardState.total;
+                maybeSendBackpressure();
+              }
+              shardBuffer.set(accepted, prevReceived);
             }
             
             // Shard complete? Verify CRC32
@@ -1078,6 +1159,21 @@ export const useAdaptiveMultiStreamTransfer = () => {
               }
               console.log(`🔍 Shard ${shardId} complete: ${shardState.received}/${shardState.total} bytes, expectedCRC: ${shardState.expectedCRC}`);
               verifyAndConfirmShard(shardId, shardState);
+
+              if (useStreamSaver && streamWriter) {
+                if (!storedShardIds.has(shardId) && shardId !== nextShardToWrite) {
+                  const shardBuffer = shardBuffers.get(shardId);
+                  if (shardBuffer) {
+                    const data = shardBuffer.buffer.slice(shardBuffer.byteOffset, shardBuffer.byteOffset + shardState.total) as ArrayBuffer;
+                    await putShard(transferId, shardId, data);
+                    storedShardIds.add(shardId);
+                    shardBuffers.delete(shardId);
+                    cachedShardBytes = Math.max(0, cachedShardBytes - shardState.total);
+                  }
+                }
+
+                await flushStreamWriter();
+              }
             }
             
             // Note: Disk writes happen immediately per chunk (non-blocking)
@@ -1106,7 +1202,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
               adaptiveChunkSize: 256 * 1024,
               rttMs,
               candidateType,
-              receiverBackpressureLevel
+              receiverBackpressureLevel,
+              cachedShardBytes: useFileSystemAPI ? undefined : cachedShardBytes,
+              maxCachedShardBytes: useFileSystemAPI ? undefined : MAX_INDEXEDDB_CACHE_BYTES
             });
 
             await finalizeIfReady();
@@ -1125,6 +1223,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           shardCount = data.shardCount;
           chunkHeaderBytes = data.chunkHeaderBytes === 8 ? 8 : 4;
           metaResendAttempts = 0;
+          transferId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
           
           console.log(`📊 Expecting ${shardCount} shards of ${(shardSize/1024/1024).toFixed(0)}MB each`);
           
@@ -1158,6 +1257,29 @@ export const useAdaptiveMultiStreamTransfer = () => {
               console.log('⚠️ File System Access API failed, using RAM');
               useFileSystemAPI = false;
             }
+          }
+
+          if (!useFileSystemAPI && supportsStreamSaver()) {
+            try {
+              streamSaver.mitm = '/streamsaver/mitm.html';
+              const fileStream = streamSaver.createWriteStream(fileName, { size: fileSize });
+              streamWriter = fileStream.getWriter();
+              useStreamSaver = true;
+              console.log('✅ StreamSaver enabled for receiver');
+            } catch (error) {
+              console.warn('⚠️ StreamSaver init failed, using in-memory fallback', error);
+              useStreamSaver = false;
+              streamWriter = null;
+            }
+          }
+
+          if (!useFileSystemAPI && !useStreamSaver) {
+            shardStates.forEach((state, id) => {
+              if (!shardBuffers.has(id)) {
+                shardBuffers.set(id, new Uint8Array(state.total));
+                cachedShardBytes += state.total;
+              }
+            });
           }
           
           // Wait for peerConnection to be ready before setting up handlers
@@ -1252,33 +1374,44 @@ export const useAdaptiveMultiStreamTransfer = () => {
             timestamp: Date.now()
           });
         } else if (data.type === 'shard_start') {
-          // Initialize or update shard with expected CRC32 and actual size
-          if (!shardStates.has(data.shardId)) {
-            shardStates.set(data.shardId, { 
-              received: 0, 
-              total: data.size, 
-              complete: false, 
-              expectedCRC: data.crc32 || '', 
+          let state = shardStates.get(data.shardId);
+          if (!state) {
+            state = {
+              received: 0,
+              total: data.size,
+              complete: false,
+              expectedCRC: data.crc32 || '',
               currentCRC: 0xFFFFFFFF,
               attemptId: data.attemptId || 0,
               offset: data.offset || 0
-            });
+            };
+            shardStates.set(data.shardId, state);
           } else {
-            // Update existing shard with CRC and actual size (for retransmissions)
-            const state = shardStates.get(data.shardId)!;
             if (typeof data.attemptId === 'number' && data.attemptId !== state.attemptId) {
               state.attemptId = data.attemptId;
               state.received = 0;
               state.complete = false;
               state.currentCRC = 0xFFFFFFFF;
             }
-            state.total = data.size; // Update with actual shard size
+            state.total = data.size;
             if (data.crc32) state.expectedCRC = data.crc32;
             state.offset = data.offset || state.offset;
+          }
 
-            if (!state.complete && state.expectedCRC && state.received >= state.total) {
-              verifyAndConfirmShard(data.shardId, state);
+          if (!useFileSystemAPI && !useStreamSaver) {
+            const existing = shardBuffers.get(data.shardId);
+            if (!existing || existing.byteLength !== state.total) {
+              if (existing) {
+                cachedShardBytes = Math.max(0, cachedShardBytes - existing.byteLength);
+              }
+              shardBuffers.set(data.shardId, new Uint8Array(state.total));
+              cachedShardBytes += state.total;
+              maybeSendBackpressure();
             }
+          }
+
+          if (!state.complete && state.expectedCRC && state.received >= state.total) {
+            verifyAndConfirmShard(data.shardId, state);
           }
         } else if (data.type === 'multi_stream_complete') {
           console.log('✅ Transfer complete signal');

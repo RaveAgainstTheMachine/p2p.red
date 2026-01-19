@@ -207,6 +207,39 @@ EXPOSE 3000
 CMD ["npm", "start"]
 ```
 
+### **Auto-Restart on Reboot (Production Only)**
+All production services already use `restart: unless-stopped` in Compose, but Docker must also start on boot.
+
+```bash
+sudo systemctl enable docker
+```
+
+To ensure the production stack itself starts after reboot, create a systemd unit for the prod compose file (do **not** enable for dev stacks):
+
+```ini
+# /etc/systemd/system/p2p-prod.service
+[Unit]
+Description=P2P File Share (Production)
+After=docker.service
+Requires=docker.service
+
+[Service]
+WorkingDirectory=/opt/p2p-file-share
+ExecStart=/usr/bin/docker compose -f docker-compose.yml up -d
+ExecStop=/usr/bin/docker compose -f docker-compose.yml down
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable p2p-prod
+```
+
+**Dev services** should be started only when testing (no systemd unit enabled).
+
 ### **nginx.conf**
 ```nginx
 events {

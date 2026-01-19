@@ -101,6 +101,12 @@ sudo chmod 770 /run/secrets
 - Postgres (dev local): `5432`
 - Redis (dev local): `6379`
 
+**PVE firewall (dev VM) - open from LAN:**
+- `5173/tcp` (dev web)
+- `5174/tcp` (dev PeerJS)
+- `5175/tcp` (dev TURN optional)
+- `3001/tcp` (metadata API for NginxPM)
+
 ## Service Ports (Prod VPS)
 - Web: `443` (Nginx)
 - PeerJS: `443` (Nginx -> 9000)

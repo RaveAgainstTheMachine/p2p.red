@@ -67,3 +67,22 @@ Nginx routes `plausible.p2p.red` to the Plausible service and allows:
 - `docker compose ps | grep plausible`
 - Open `https://plausible.p2p.red`
 - Confirm `/run/secrets/plausible.env` exists
+
+## Admin Bootstrap (first-time)
+Create the initial admin user and site ownership. Store the password in Bitwarden.
+
+Create admin user (prod):
+```bash
+cd /opt/p2p-file-share
+docker exec -i p2p-plausible bin/plausible rpc \
+  "IO.inspect(Plausible.Auth.create_user(\"Admin\", \"admin@p2p.red\", \"<password>\"))"
+```
+
+Create site + membership (prod):
+```bash
+docker exec -i p2p-plausible-db psql -U plausible -d plausible -c \
+  "INSERT INTO sites (domain, timezone, public, locked, has_stats, imported_data, ingest_rate_limit_threshold, inserted_at, updated_at, domain_changed_from, domain_changed_at) VALUES ('p2p.red', 'UTC', false, false, false, NULL, 60, now(), now(), 'p2p.red', now()) ON CONFLICT (domain) DO NOTHING RETURNING id;"
+
+docker exec -i p2p-plausible-db psql -U plausible -d plausible -c \
+  "INSERT INTO site_memberships (user_id, site_id, role, inserted_at, updated_at) VALUES (1, 1, 'owner', now(), now()) ON CONFLICT DO NOTHING;"
+```

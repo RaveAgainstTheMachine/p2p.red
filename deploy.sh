@@ -57,19 +57,19 @@ fi
 
 # Stop services gracefully
 echo "🛑 Stopping services..."
-docker-compose down
+docker compose down
 
 # Remove old containers and images
 echo "🧹 Cleaning up old containers..."
-docker-compose rm -f || true
+docker compose rm -f || true
 
 # Rebuild only changed services
 echo "🔨 Building Docker images..."
-docker-compose build --no-cache nginx app
+docker compose build --no-cache nginx app
 
 # Start all services in correct order
 echo "🚀 Starting services..."
-docker-compose up -d
+docker compose up -d
 
 # Wait for services to be healthy
 echo "⏳ Waiting for services to start..."
@@ -77,29 +77,29 @@ sleep 10
 
 # Check service health
 echo "🔍 Checking service health..."
-docker-compose ps
+docker compose ps
 
 # Verify critical services
 echo "✅ Verifying critical services..."
 
 # Check nginx
-if ! docker-compose ps | grep -q "nginx.*Up"; then
+if ! docker compose ps | grep -q "nginx.*Up"; then
     echo "❌ Nginx failed to start"
-    docker-compose logs --tail=20 nginx
+    docker compose logs --tail=20 nginx
     exit 1
 fi
 
 # Check app
-if ! docker-compose ps | grep -q "app.*Up"; then
+if ! docker compose ps | grep -q "app.*Up"; then
     echo "❌ App failed to start"
-    docker-compose logs --tail=20 app
+    docker compose logs --tail=20 app
     exit 1
 fi
 
 # Check peerjs (check actual container name)
 if ! docker ps | grep -q "p2p-peerjs"; then
     echo "❌ PeerJS failed to start"
-    docker-compose logs --tail=20 peerjs-server
+    docker compose logs --tail=20 peerjs-server
     exit 1
 fi
 
@@ -134,5 +134,5 @@ echo "   - Users should hard refresh: Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+
 echo "   - Or clear browser cache for p2p.red"
 echo ""
 echo "🌐 Site: $SITE_URL"
-echo "📊 Status: docker-compose ps"
+echo "📊 Status: docker compose ps"
 echo "🔑 Build: $BUILD_HASH @ $BUILD_TIMESTAMP"

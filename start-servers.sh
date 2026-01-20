@@ -10,12 +10,12 @@ echo "===================================="
 
 # Stop existing services
 echo "🛑 Stopping existing services..."
-sudo docker-compose down 2>/dev/null || true
+sudo docker compose down 2>/dev/null || true
 sudo docker system prune -f 2>/dev/null || true
 
 # Start core services
 echo "🔧 Starting core services..."
-sudo docker-compose up -d
+sudo docker compose up -d
 
 # Wait for services to start
 echo "⏳ Waiting for services to start..."
@@ -87,7 +87,7 @@ sleep 5
 # Verify all services
 echo "🔍 Verifying all services..."
 echo "📊 Service Status:"
-sudo docker-compose ps
+sudo docker compose ps
 
 echo ""
 echo "🌐 Testing endpoints:"

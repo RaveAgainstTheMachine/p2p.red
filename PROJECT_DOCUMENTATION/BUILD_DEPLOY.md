@@ -58,6 +58,20 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 ## Prod Workflow (OVH VPS)
 
+### Signal Domain TLS (prod)
+`signal.p2p.red` has its own TLS cert and nginx server block (PeerJS only).
+Because the nginx container owns :80/:443, issue certs with a short nginx stop:
+```
+docker stop p2p-nginx
+sudo certbot certonly --standalone -d signal.p2p.red
+docker start p2p-nginx
+```
+Then reload nginx with the updated config (nginx.conf / nginx.blue-green.conf):
+```
+docker cp /opt/p2p-file-share/nginx.conf p2p-nginx:/etc/nginx/nginx.conf
+docker exec -i p2p-nginx nginx -t && docker exec -i p2p-nginx nginx -s reload
+```
+
 ## Zero-Downtime Readiness Checklist (Prod)
 - OpenBao Agent renders `/run/secrets/metadata.env` and file readable by service user.
 - Metadata API health check returns `healthy` locally (`http://localhost:3001/health`).
@@ -66,6 +80,18 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 - Blue/green services are built and start cleanly (`docker compose -f docker-compose.blue-green.yml up -d`).
 - Smoke test: open web app, create a share link, connect a second client, verify WebRTC connection.
 - Rollback plan verified (`automation/switch-upstream.sh`).
+
+### Recent Prod Findings (2026-01-20)
+- `/run/secrets/metadata.env` exists, but `p2p-metadata-api` container was **Exited**.
+- `curl http://localhost:3001/health` and `/api/turn-credentials` failed because the API was down.
+- Root cause is the metadata container not running; restart via:
+  `SECRETS_ENV_FILE=/run/secrets/metadata.env ./deploy-metadata-api.sh`
+- Upgraded Docker Compose to v2 on prod + dev (use `docker compose`, not `docker-compose`).
+- OpenBao Agent is enabled on prod and renders `/run/secrets/metadata.env` from Bao.
+- If Postgres auth fails after secrets updates, sync the DB user password to the Bao secret:
+  `PASS=$(sed -n 's/^POSTGRES_PASSWORD=//p' /run/secrets/metadata.env)`
+  `docker exec -i p2p-postgres psql -U p2p_api_user -d p2p_metadata -c "ALTER USER p2p_api_user WITH PASSWORD '$PASS';"`
+- TURN credentials require `METADATA_API_ENV_FILE=/run/secrets/metadata.env` so the app reads `TURN_SECRET` from the rendered file.
 
 ### 1) Deploy Metadata API (prod)
 ```

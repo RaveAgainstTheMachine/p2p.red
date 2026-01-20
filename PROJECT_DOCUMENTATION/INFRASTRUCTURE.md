@@ -133,6 +133,11 @@ sudo chmod 770 /run/secrets
 
 WireGuard hub: `bao.p2p.red` (WG `10.88.0.1`), all SSH access goes through the bastion.
 
+**SSH users + keys (dev VM):**
+- Bastion (`bao`): `debian@10.88.0.1` using `/home/frosty/.ssh/p2p_dev_key`
+- Prod (`prod`): `ubuntu@10.88.0.10` using `/home/frosty/.ssh/p2p_deploy`
+- TURN (`turn1/turn2`): `root@10.88.0.11/10.88.0.12` via bastion (key varies)
+
 | Host   | WG IP      | SSH Access |
 |--------|------------|------------|
 | cachyos| 10.88.0.2   | WG client |

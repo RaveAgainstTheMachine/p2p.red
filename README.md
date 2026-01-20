@@ -206,7 +206,7 @@ sudo ufw enable
 
 ```bash
 # 1. Deploy metadata services
-docker-compose -f docker-compose.metadata.yml up -d
+docker compose -f docker-compose.metadata.yml up -d
 
 # 2. Initialize database
 docker exec -i p2p-postgres psql -U p2p_api_user -d p2p_metadata < metadata-api/db/init.sql
@@ -226,7 +226,7 @@ npm run build
 scp -r dist/ ubuntu@p2p.red:/opt/p2p-file-share/
 
 # Restart services
-ssh ubuntu@p2p.red "cd /opt/p2p-file-share && sudo docker-compose restart"
+ssh ubuntu@p2p.red "cd /opt/p2p-file-share && sudo docker compose restart"
 ```
 
 ## 📊 **Monitoring & Logging**
@@ -234,12 +234,12 @@ ssh ubuntu@p2p.red "cd /opt/p2p-file-share && sudo docker-compose restart"
 ### Application Monitoring
 ```bash
 # View all logs
-docker-compose logs -f
-docker-compose -f docker-compose.metadata.yml logs -f
+docker compose logs -f
+docker compose -f docker-compose.metadata.yml logs -f
 
 # Check service status
-docker-compose ps
-docker-compose -f docker-compose.metadata.yml ps
+docker compose ps
+docker compose -f docker-compose.metadata.yml ps
 
 # Test metadata API
 curl http://localhost:3001/health

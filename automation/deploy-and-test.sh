@@ -38,15 +38,15 @@ if ! curl -fsS "$METADATA_HEALTH_URL" > /dev/null; then
   exit 1
 fi
 
-if ! docker-compose ps | grep -q "peerjs"; then
+if ! docker compose ps | grep -q "peerjs"; then
   echo "❌ PeerJS container not running"
-  docker-compose ps
+  docker compose ps
   exit 1
 fi
 
-if ! docker-compose ps | grep -q "nginx"; then
+if ! docker compose ps | grep -q "nginx"; then
   echo "❌ Nginx container not running"
-  docker-compose ps
+  docker compose ps
   exit 1
 fi
 

@@ -29,7 +29,6 @@ services:
     environment:
       POSTGRES_DB: plausible
       POSTGRES_USER: plausible
-      POSTGRES_PASSWORD: $${PLAUSIBLE_DB_PASSWORD}
     volumes:
       - plausible_db_data:/var/lib/postgresql/data
     networks:
@@ -61,7 +60,6 @@ services:
       - /run/secrets/plausible.env
     environment:
       BASE_URL: https://plausible.p2p.red
-      DATABASE_URL: postgres://plausible:$${PLAUSIBLE_DB_PASSWORD}@plausible-db:5432/plausible
       CLICKHOUSE_DATABASE_URL: http://plausible-events-db:8123/plausible_events
       DISABLE_AUTH_FOR_PRODUCTION: "false"
     networks:

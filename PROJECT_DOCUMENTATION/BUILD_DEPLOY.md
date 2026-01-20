@@ -92,6 +92,24 @@ docker cp /opt/p2p-file-share/nginx.conf p2p-nginx:/etc/nginx/nginx.conf
 docker exec -i p2p-nginx nginx -t && docker exec -i p2p-nginx nginx -s reload
 ```
 
+Initial Plausible DB bootstrap (first-time only):
+```
+cd /opt/p2p-file-share
+docker exec -i p2p-plausible-events-db clickhouse-client --query="CREATE DATABASE IF NOT EXISTS plausible_events"
+
+docker run --rm --env-file /run/secrets/plausible.env \
+  -e BASE_URL=https://plausible.p2p.red \
+  -e CLICKHOUSE_DATABASE_URL=http://plausible-events-db:8123/plausible_events \
+  --network p2p-file-share_p2p-network \
+  plausible/analytics:latest bin/plausible eval "Plausible.Release.createdb"
+
+docker run --rm --env-file /run/secrets/plausible.env \
+  -e BASE_URL=https://plausible.p2p.red \
+  -e CLICKHOUSE_DATABASE_URL=http://plausible-events-db:8123/plausible_events \
+  --network p2p-file-share_p2p-network \
+  plausible/analytics:latest bin/plausible eval "Plausible.Release.migrate"
+```
+
 ## Zero-Downtime Readiness Checklist (Prod)
 - OpenBao Agent renders `/run/secrets/metadata.env` and file readable by service user.
 - Metadata API health check returns `healthy` locally (`http://localhost:3001/health`).

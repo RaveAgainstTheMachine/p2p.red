@@ -58,6 +58,15 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 ## Prod Workflow (OVH VPS)
 
+## Zero-Downtime Readiness Checklist (Prod)
+- OpenBao Agent renders `/run/secrets/metadata.env` and file readable by service user.
+- Metadata API health check returns `healthy` locally (`http://localhost:3001/health`).
+- TURN credentials endpoint returns `200` locally (`http://localhost:3001/api/turn-credentials`).
+- Nginx routes (`p2p.red`, `signal.p2p.red`) point to the correct upstreams.
+- Blue/green services are built and start cleanly (`docker compose -f docker-compose.blue-green.yml up -d`).
+- Smoke test: open web app, create a share link, connect a second client, verify WebRTC connection.
+- Rollback plan verified (`automation/switch-upstream.sh`).
+
 ### 1) Deploy Metadata API (prod)
 ```
 SECRETS_ENV_FILE=/run/secrets/metadata.env ./deploy-metadata-api.sh
@@ -77,10 +86,14 @@ curl http://localhost:3001/health
 ./automation/deploy-zero-downtime.sh
 ```
 
-## Verification Checklist
+## Verification Checklist (dev)
 - Metadata API health returns `healthy`.
 - Web loads and PeerJS connects.
 - Dev routes are served via NginxPM (not prod nginx).
+
+## Verification Checklist (prod)
+- Metadata API health returns `healthy`.
+- Web loads and PeerJS connects.
 - Prod routes are served via VPS nginx.
 
 ## Rollback (Prod)

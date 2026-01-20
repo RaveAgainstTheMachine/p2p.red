@@ -97,6 +97,7 @@ docker exec -i p2p-nginx nginx -t && docker exec -i p2p-nginx nginx -s reload
 ```
 SECRETS_ENV_FILE=/run/secrets/metadata.env ./deploy-metadata-api.sh
 ```
+Ports are bound to localhost only (`127.0.0.1:3001/5432/6379`). Use SSH tunnel for remote access.
 Health check:
 ```
 curl http://localhost:3001/health

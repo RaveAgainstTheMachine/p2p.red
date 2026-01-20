@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U p2p_api_user -d p2p_metadata"]
       interval: 10s
@@ -31,7 +31,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -46,7 +46,7 @@ services:
     container_name: p2p-metadata-api
     restart: unless-stopped
     env_file:
-      - ${METADATA_API_ENV_FILE:-./metadata-api/.env}
+      - ${METADATA_API_ENV_FILE:-/run/secrets/metadata.env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,7 +70,7 @@ services:
       RATE_LIMIT_MAX_REQUESTS: 100
       CORS_ORIGIN: ${CORS_ORIGIN:-https://p2p.red}
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     networks:
       - p2p-network
     healthcheck:

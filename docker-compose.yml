@@ -21,6 +21,54 @@ services:
     networks:
       - p2p-network
 
+  # Plausible Analytics - Postgres
+  plausible-db:
+    image: postgres:16-alpine
+    container_name: p2p-plausible-db
+    restart: unless-stopped
+    env_file:
+      - /run/secrets/plausible.env
+    environment:
+      POSTGRES_DB: plausible
+      POSTGRES_USER: plausible
+      POSTGRES_PASSWORD: $${PLAUSIBLE_DB_PASSWORD}
+    volumes:
+      - plausible_db_data:/var/lib/postgresql/data
+    networks:
+      - p2p-network
+
+  # Plausible Analytics - ClickHouse
+  plausible-events-db:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    container_name: p2p-plausible-events-db
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - plausible_events_data:/var/lib/clickhouse
+    networks:
+      - p2p-network
+
+  # Plausible Analytics - App
+  plausible:
+    image: plausible/analytics:latest
+    container_name: p2p-plausible
+    restart: unless-stopped
+    depends_on:
+      - plausible-db
+      - plausible-events-db
+    env_file:
+      - /run/secrets/plausible.env
+    environment:
+      BASE_URL: https://plausible.p2p.red
+      DATABASE_URL: postgres://plausible:$${PLAUSIBLE_DB_PASSWORD}@plausible-db:5432/plausible
+      CLICKHOUSE_DATABASE_URL: http://plausible-events-db:8123/plausible_events
+      DISABLE_AUTH_FOR_PRODUCTION: "false"
+    networks:
+      - p2p-network
+
   # Redis - Metadata cache
   redis:
     image: redis:7-alpine
@@ -129,6 +177,10 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  plausible_db_data:
+    driver: local
+  plausible_events_data:
     driver: local
 
 networks:

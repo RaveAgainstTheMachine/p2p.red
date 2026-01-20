@@ -76,7 +76,7 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
               </p>
               <ul className="list-disc list-inside space-y-2 ml-4">
                 <li><strong>No Cookies:</strong> We use only localStorage for essential functionality (consent preferences, link expiry)</li>
-                <li><strong>No Tracking:</strong> No analytics, no third-party scripts, no user tracking</li>
+                <li><strong>Privacy-first Analytics:</strong> Self-hosted, cookie-free Plausible for anonymous pageview counts (no cross-site tracking)</li>
                 <li><strong>True P2P:</strong> Files transferred directly between browsers, never stored on servers</li>
                 <li><strong>Minimal Data:</strong> Only metadata (filename, size, peer IDs) temporarily stored for 24 hours</li>
                 <li><strong>Automatic Deletion:</strong> All metadata automatically deleted after 24 hours</li>

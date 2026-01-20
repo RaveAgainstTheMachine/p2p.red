@@ -29,7 +29,7 @@ export const CookieBanner: React.FC = () => {
         <div className="flex-1 text-sm text-white/80">
           <p className="mb-2">
             <strong className="text-white">Privacy Notice:</strong> We use minimal localStorage for functionality only (link expiry, consent preferences). 
-            No cookies, no tracking, no analytics. Your files never touch our servers.
+            We also use self-hosted, cookie-free Plausible analytics for anonymous pageview counts. Your files never touch our servers.
           </p>
           <p className="text-xs text-white/60">
             GDPR & Canada/Quebec compliant. Data retention: 24 hours max. No user-identifiable information stored.

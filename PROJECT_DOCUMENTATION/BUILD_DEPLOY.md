@@ -72,6 +72,26 @@ docker cp /opt/p2p-file-share/nginx.conf p2p-nginx:/etc/nginx/nginx.conf
 docker exec -i p2p-nginx nginx -t && docker exec -i p2p-nginx nginx -s reload
 ```
 
+### Plausible Analytics (prod)
+Plausible is self-hosted on the prod VPS and exposed via `plausible.p2p.red`.
+
+Required env vars (docker-compose.yml):
+- `PLAUSIBLE_DB_PASSWORD`
+- `PLAUSIBLE_SECRET_KEY_BASE`
+
+Issue TLS certs:
+```
+docker stop p2p-nginx
+sudo certbot certonly --standalone -d plausible.p2p.red
+docker start p2p-nginx
+```
+
+Reload nginx after certs/config updates:
+```
+docker cp /opt/p2p-file-share/nginx.conf p2p-nginx:/etc/nginx/nginx.conf
+docker exec -i p2p-nginx nginx -t && docker exec -i p2p-nginx nginx -s reload
+```
+
 ## Zero-Downtime Readiness Checklist (Prod)
 - OpenBao Agent renders `/run/secrets/metadata.env` and file readable by service user.
 - Metadata API health check returns `healthy` locally (`http://localhost:3001/health`).

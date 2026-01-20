@@ -122,6 +122,7 @@ sudo chmod 770 /run/secrets
 - Signal: `signal.p2p.red`
 - TURN: `turn1.p2p.red`, `turn2.p2p.red`
 - OpenBao: `bao.p2p.red`
+- Analytics: `plausible.p2p.red`
 
 **Development**
 - Web: `dev.p2p.red`
@@ -137,6 +138,13 @@ WireGuard hub: `bao.p2p.red` (WG `10.88.0.1`), all SSH access goes through the b
 - Bastion (`bao`): `debian@10.88.0.1` using `/home/frosty/.ssh/p2p_dev_key`
 - Prod (`prod`): `ubuntu@10.88.0.10` using `/home/frosty/.ssh/p2p_deploy`
 - TURN (`turn1/turn2`): `p2padmin@10.88.0.11/10.88.0.12` via bastion using `/home/frosty/.ssh/p2p_dev_key` (sudo enabled)
+
+**ProxyJump example (prod via bastion):**
+```
+ssh -i /home/frosty/.ssh/p2p_deploy \
+  -o "ProxyCommand=ssh -i /home/frosty/.ssh/p2p_dev_key -W %h:%p debian@10.88.0.1" \
+  ubuntu@10.88.0.10
+```
 
 | Host   | WG IP      | SSH Access |
 |--------|------------|------------|

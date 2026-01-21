@@ -27,40 +27,39 @@ export const Info: React.FC<InfoProps> = ({ onBack }) => {
             <section>
               <h2 className="text-xl font-semibold text-white mb-3">Direct Browser-to-Browser Transfer</h2>
               <p className="leading-relaxed">
-                Files transfer directly between browsers using WebRTC. No uploads to servers, no middleman. 
-                Your file goes straight from you to the recipient.
+                Files move over WebRTC DataChannels between browsers. There is no server relay of file data.
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-3">Privacy</h2>
+              <h2 className="text-xl font-semibold text-white mb-3">Privacy + Encryption</h2>
               <p className="leading-relaxed mb-2">
-                We don't store your files. Ever. The connection is encrypted end-to-end by default.
+                Files are encrypted in your browser with AES-GCM before transfer. We never store file contents.
               </p>
               <p className="text-sm text-white/60">
-                We temporarily store filename, size, and connection IDs for 24 hours to help browsers find each other.
+                We temporarily store minimal metadata (filename, size, peer IDs) for up to 24 hours to help peers connect.
               </p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold text-white mb-3">Usage</h2>
-              <p className="leading-relaxed mb-3"><strong>Sending:</strong> Drop files, optionally add a PIN, create link, share it. Keep the page open.</p>
-              <p className="leading-relaxed"><strong>Receiving:</strong> Open link, enter PIN if needed, download. Both users must be online.</p>
+              <p className="leading-relaxed mb-3"><strong>Sending:</strong> Drop files, choose optional ZIP compression, set a PIN if needed, create the share link, and keep the tab open.</p>
+              <p className="leading-relaxed"><strong>Receiving:</strong> Open the link, enter the PIN if required, then download. Both users must be online.</p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold text-white mb-3">PIN Protection</h2>
               <p className="leading-relaxed">
-                Optional 4-digit PIN. Rate limited to 5 attempts per 15 minutes. Share the PIN separately from the link.
+                Optional 4-digit PIN with rate limits. Share the PIN separately from the link.
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-3">Limitations</h2>
+              <h2 className="text-xl font-semibold text-white mb-3">Connection Notes</h2>
               <ul className="list-disc list-inside space-y-1">
                 <li>Both users must be online during transfer</li>
                 <li>Links expire after 24 hours</li>
-                <li>Some corporate firewalls may block P2P connections</li>
+                <li>Some corporate networks can block WebRTC</li>
               </ul>
             </section>
 

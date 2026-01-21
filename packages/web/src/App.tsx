@@ -881,7 +881,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen app-shell flex flex-col pb-16">
+    <div className="min-h-screen app-shell flex flex-col">
       {/* Animated background */}
       <div className="fixed inset-0 app-overlay-base" />
       <div className="fixed inset-0 app-overlay-accent animate-gradient-shift" />
@@ -1337,7 +1337,7 @@ function App() {
       </div>
 
       {/* Footer */}
-      <footer className="relative z-10 mt-auto py-3 border-t border-white/10">
+      <footer className="relative z-10 mt-auto py-3 pb-16 border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-center gap-3 text-sm">
             <a href="https://buymeacoffee.com/p2p.red" target="_blank" rel="noopener noreferrer" className="text-yellow-400 hover:text-yellow-300 transition-colors">Support</a>
@@ -1354,7 +1354,7 @@ function App() {
       </footer>
 
       {buildIndicatorClass && buildIndicatorLabel && (
-        <div className="relative z-10 mt-2 flex justify-center">
+        <div className="fixed bottom-24 left-1/2 z-40 flex -translate-x-1/2 justify-center">
           <div className="rounded-xl border border-white/10 bg-black/50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80 shadow-lg">
             <div className="inline-flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />

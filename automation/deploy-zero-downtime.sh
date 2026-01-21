@@ -137,6 +137,18 @@ fi
 
 # Switch traffic (update Nginx upstream)
 echo "🔄 Switching traffic to $NEXT_ENV..."
+if ! docker ps --format '{{.Names}}' | grep -q "^p2p-app-$NEXT_ENV$"; then
+    echo "❌ Target container p2p-app-$NEXT_ENV is not running. Aborting switch."
+    COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
+    exit 1
+fi
+
+if ! COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml exec -T app-$NEXT_ENV node -e "require('http').get('http://localhost:3000',res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))"; then
+    echo "❌ Target container p2p-app-$NEXT_ENV is not reachable. Aborting switch."
+    COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
+    exit 1
+fi
+
 sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$NEXT_ENV:3000;/g" nginx.conf
 
 # Reload Nginx

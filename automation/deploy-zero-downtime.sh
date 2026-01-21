@@ -56,7 +56,13 @@ ensure_nginx_running() {
     fi
 }
 
+sync_nginx_config() {
+    ensure_nginx_running
+    docker cp "$REPO_ROOT/nginx.conf" p2p-nginx:/etc/nginx/nginx.conf
+}
+
 # Determine current active environment (prefer nginx.conf upstream)
+sync_nginx_config
 CURRENT_ENV=""
 if [[ -f nginx.conf ]]; then
     if grep -q "p2p-app-green:3000" nginx.conf; then
@@ -152,15 +158,13 @@ fi
 sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$NEXT_ENV:3000;/g" nginx.conf
 
 # Reload Nginx
-ensure_nginx_running
-docker cp "$REPO_ROOT/nginx.conf" p2p-nginx:/etc/nginx/nginx.conf
+sync_nginx_config
 docker compose -f docker-compose.yml exec nginx nginx -s reload
 
 if ! grep -q "server p2p-app-$NEXT_ENV:3000;" nginx.conf; then
     echo "❌ Upstream swap failed. nginx.conf does not point to $NEXT_ENV."
     sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$CURRENT_ENV:3000;/g" nginx.conf
-    ensure_nginx_running
-    docker cp "$REPO_ROOT/nginx.conf" p2p-nginx:/etc/nginx/nginx.conf
+    sync_nginx_config
     docker compose -f docker-compose.yml exec nginx nginx -s reload
     COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
     exit 1
@@ -182,8 +186,7 @@ sleep "$POST_SWITCH_VERIFY_DELAY"
 if ! curl -fs "$SITE_URL" > /dev/null; then
     echo "❌ Site verification failed - rolling back"
     sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$CURRENT_ENV:3000;/g" nginx.conf
-    ensure_nginx_running
-    docker cp "$REPO_ROOT/nginx.conf" p2p-nginx:/etc/nginx/nginx.conf
+    sync_nginx_config
     docker compose -f docker-compose.yml exec nginx nginx -s reload
     COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
     exit 1
@@ -197,6 +200,11 @@ if grep -q "server p2p-app-$NEXT_ENV:3000;" nginx.conf; then
     COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$CURRENT_ENV
 else
     echo "⚠️  Skipping stop of $CURRENT_ENV: nginx.conf no longer points to $NEXT_ENV."
+fi
+
+if [ -f "$REPO_ROOT/automation/cleanup-images.sh" ]; then
+    KEEP_COUNT=${KEEP_IMAGE_COUNT:-}
+    DEPLOY_ENV="$DEPLOY_ENV" KEEP_COUNT="$KEEP_COUNT" "$REPO_ROOT/automation/cleanup-images.sh" || true
 fi
 
 echo "🎉 Zero-downtime deployment complete!"

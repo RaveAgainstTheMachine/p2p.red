@@ -141,3 +141,7 @@ echo ""
 echo "🌐 Site: $SITE_URL"
 echo "📊 Status: docker compose ps"
 echo "🔑 Build: $BUILD_HASH @ $BUILD_TIMESTAMP"
+
+if [ -f "$APP_DIR/automation/cleanup-images.sh" ]; then
+    DEPLOY_ENV="$DEPLOY_ENV" "$APP_DIR/automation/cleanup-images.sh" || true
+fi

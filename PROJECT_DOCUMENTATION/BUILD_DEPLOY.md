@@ -170,6 +170,10 @@ Confirm the UI shows the expected **blue/green badge** and the build **version**
 - Build images only via `automation/build-prod-images.sh` (labels `p2p.build_variant` are enforced).
 - If the build indicator is missing or wrong, rebuild locally (do not proceed).
 - Deploy script now **copies nginx.conf into the nginx container** before reload to avoid stale upstreams.
+- Image retention policy:
+  - **prod** keeps current + 1 previous image per variant.
+  - **dev** keeps up to 10 previous images per variant.
+  - `automation/cleanup-images.sh` enforces this (runs after deploy). Override with `KEEP_IMAGE_COUNT`.
 - The switch may still cause a brief blip during nginx reload. Use env vars to reduce impact:
   - `SWITCH_GRACE_SECONDS` (default: 5)
   - `POST_SWITCH_VERIFY_DELAY` (default: 5)

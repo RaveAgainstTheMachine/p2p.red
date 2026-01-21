@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useWebRTC } from '@p2p-file-share/shared';
 import { useEncryption } from '@p2p-file-share/shared';
 import { useFileTransfer } from '@p2p-file-share/shared';
@@ -14,7 +14,7 @@ import { Logo } from './components/Logo';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, Share2, Shield, CheckCircle, File, Check, Sun, Moon, Monitor, Palette } from 'lucide-react';
+import { Download, Share2, Shield, CheckCircle, File, Check, Sun, Moon, Monitor } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from '@p2p-file-share/shared';
 import { Info } from './pages/Info';
@@ -155,6 +155,7 @@ function App() {
     return 'system';
   });
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+  const themeToggleRef = useRef<HTMLDivElement | null>(null);
   const [enableZip, setEnableZip] = useState<boolean>(true);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
   const buildVariant = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
@@ -184,6 +185,25 @@ function App() {
   }, [initializePeer]);
 
   useEffect(() => {
+    document.documentElement.setAttribute('data-theme', themePreference);
+    localStorage.setItem('theme', themePreference);
+  }, [themePreference]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!isThemeMenuOpen) return;
+      const target = event.target as Node | null;
+      if (target && themeToggleRef.current && themeToggleRef.current.contains(target)) {
+        return;
+      }
+      setIsThemeMenuOpen(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, [isThemeMenuOpen]);
+
+  useEffect(() => {
     const applyTheme = (preference: 'system' | 'light' | 'dark') => {
       const root = document.documentElement;
       const resolved = preference === 'system'
@@ -191,9 +211,6 @@ function App() {
         : preference;
       root.setAttribute('data-theme', resolved);
     };
-
-    applyTheme(themePreference);
-    localStorage.setItem('theme', themePreference);
 
     if (themePreference !== 'system') {
       return undefined;
@@ -864,11 +881,71 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen app-shell flex flex-col">
+    <div className="min-h-screen app-shell flex flex-col pb-16">
       {/* Animated background */}
       <div className="fixed inset-0 app-overlay-base" />
       <div className="fixed inset-0 app-overlay-accent animate-gradient-shift" />
       
+      <div ref={themeToggleRef} className="fixed top-4 right-4 z-30">
+        <div
+          className={`flex h-10 items-center justify-center gap-1 overflow-hidden border border-white/15 bg-black/30 text-white/80 shadow-lg transition-[width,border-radius,padding] duration-200 ease-out ${isThemeMenuOpen ? 'w-28 rounded-2xl px-2' : 'w-10 rounded-full'}`}
+          onMouseEnter={() => setIsThemeMenuOpen(true)}
+          onMouseLeave={(event) => {
+            if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
+              return;
+            }
+            setIsThemeMenuOpen(false);
+          }}
+        >
+          {isThemeMenuOpen ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setThemePreference('system');
+                  setIsThemeMenuOpen(false);
+                }}
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${themePreference === 'system' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
+                title="System"
+              >
+                <Monitor size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setThemePreference('light');
+                  setIsThemeMenuOpen(false);
+                }}
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${themePreference === 'light' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
+                title="Light"
+              >
+                <Sun size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setThemePreference('dark');
+                  setIsThemeMenuOpen(false);
+                }}
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${themePreference === 'dark' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
+                title="Dark"
+              >
+                <Moon size={16} />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsThemeMenuOpen(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-white/80 transition-colors hover:text-white"
+              title="Theme"
+            >
+              {themePreference === 'dark' ? <Moon size={16} /> : themePreference === 'light' ? <Sun size={16} /> : <Monitor size={16} />}
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="relative z-10 mx-auto px-4 py-6 max-w-7xl flex-1">
         {/* Header */}
         <header className="text-center mb-8">
@@ -878,51 +955,6 @@ function App() {
           <p className="text-white/80 text-base">
             Privacy-first file sharing with true peer-to-peer transfer
           </p>
-          <div className="mt-4 flex justify-center">
-            <div
-              className="relative"
-              onMouseEnter={() => setIsThemeMenuOpen(true)}
-              onMouseLeave={() => setIsThemeMenuOpen(false)}
-            >
-              <button
-                type="button"
-                onClick={() => setIsThemeMenuOpen((open) => !open)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white/80 shadow-lg transition-colors hover:bg-white/10"
-                title="Theme"
-              >
-                {themePreference === 'dark' ? <Moon size={16} /> : themePreference === 'light' ? <Sun size={16} /> : <Monitor size={16} />}
-              </button>
-              {isThemeMenuOpen && (
-                <div className="absolute left-1/2 mt-2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-white/70 shadow-lg">
-                  <Palette size={12} className="text-white/50" />
-                  <button
-                    type="button"
-                    onClick={() => setThemePreference('system')}
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 transition-colors ${themePreference === 'system' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
-                  >
-                    <Monitor size={12} />
-                    <span>System</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setThemePreference('light')}
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 transition-colors ${themePreference === 'light' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
-                  >
-                    <Sun size={12} />
-                    <span>Light</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setThemePreference('dark')}
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 transition-colors ${themePreference === 'dark' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
-                  >
-                    <Moon size={12} />
-                    <span>Dark</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
           
           {/* Connection Status Alerts */}
           {!isOnline && (

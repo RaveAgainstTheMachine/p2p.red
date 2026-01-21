@@ -130,6 +130,26 @@ USE_PREBUILT_IMAGES=1 \
 curl -s https://p2p.red/api/status | jq
 curl -s https://p2p.red | head -n 3
 ```
+
+#### Prod Incident: Stale UI + nginx crash (2026-01-21)
+**Symptoms**
+- UI stayed stale (no FAQ/how-it-works) and badge color mismatch.
+- `p2p-nginx` restart loop with: `host not found in upstream "p2p-app-green:3000"`.
+
+**Root cause**
+- Nginx was serving static HTML from its own image (`root /usr/share/nginx/html`) instead of proxying to the blue/green app container. That kept serving old bundles even after deploys.
+- Nginx config referenced a blue/green upstream that wasn’t running, causing nginx to crash-loop.
+
+**Fix**
+- Proxy `/` and `/assets/` to the blue/green `app` upstream in `nginx.conf` and `nginx.blue-green.conf` (no static root for the main site).
+- Ensure the target app container is running **before** restarting nginx.
+
+**Verification**
+```
+curl -sL https://p2p.red | grep -oE '/assets/[^" ]+' | head -n 2
+curl -sL https://p2p.red/assets/<latest>.js | grep -i 'How it works\|FAQ'
+curl -s https://p2p.red/api/status | jq
+```
 Confirm the UI shows the expected **blue/green badge** and status panel is online.
 
 ### E) Rollback (If Needed)

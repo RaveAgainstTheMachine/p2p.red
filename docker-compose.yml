@@ -98,7 +98,7 @@ services:
       NODE_ENV: production
       PORT: 3001
       METADATA_ENV_FILE: /run/secrets/metadata.env
-      WEB_STATUS_URL: http://p2p-app-blue:3000
+      WEB_STATUS_URL: https://p2p.red
       SIGNAL_STATUS_URL: http://p2p-peerjs:9000/peerjs/id
       ANALYTICS_STATUS_URL: http://p2p-plausible:8000/js/script.js
       OPENBAO_STATUS_URL: https://bao.p2p.red:8200/v1/sys/health

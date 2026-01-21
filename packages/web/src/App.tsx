@@ -1201,6 +1201,43 @@ function App() {
             </p>
           </div>
         </div>
+
+        {/* How it works + FAQ */}
+        <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="glass-card p-6">
+            <h2 className="text-xl font-semibold text-white mb-3">How it works</h2>
+            <ol className="space-y-2 text-sm text-white/70 list-decimal list-inside">
+              <li>Create a share link and send it to the recipient.</li>
+              <li>Both browsers connect directly over WebRTC.</li>
+              <li>File data streams peer-to-peer with AES-GCM encryption.</li>
+            </ol>
+            <p className="mt-3 text-xs text-white/50">
+              We only store minimal metadata (filename, size, peer ID) for up to 24 hours.
+            </p>
+          </div>
+
+          <div className="glass-card p-6">
+            <h2 className="text-xl font-semibold text-white mb-3">FAQ</h2>
+            <div className="space-y-4 text-sm text-white/70">
+              <div>
+                <h3 className="text-white font-semibold">Is this truly peer-to-peer?</h3>
+                <p>Yes. File data stays between browsers via WebRTC DataChannels; servers only help peers find each other.</p>
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">Do I need an account?</h3>
+                <p>No account required. Create a link and share it.</p>
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">How long do links last?</h3>
+                <p>Links expire after 24 hours to reduce exposure.</p>
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">Will it work on restricted networks?</h3>
+                <p>Some corporate or school networks can block WebRTC; a different network may be needed.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Footer */}

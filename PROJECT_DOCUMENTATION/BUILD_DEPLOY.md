@@ -169,6 +169,7 @@ Confirm the UI shows the expected **blue/green badge** and the build **version**
 - Prod deploys require **prebuilt images** (`USE_PREBUILT_IMAGES=1`) to prevent local builds on prod.
 - Build images only via `automation/build-prod-images.sh` (labels `p2p.build_variant` are enforced).
 - If the build indicator is missing or wrong, rebuild locally (do not proceed).
+- Deploy script now **copies nginx.conf into the nginx container** before reload to avoid stale upstreams.
 - The switch may still cause a brief blip during nginx reload. Use env vars to reduce impact:
   - `SWITCH_GRACE_SECONDS` (default: 5)
   - `POST_SWITCH_VERIFY_DELAY` (default: 5)

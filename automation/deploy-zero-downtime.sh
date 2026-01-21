@@ -153,12 +153,14 @@ sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$NEXT_ENV:3000;/g"
 
 # Reload Nginx
 ensure_nginx_running
+docker cp "$REPO_ROOT/nginx.conf" p2p-nginx:/etc/nginx/nginx.conf
 docker compose -f docker-compose.yml exec nginx nginx -s reload
 
 if ! grep -q "server p2p-app-$NEXT_ENV:3000;" nginx.conf; then
     echo "❌ Upstream swap failed. nginx.conf does not point to $NEXT_ENV."
     sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$CURRENT_ENV:3000;/g" nginx.conf
     ensure_nginx_running
+    docker cp "$REPO_ROOT/nginx.conf" p2p-nginx:/etc/nginx/nginx.conf
     docker compose -f docker-compose.yml exec nginx nginx -s reload
     COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
     exit 1
@@ -181,6 +183,7 @@ if ! curl -fs "$SITE_URL" > /dev/null; then
     echo "❌ Site verification failed - rolling back"
     sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$CURRENT_ENV:3000;/g" nginx.conf
     ensure_nginx_running
+    docker cp "$REPO_ROOT/nginx.conf" p2p-nginx:/etc/nginx/nginx.conf
     docker compose -f docker-compose.yml exec nginx nginx -s reload
     COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
     exit 1

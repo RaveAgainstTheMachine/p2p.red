@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Activity } from 'lucide-react';
 
-interface MonitoringStats {
-  uptime: number;
-  transfersToday: number;
-  activeConnections: number;
-}
-
 type ServiceStatus = 'online' | 'offline' | 'degraded' | 'unknown';
+type DisplayStatus = 'healthy' | 'degraded' | 'offline';
 
 interface StatusResponse {
   status: ServiceStatus;
@@ -20,15 +15,24 @@ export const Monitoring: React.FC = () => {
   const statusUrl = import.meta.env.PROD
     ? `${window.location.origin}/api/status`
     : 'http://localhost:3001/api/status';
-  const [stats, setStats] = useState<MonitoringStats>({
-    uptime: 0,
-    transfersToday: 0,
-    activeConnections: 0
-  });
-  const [overallStatus, setOverallStatus] = useState<ServiceStatus>('unknown');
+  const [overallStatus, setOverallStatus] = useState<DisplayStatus>('degraded');
   const [serviceStatuses, setServiceStatuses] = useState<Record<string, ServiceStatus>>({});
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+
+  const normalizeStatus = (status: ServiceStatus): DisplayStatus => {
+    if (status === 'online') return 'healthy';
+    if (status === 'offline') return 'offline';
+    return 'degraded';
+  };
+
+  const deriveOverallStatus = (services: Record<string, ServiceStatus>): DisplayStatus => {
+    const values = Object.values(services);
+    if (values.length === 0) return 'degraded';
+    if (values.some((value) => value === 'offline')) return 'offline';
+    if (values.some((value) => value !== 'online')) return 'degraded';
+    return 'healthy';
+  };
 
   useEffect(() => {
     // Check service health
@@ -37,13 +41,12 @@ export const Monitoring: React.FC = () => {
         const response = await fetch(statusUrl);
         if (response.ok) {
           const data: StatusResponse = await response.json();
-          setStats({
-            uptime: data.uptimeSeconds || 0,
-            transfersToday: 0, // Privacy: no tracking
-            activeConnections: 0 // Privacy: no tracking
-          });
-          setOverallStatus(data.status || 'unknown');
-          setServiceStatuses(data.services || {});
+          const services = data.services || {};
+          const overall = Object.keys(services).length > 0
+            ? deriveOverallStatus(services)
+            : normalizeStatus(data.status || 'unknown');
+          setOverallStatus(overall);
+          setServiceStatuses(services);
           setLastCheckedAt(data.checkedAt || null);
         }
       } catch (error) {
@@ -57,14 +60,6 @@ export const Monitoring: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const formatUptime = (seconds: number) => {
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    if (days > 0) return `${days}d ${hours}h`;
-    if (hours > 0) return `${hours}h`;
-    return `${Math.floor(seconds / 60)}m`;
-  };
-
   const services = [
     { key: 'web', label: 'Web' },
     { key: 'signal', label: 'Signal' },
@@ -75,18 +70,18 @@ export const Monitoring: React.FC = () => {
     { key: 'secrets', label: 'Vault' }
   ];
 
-  const getStatusColor = (status: ServiceStatus) => {
-    if (status === 'online') return 'text-green-400';
+  const getStatusColor = (status: DisplayStatus) => {
+    if (status === 'healthy') return 'text-green-400';
     if (status === 'degraded') return 'text-yellow-400';
     if (status === 'offline') return 'text-red-400';
     return 'text-white/50';
   };
 
-  const formatStatusLabel = (status: ServiceStatus) => {
-    if (status === 'online') return 'Online';
+  const formatStatusLabel = (status: DisplayStatus) => {
+    if (status === 'healthy') return 'Healthy';
     if (status === 'degraded') return 'Degraded';
     if (status === 'offline') return 'Offline';
-    return 'Unknown';
+    return 'Degraded';
   };
 
   if (!isVisible) {
@@ -105,7 +100,7 @@ export const Monitoring: React.FC = () => {
     <div className="fixed bottom-1 right-4 z-50 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Activity size={16} className="text-green-400" />
+          <Activity size={16} className={getStatusColor(overallStatus)} />
           <h3 className="text-sm font-semibold text-white">Service Status</h3>
         </div>
         <button
@@ -123,15 +118,11 @@ export const Monitoring: React.FC = () => {
             ● {formatStatusLabel(overallStatus)}
           </span>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-white/60">Uptime:</span>
-          <span className="text-white">{formatUptime(stats.uptime)}</span>
-        </div>
         <div className="mt-2 border-t border-white/10 pt-2">
-          <div className="text-white/50 text-[10px] uppercase tracking-wide mb-2">Systems</div>
           <div className="space-y-1">
             {services.map((service) => {
-              const status = serviceStatuses[service.key] || 'unknown';
+              const rawStatus = serviceStatuses[service.key] || 'unknown';
+              const status = normalizeStatus(rawStatus);
               return (
                 <div key={service.label} className="flex items-center justify-between">
                   <span className="text-white/60">{service.label}</span>

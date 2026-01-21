@@ -14,7 +14,7 @@ import { Logo } from './components/Logo';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, Share2, Shield, CheckCircle, File, Check } from 'lucide-react';
+import { Download, Share2, Shield, CheckCircle, File, Check, Sun, Moon, Monitor, Palette } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
@@ -154,6 +154,7 @@ function App() {
     }
     return 'system';
   });
+  const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const [enableZip, setEnableZip] = useState<boolean>(true);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
   const buildVariant = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
@@ -878,29 +879,48 @@ function App() {
             Privacy-first file sharing with true peer-to-peer transfer
           </p>
           <div className="mt-4 flex justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/30 px-3 py-2 text-xs text-white/80">
-              <span className="uppercase tracking-[0.2em] text-[10px] text-white/50">Theme</span>
+            <div
+              className="relative"
+              onMouseEnter={() => setIsThemeMenuOpen(true)}
+              onMouseLeave={() => setIsThemeMenuOpen(false)}
+            >
               <button
                 type="button"
-                onClick={() => setThemePreference('system')}
-                className={`px-2 py-1 rounded-full transition-colors ${themePreference === 'system' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
+                onClick={() => setIsThemeMenuOpen((open) => !open)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white/80 shadow-lg transition-colors hover:bg-white/10"
+                title="Theme"
               >
-                System
+                {themePreference === 'dark' ? <Moon size={16} /> : themePreference === 'light' ? <Sun size={16} /> : <Monitor size={16} />}
               </button>
-              <button
-                type="button"
-                onClick={() => setThemePreference('light')}
-                className={`px-2 py-1 rounded-full transition-colors ${themePreference === 'light' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
-              >
-                Light
-              </button>
-              <button
-                type="button"
-                onClick={() => setThemePreference('dark')}
-                className={`px-2 py-1 rounded-full transition-colors ${themePreference === 'dark' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
-              >
-                Dark
-              </button>
+              {isThemeMenuOpen && (
+                <div className="absolute left-1/2 mt-2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-white/70 shadow-lg">
+                  <Palette size={12} className="text-white/50" />
+                  <button
+                    type="button"
+                    onClick={() => setThemePreference('system')}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 transition-colors ${themePreference === 'system' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
+                  >
+                    <Monitor size={12} />
+                    <span>System</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setThemePreference('light')}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 transition-colors ${themePreference === 'light' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
+                  >
+                    <Sun size={12} />
+                    <span>Light</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setThemePreference('dark')}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 transition-colors ${themePreference === 'dark' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
+                  >
+                    <Moon size={12} />
+                    <span>Dark</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           
@@ -1301,26 +1321,28 @@ function App() {
         </div>
       </footer>
 
+      {buildIndicatorClass && buildIndicatorLabel && (
+        <div className="relative z-10 mt-2 flex justify-center">
+          <div className="rounded-xl border border-white/10 bg-black/50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80 shadow-lg">
+            <div className="inline-flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
+              <span>{buildIndicatorLabel}</span>
+            </div>
+            {buildVersion && (
+              <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50">
+                {buildVersion}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Cookie/Privacy Banner */}
       <CookieBanner />
       
       {/* Monitoring */}
       <Monitoring />
 
-      {buildIndicatorClass && buildIndicatorLabel && (
-        <div className="fixed bottom-3 left-4 z-50 rounded-xl border border-white/10 bg-black/50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80 shadow-lg">
-          <div className="inline-flex items-center gap-2">
-            <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
-            <span>{buildIndicatorLabel}</span>
-          </div>
-          {buildVersion && (
-            <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50">
-              {buildVersion}
-            </div>
-          )}
-        </div>
-      )}
-      
       {/* Clipboard Notification */}
       {showClipboardNotification && (
         <div className="fixed bottom-8 right-8 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out z-50">

@@ -39,6 +39,12 @@ if [[ "$SITE_URL" != *"p2p.red"* ]]; then
     exit 1
 fi
 
+if [ "$DEPLOY_ENV" = "prod" ] && [ "$USE_PREBUILT_IMAGES" != "1" ]; then
+    echo "❌ Prod deploys must use prebuilt images (USE_PREBUILT_IMAGES=1)."
+    echo "   Build locally with explicit VITE_BUILD_VARIANT and ship tars to prod."
+    exit 1
+fi
+
 ensure_nginx_running() {
     if ! docker compose ps --services --filter "status=running" | grep -q "^nginx$"; then
         echo "🧩 Nginx not running, starting..."
@@ -98,6 +104,21 @@ sleep 10
 echo "🔍 Health checking $NEXT_ENV..."
 if ! docker compose -f docker-compose.blue-green.yml exec -T app-$NEXT_ENV node -e "require('http').get('http://localhost:3000',res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))"; then
     echo "❌ Health check failed for $NEXT_ENV"
+    docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
+    exit 1
+fi
+
+# Verify build variant label matches target color
+BUILD_VARIANT_LABEL=$(docker inspect -f '{{ index .Config.Labels "p2p.build_variant" }}' "p2p-app-$NEXT_ENV" 2>/dev/null || true)
+if [ -z "$BUILD_VARIANT_LABEL" ]; then
+    echo "❌ Missing p2p.build_variant label on image for $NEXT_ENV."
+    echo "   Rebuild with VITE_BUILD_VARIANT and the Dockerfile label." 
+    docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
+    exit 1
+fi
+
+if [ "$BUILD_VARIANT_LABEL" != "$NEXT_ENV" ]; then
+    echo "❌ Build variant mismatch: expected '$NEXT_ENV', got '$BUILD_VARIANT_LABEL'."
     docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
     exit 1
 fi

@@ -88,20 +88,10 @@ curl -s https://p2p.red | head -n 3
 ### B) Build + Transfer Images (Local → Prod)
 Prod runtime host does **not** have full source. Build locally and ship tars.
 ```
-# Local build (set build indicator)
-export VITE_BUILD_VARIANT=green   # use blue when deploying blue
-
-docker build -f Dockerfile -t p2p-app-blue:latest /opt/p2p-file-share
-docker tag p2p-app-blue:latest p2p-app-green:latest
-docker build -f metadata-api/Dockerfile -t p2p-metadata-api:latest /opt/p2p-file-share/metadata-api
-docker build -f Dockerfile.peerjs -t p2p-peerjs:latest /opt/p2p-file-share
-docker build -f Dockerfile.nginx -t p2p-nginx:latest /opt/p2p-file-share
-
-docker save -o /opt/p2p-file-share/images/app-blue.tar p2p-app-blue:latest
-docker save -o /opt/p2p-file-share/images/app-green.tar p2p-app-green:latest
-docker save -o /opt/p2p-file-share/images/metadata-api.tar p2p-metadata-api:latest
-docker save -o /opt/p2p-file-share/images/peerjs.tar p2p-peerjs:latest
-docker save -o /opt/p2p-file-share/images/nginx.tar p2p-nginx:latest
+# Local build (authoritative)
+# This script builds BOTH colors with explicit VITE_BUILD_VARIANT
+# and validates the p2p.build_variant label on each image.
+./automation/build-prod-images.sh
 
 # Copy to prod via WG
 scp -i /home/frosty/.ssh/p2p_deploy \
@@ -128,8 +118,11 @@ cd /opt/p2p-file-share
 # Runtime services (metadata + peerjs + nginx)
 sudo METADATA_API_ENV_FILE=/run/secrets/metadata.env docker compose -f docker-compose.yml up -d
 
-# Zero-downtime app switch
-./automation/deploy-zero-downtime.sh
+# Zero-downtime app switch (prod requires prebuilt images)
+USE_PREBUILT_IMAGES=1 \
+  APP_IMAGE_BLUE=p2p-app-blue:latest \
+  APP_IMAGE_GREEN=p2p-app-green:latest \
+  ./automation/deploy-zero-downtime.sh
 ```
 
 ### D) Verify + Switch Outcome
@@ -148,8 +141,10 @@ Confirm the UI shows the expected **blue/green badge** and status panel is onlin
 ### Notes (Operational Guardrails)
 - **Never** deploy both colors at once.
 - Always deploy the **inactive** color and switch via nginx.
-- `automation/deploy-zero-downtime.sh` now checks **nginx.conf** to decide the active color.
-- If the build indicator is missing, recheck `VITE_BUILD_VARIANT` during local build.
+- `automation/deploy-zero-downtime.sh` checks **nginx.conf** to decide the active color.
+- Prod deploys require **prebuilt images** (`USE_PREBUILT_IMAGES=1`) to prevent local builds on prod.
+- Build images only via `automation/build-prod-images.sh` (labels `p2p.build_variant` are enforced).
+- If the build indicator is missing or wrong, rebuild locally (do not proceed).
 - The switch may still cause a brief blip during nginx reload. Use env vars to reduce impact:
   - `SWITCH_GRACE_SECONDS` (default: 5)
   - `POST_SWITCH_VERIFY_DELAY` (default: 5)

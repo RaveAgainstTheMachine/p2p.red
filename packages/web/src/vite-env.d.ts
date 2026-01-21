@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly PROD: boolean;
   readonly DEV: boolean;
   readonly VITE_BUILD_VARIANT?: string;
+  readonly VITE_BUILD_VERSION?: string;
 }
 
 interface ImportMeta {

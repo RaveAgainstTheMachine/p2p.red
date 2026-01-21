@@ -78,6 +78,8 @@ grep -n "p2p-app-" /opt/p2p-file-share/nginx.conf
 Optional cross-checks:
 ```
 docker ps --filter "label=version" --format "{{.Names}} {{.Labels}}"
+docker inspect -f '{{ index .Config.Labels "p2p.build_version" }}' p2p-app-blue
+docker inspect -f '{{ index .Config.Labels "p2p.build_version" }}' p2p-app-green
 curl -s https://p2p.red | head -n 3
 ```
 
@@ -91,6 +93,8 @@ Prod runtime host does **not** have full source. Build locally and ship tars.
 # Local build (authoritative)
 # This script builds BOTH colors with explicit VITE_BUILD_VARIANT
 # and validates the p2p.build_variant label on each image.
+# It also injects VITE_BUILD_VERSION (SemVer + git SHA + UTC timestamp)
+# and validates the p2p.build_version label.
 ./automation/build-prod-images.sh
 
 # Copy to prod via WG
@@ -150,7 +154,7 @@ curl -sL https://p2p.red | grep -oE '/assets/[^" ]+' | head -n 2
 curl -sL https://p2p.red/assets/<latest>.js | grep -i 'How it works\|FAQ'
 curl -s https://p2p.red/api/status | jq
 ```
-Confirm the UI shows the expected **blue/green badge** and status panel is online.
+Confirm the UI shows the expected **blue/green badge** and the build **version** below it.
 
 ### E) Rollback (If Needed)
 ```

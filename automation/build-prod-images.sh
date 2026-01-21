@@ -4,6 +4,10 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGES_DIR="$REPO_ROOT/images"
+APP_VERSION="$(node -p "require('$REPO_ROOT/package.json').version")"
+GIT_SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+BUILD_TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
+BUILD_VERSION="${APP_VERSION}-${GIT_SHA}-${BUILD_TIMESTAMP}"
 
 mkdir -p "$IMAGES_DIR"
 
@@ -19,6 +23,7 @@ build_app_image() {
     docker build \
         -f "$REPO_ROOT/Dockerfile" \
         --build-arg "VITE_BUILD_VARIANT=$color" \
+        --build-arg "VITE_BUILD_VERSION=$BUILD_VERSION" \
         -t "p2p-app-$color:latest" \
         "$REPO_ROOT"
 
@@ -26,6 +31,13 @@ build_app_image() {
     label=$(docker inspect -f '{{ index .Config.Labels "p2p.build_variant" }}' "p2p-app-$color:latest")
     if [ "$label" != "$color" ]; then
         echo "❌ Build variant mismatch for $color image (label: '$label')."
+        exit 1
+    fi
+
+    local version_label
+    version_label=$(docker inspect -f '{{ index .Config.Labels "p2p.build_version" }}' "p2p-app-$color:latest")
+    if [ -z "$version_label" ] || [ "$version_label" = "<no value>" ]; then
+        echo "❌ Missing build version label for $color image."
         exit 1
     fi
 

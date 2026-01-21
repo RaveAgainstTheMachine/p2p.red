@@ -10,9 +10,11 @@ RUN pnpm install --frozen-lockfile
 # Copy source code
 COPY . .
 
-# Build-time build variant for badge
+# Build-time build metadata for badge
 ARG VITE_BUILD_VARIANT
+ARG VITE_BUILD_VERSION
 ENV VITE_BUILD_VARIANT=$VITE_BUILD_VARIANT
+ENV VITE_BUILD_VERSION=$VITE_BUILD_VERSION
 
 # Build application
 RUN pnpm run build
@@ -21,7 +23,9 @@ RUN pnpm run build
 FROM node:20-alpine
 
 ARG VITE_BUILD_VARIANT
+ARG VITE_BUILD_VERSION
 LABEL p2p.build_variant=$VITE_BUILD_VARIANT
+LABEL p2p.build_version=$VITE_BUILD_VERSION
 
 WORKDIR /app
 

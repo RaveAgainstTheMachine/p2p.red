@@ -147,9 +147,17 @@ function App() {
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<'home' | 'legal' | 'info'>('home');
+  const [themePreference, setThemePreference] = useState<'system' | 'light' | 'dark'>(() => {
+    const storedTheme = localStorage.getItem('theme');
+    if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') {
+      return storedTheme;
+    }
+    return 'system';
+  });
   const [enableZip, setEnableZip] = useState<boolean>(true);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
   const buildVariant = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
+  const buildVersion = (import.meta as any)?.env?.VITE_BUILD_VERSION;
   const buildIndicatorClass = buildVariant === 'blue'
     ? 'bg-blue-400'
     : buildVariant === 'green'
@@ -173,6 +181,28 @@ function App() {
   useEffect(() => {
     initializePeer();
   }, [initializePeer]);
+
+  useEffect(() => {
+    const applyTheme = (preference: 'system' | 'light' | 'dark') => {
+      const root = document.documentElement;
+      const resolved = preference === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : preference;
+      root.setAttribute('data-theme', resolved);
+    };
+
+    applyTheme(themePreference);
+    localStorage.setItem('theme', themePreference);
+
+    if (themePreference !== 'system') {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => applyTheme('system');
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [themePreference]);
 
 
   // Update meta tags for rich link previews
@@ -833,10 +863,10 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 flex flex-col">
+    <div className="min-h-screen app-shell flex flex-col">
       {/* Animated background */}
-      <div className="fixed inset-0 bg-black/20" />
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-pink-600/20 animate-gradient-shift" />
+      <div className="fixed inset-0 app-overlay-base" />
+      <div className="fixed inset-0 app-overlay-accent animate-gradient-shift" />
       
       <div className="relative z-10 mx-auto px-4 py-6 max-w-7xl flex-1">
         {/* Header */}
@@ -847,6 +877,32 @@ function App() {
           <p className="text-white/80 text-base">
             Privacy-first file sharing with true peer-to-peer transfer
           </p>
+          <div className="mt-4 flex justify-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/30 px-3 py-2 text-xs text-white/80">
+              <span className="uppercase tracking-[0.2em] text-[10px] text-white/50">Theme</span>
+              <button
+                type="button"
+                onClick={() => setThemePreference('system')}
+                className={`px-2 py-1 rounded-full transition-colors ${themePreference === 'system' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
+              >
+                System
+              </button>
+              <button
+                type="button"
+                onClick={() => setThemePreference('light')}
+                className={`px-2 py-1 rounded-full transition-colors ${themePreference === 'light' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
+              >
+                Light
+              </button>
+              <button
+                type="button"
+                onClick={() => setThemePreference('dark')}
+                className={`px-2 py-1 rounded-full transition-colors ${themePreference === 'dark' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
+              >
+                Dark
+              </button>
+            </div>
+          </div>
           
           {/* Connection Status Alerts */}
           {!isOnline && (
@@ -1205,8 +1261,8 @@ function App() {
         {/* FAQ */}
         <div className="mt-12">
           <div className="glass-card p-6">
-            <h2 className="text-xl font-semibold text-white mb-3">FAQ</h2>
-            <div className="space-y-4 text-sm text-white/70">
+            <h2 className="text-xl font-semibold text-white mb-3 text-center">FAQ</h2>
+            <div className="space-y-4 text-sm text-white/70 text-center">
               <div>
                 <h3 className="text-white font-semibold">Is this truly peer-to-peer?</h3>
                 <p>Yes. File data stays between browsers via WebRTC DataChannels; servers only help peers find each other.</p>
@@ -1252,9 +1308,16 @@ function App() {
       <Monitoring />
 
       {buildIndicatorClass && buildIndicatorLabel && (
-        <div className="fixed bottom-3 left-4 z-50 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80 shadow-lg">
-          <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
-          <span>{buildIndicatorLabel}</span>
+        <div className="fixed bottom-3 left-4 z-50 rounded-xl border border-white/10 bg-black/50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80 shadow-lg">
+          <div className="inline-flex items-center gap-2">
+            <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
+            <span>{buildIndicatorLabel}</span>
+          </div>
+          {buildVersion && (
+            <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50">
+              {buildVersion}
+            </div>
+          )}
         </div>
       )}
       

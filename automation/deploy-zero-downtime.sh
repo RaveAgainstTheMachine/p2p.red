@@ -121,6 +121,14 @@ if [ -z "$BUILD_VARIANT_LABEL" ]; then
     exit 1
 fi
 
+BUILD_VERSION_LABEL=$(docker inspect -f '{{ index .Config.Labels "p2p.build_version" }}' "p2p-app-$NEXT_ENV" 2>/dev/null || true)
+if [ -z "$BUILD_VERSION_LABEL" ] || [ "$BUILD_VERSION_LABEL" = "<no value>" ]; then
+    echo "❌ Missing p2p.build_version label on image for $NEXT_ENV."
+    echo "   Rebuild with VITE_BUILD_VERSION and the Dockerfile label."
+    docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
+    exit 1
+fi
+
 if [ "$BUILD_VARIANT_LABEL" != "$NEXT_ENV" ]; then
     echo "❌ Build variant mismatch: expected '$NEXT_ENV', got '$BUILD_VARIANT_LABEL'."
     docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
@@ -151,7 +159,7 @@ echo "✅ Traffic switched to $NEXT_ENV"
 
 DEPLOY_LOG_PATH=${DEPLOY_LOG_PATH:-"$REPO_ROOT/automation/deploy.log"}
 DEPLOY_IMAGE_ID=$(docker inspect -f '{{.Image}}' "p2p-app-$NEXT_ENV" 2>/dev/null || echo "unknown")
-echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) env=$NEXT_ENV image=$DEPLOY_IMAGE_ID site=$SITE_URL" >> "$DEPLOY_LOG_PATH"
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) env=$NEXT_ENV image=$DEPLOY_IMAGE_ID version=$BUILD_VERSION_LABEL site=$SITE_URL" >> "$DEPLOY_LOG_PATH"
 
 # Wait and verify
 echo "⏳ Verifying live traffic..."

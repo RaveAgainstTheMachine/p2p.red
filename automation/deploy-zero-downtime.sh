@@ -6,6 +6,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOY_ENV=${DEPLOY_ENV:-prod}
 SITE_URL=${SITE_URL:-"https://p2p.red"}
 USE_PREBUILT_IMAGES=${USE_PREBUILT_IMAGES:-0}
+SWITCH_GRACE_SECONDS=${SWITCH_GRACE_SECONDS:-5}
+POST_SWITCH_VERIFY_DELAY=${POST_SWITCH_VERIFY_DELAY:-5}
+OLD_ENV_STOP_DELAY=${OLD_ENV_STOP_DELAY:-15}
 export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-p2p-bluegreen}
 
 cd "$REPO_ROOT"
@@ -107,11 +110,14 @@ sed -i "s/server p2p-app:3000;/server p2p-app-$NEXT_ENV:3000;/g" nginx.conf
 ensure_nginx_running
 docker compose exec nginx nginx -s reload
 
+echo "⏳ Grace period after switch (${SWITCH_GRACE_SECONDS}s)..."
+sleep "$SWITCH_GRACE_SECONDS"
+
 echo "✅ Traffic switched to $NEXT_ENV"
 
 # Wait and verify
 echo "⏳ Verifying live traffic..."
-sleep 5
+sleep "$POST_SWITCH_VERIFY_DELAY"
 
 if ! curl -fs "$SITE_URL" > /dev/null; then
     echo "❌ Site verification failed - rolling back"
@@ -121,6 +127,9 @@ if ! curl -fs "$SITE_URL" > /dev/null; then
     docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
     exit 1
 fi
+
+echo "⏳ Allowing old environment to drain (${OLD_ENV_STOP_DELAY}s)..."
+sleep "$OLD_ENV_STOP_DELAY"
 
 echo "✅ Deployment successful - stopping old environment"
 docker compose -f docker-compose.blue-green.yml stop app-$CURRENT_ENV

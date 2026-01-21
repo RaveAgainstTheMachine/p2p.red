@@ -150,6 +150,10 @@ Confirm the UI shows the expected **blue/green badge** and status panel is onlin
 - Always deploy the **inactive** color and switch via nginx.
 - `automation/deploy-zero-downtime.sh` now checks **nginx.conf** to decide the active color.
 - If the build indicator is missing, recheck `VITE_BUILD_VARIANT` during local build.
+- The switch may still cause a brief blip during nginx reload. Use env vars to reduce impact:
+  - `SWITCH_GRACE_SECONDS` (default: 5)
+  - `POST_SWITCH_VERIFY_DELAY` (default: 5)
+  - `OLD_ENV_STOP_DELAY` (default: 15)
 ### Signal Domain TLS (prod)
 `signal.p2p.red` has its own TLS cert and nginx server block (PeerJS only).
 Because the nginx container owns :80/:443, issue certs with a short nginx stop:
@@ -166,6 +170,13 @@ docker exec -i p2p-nginx nginx -t && docker exec -i p2p-nginx nginx -s reload
 
 ### Plausible Analytics (prod)
 Plausible is self-hosted on the prod VPS and exposed via `plausible.p2p.red`.
+
+**First-party proxy (recommended):**
+- Nginx on `p2p.red` proxies:
+  - `/js/script.js` -> `http://plausible/js/script.js`
+  - `/api/event` -> `http://plausible/api/event`
+- Script tag should use first-party path:
+  - `<script defer data-domain="p2p.red" src="/js/script.js"></script>`
 
 Required env vars (docker-compose.yml):
 - `PLAUSIBLE_DB_PASSWORD`

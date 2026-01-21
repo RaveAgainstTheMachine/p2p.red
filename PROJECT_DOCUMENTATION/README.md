@@ -10,15 +10,16 @@ Current documentation for the WebRTC + PeerJS + VPS deployment stack.
 - **VPS_DEPLOYMENT_GUIDE.md** — deployment guide (needs alignment with multi-host setup).
 - **WEBRTC_ARCHITECTURE_GUIDE.md** — WebRTC P2P architecture and security.
 - **DESKTOP_APP_PLAN.md** — current desktop roadmap and UX direction.
+- **SEO_TRAFFIC_PLAN.md** — SEO and low-effort traffic plan.
 - **UI_IMPLEMENTATION_GUIDE.md** — UI implementation patterns (web).
 - **UI_THEME_DOCUMENTATION.md** — current UI theme and palette details.
 
-## Additional Docs (moved from repo root)
+## Additional Docs
 - **ARCHITECTURE.md** — production architecture and scaling plan.
 - **SCALING-PLAN.md** — scaling notes and capacity planning.
 - **PROJECT_OVERVIEW.md** — high-level product summary.
-- **PRODUCTION_ZERO_DOWNTIME_PLAN.md** — blue/green deployment process.
 - **LARGE-FILE-TRANSFER.md** — large file transfer design notes.
+- **LOAD_BALANCER_MIGRATION.md** — Envoy/HAProxy migration plans.
 - **MALWARE_SCANNING_PLAN.md** — security scanning roadmap.
 - **MEMORY-OPTIMIZATION.md** — memory/streaming optimizations.
 - **LESSONS_DEP_UPGRADE.md** — dependency upgrade lessons.

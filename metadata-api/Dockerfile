@@ -2,6 +2,9 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Install CA certificates for HTTPS status checks
+RUN apk add --no-cache ca-certificates
+
 # Install dependencies
 COPY package*.json ./
 RUN npm ci --only=production

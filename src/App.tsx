@@ -155,6 +155,9 @@ function App() {
     : buildVariant === 'green'
       ? 'bg-emerald-400'
       : null;
+  const buildIndicatorLabel = buildVariant === 'blue' || buildVariant === 'green'
+    ? buildVariant
+    : null;
 
   const copyShareLinkToClipboard = async (link: string) => {
     try {
@@ -1223,9 +1226,10 @@ function App() {
       {/* Monitoring */}
       <Monitoring />
 
-      {buildIndicatorClass && (
-        <div className="fixed bottom-4 left-4 z-40">
-          <span className={`block h-3 w-3 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
+      {buildIndicatorClass && buildIndicatorLabel && (
+        <div className="fixed bottom-3 left-4 z-50 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80 shadow-lg">
+          <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
+          <span>{buildIndicatorLabel}</span>
         </div>
       )}
       

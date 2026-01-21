@@ -98,6 +98,10 @@ services:
       NODE_ENV: production
       PORT: 3001
       METADATA_ENV_FILE: /run/secrets/metadata.env
+      WEB_STATUS_URL: http://p2p-app-blue:3000
+      SIGNAL_STATUS_URL: http://p2p-peerjs:9000/peerjs/id
+      ANALYTICS_STATUS_URL: http://p2p-plausible:8000/js/script.js
+      OPENBAO_STATUS_URL: https://bao.p2p.red:8200/v1/sys/health
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: p2p_metadata
@@ -113,6 +117,7 @@ services:
       CORS_ORIGIN: https://p2p.red
     networks:
       - p2p-network
+      - p2p-bluegreen-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
       interval: 30s
@@ -121,6 +126,8 @@ services:
       start_period: 40s
     volumes:
       - /run/secrets:/run/secrets:ro
+    extra_hosts:
+      - "bao.p2p.red:10.88.0.1"
 
   # Frontend app (React)
   app:

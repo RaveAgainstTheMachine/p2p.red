@@ -157,6 +157,12 @@ ssh -i /home/frosty/.ssh/p2p_deploy \
 
 ### Full Prod Image Rebuild + Tar Prep (Local)
 ```
+# Ensure build variant shows in UI (blue/green indicator)
+export VITE_BUILD_VARIANT=green
+
+# If dist is owned by root from a prior Docker build:
+# sudo chown -R $USER:$USER /opt/p2p-file-share/dist
+
 # Build web app (blue/green images)
 docker build -f Dockerfile -t p2p-app-blue:latest /opt/p2p-file-share
 docker tag p2p-app-blue:latest p2p-app-green:latest
@@ -194,6 +200,12 @@ curl http://localhost:3001/health
 ### 3) Blue/Green (if enabled)
 ```
 ./automation/deploy-zero-downtime.sh
+```
+
+### Manual nginx restart (prod)
+When updating nginx only, still export the metadata env file or compose will error parsing the metadata-api service:
+```
+METADATA_API_ENV_FILE=/run/secrets/metadata.env docker compose -f docker-compose.yml up -d --no-deps nginx
 ```
 
 ## Verification Checklist (dev)

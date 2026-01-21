@@ -8,6 +8,7 @@ set -euo pipefail
 
 DEPLOY_ENV=${DEPLOY_ENV:-prod}
 SITE_URL=${SITE_URL:-""}
+BUILD_VARIANT=${BUILD_VARIANT:-""}
 
 if [ -z "$SITE_URL" ]; then
     if [ "$DEPLOY_ENV" = "dev" ]; then
@@ -22,6 +23,10 @@ APP_DIR="/opt/p2p-file-share"
 echo "🚀 Starting streamlined build & deploy..."
 echo "🧭 Deploy environment: $DEPLOY_ENV"
 echo "🌐 Site URL: $SITE_URL"
+if [ -n "$BUILD_VARIANT" ]; then
+    echo "🎨 Build variant: $BUILD_VARIANT"
+    export VITE_BUILD_VARIANT="$BUILD_VARIANT"
+fi
 
 # Generate build timestamp for cache busting
 BUILD_TIMESTAMP=$(date +%s)
@@ -29,7 +34,7 @@ echo "📅 Build timestamp: $BUILD_TIMESTAMP"
 
 # Build application
 echo "📦 Building application..."
-npm run build
+pnpm run build
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed!"

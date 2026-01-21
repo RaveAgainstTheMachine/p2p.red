@@ -72,7 +72,7 @@ export const Monitoring: React.FC = () => {
     { key: 'databases', label: 'Databases' },
     { key: 'analytics', label: 'Analytics' },
     { key: 'turn', label: 'TURN' },
-    { key: 'secrets', label: 'Secret Management' }
+    { key: 'secrets', label: 'Vault' }
   ];
 
   const getStatusColor = (status: ServiceStatus) => {
@@ -93,7 +93,7 @@ export const Monitoring: React.FC = () => {
     return (
       <button
         onClick={() => setIsVisible(true)}
-        className="fixed bottom-6 right-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/20"
+        className="fixed bottom-1 right-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/20"
         title="Service Status"
       >
         <Activity size={20} className="text-white/60" />
@@ -102,7 +102,7 @@ export const Monitoring: React.FC = () => {
   }
 
   return (
-    <div className="fixed bottom-6 right-4 z-50 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg">
+    <div className="fixed bottom-1 right-4 z-50 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Activity size={16} className="text-green-400" />

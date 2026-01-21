@@ -23,6 +23,54 @@ This document describes the current infrastructure layout for p2p.red. It is aut
 - dev signal domain -> `http://10.10.10.77:5174`
 - dev TURN domain (optional) -> `http://10.10.10.77:5175`
 
+**NginxPM proxy host settings (dev):**
+- `dev.p2p.red`
+  - Forward: `http://10.10.10.77:5173`
+  - Access list: `bao.p2p.red`
+  - Websockets: enabled
+  - Block common exploits: enabled
+  - Cache assets: disabled
+  - SSL: Force SSL on, HTTP/2 on, HSTS off, HSTS subdomains off
+  - Certificate: `dev.p2p.red`
+  - Advanced config:
+```nginx
+location /api/ {
+    proxy_pass http://10.10.10.77:3001/api/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location /share/ {
+    rewrite ^/share/(.*)$ /api/metadata/$1?html=true break;
+    proxy_pass http://10.10.10.77:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# CSP override (dev only) - use if NPM injects `default-src 'none'`
+add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' https://plausible.p2p.red; style-src 'self' 'unsafe-inline'; connect-src 'self' https://dev.p2p.red wss://dev.p2p.red https://plausible.p2p.red;" always;
+```
+- `dev-signal.p2p.red`
+  - Forward: `http://10.10.10.77:5174`
+  - Access list: `LAN ONLY`
+  - Websockets: enabled
+  - Block common exploits: enabled
+  - Cache assets: disabled
+  - SSL: Force SSL on, HTTP/2 on, HSTS off, HSTS subdomains off
+  - Certificate: `dev-signal.p2p.red`
+- `dev-turn.p2p.red`
+  - Forward: `http://10.10.10.77:5175`
+  - Access list: `LAN ONLY`
+  - Websockets: enabled
+  - Block common exploits: enabled
+  - Cache assets: disabled
+  - SSL: Force SSL on, HTTP/2 on, HSTS off, HSTS subdomains off
+  - Certificate: `dev-turn.p2p.red`
+
 ### Prod (OVH VPS)
 - Nginx handles `p2p.red` and `www.p2p.red` on the VPS.
 - Containers run on the VPS: web, PeerJS, metadata API, Redis, Postgres.

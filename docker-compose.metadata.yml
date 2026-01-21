@@ -70,7 +70,7 @@ services:
       RATE_LIMIT_MAX_REQUESTS: 100
       CORS_ORIGIN: ${CORS_ORIGIN:-https://p2p.red}
     ports:
-      - "127.0.0.1:3001:3001"
+      - "0.0.0.0:3001:3001"
     networks:
       - p2p-network
     healthcheck:

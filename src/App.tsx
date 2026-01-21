@@ -149,6 +149,12 @@ function App() {
   const [currentPage, setCurrentPage] = useState<'home' | 'legal' | 'info'>('home');
   const [enableZip, setEnableZip] = useState<boolean>(true);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
+  const buildVariant = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
+  const buildIndicatorClass = buildVariant === 'blue'
+    ? 'bg-blue-400'
+    : buildVariant === 'green'
+      ? 'bg-emerald-400'
+      : null;
 
   const copyShareLinkToClipboard = async (link: string) => {
     try {
@@ -1216,6 +1222,12 @@ function App() {
       
       {/* Monitoring */}
       <Monitoring />
+
+      {buildIndicatorClass && (
+        <div className="fixed bottom-4 left-4 z-40">
+          <span className={`block h-3 w-3 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
+        </div>
+      )}
       
       {/* Clipboard Notification */}
       {showClipboardNotification && (

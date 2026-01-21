@@ -308,11 +308,10 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
   }, []);
 
   const handleFolderDialogSelect = useCallback(() => {
-    // Trigger the actual folder selection
+    // Trigger the actual file selection
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
-    input.setAttribute('webkitdirectory', '');
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files;
       if (files && files.length > 0) {
@@ -349,10 +348,10 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
           <div className="bg-white/5 rounded-lg p-4 border border-white/10 max-w-md w-full">
             <div className="flex items-center gap-3 text-white/80 mb-2">
               <HardDrive size={20} className="text-blue-400" />
-              <span className="font-medium">Choose a folder to share</span>
+              <span className="font-medium">Choose files to share</span>
             </div>
             <p className="text-white/60 text-sm">
-              Select a folder containing files you want to share. All files and subfolders will be included.
+              Select one or more files to share. You can also drag and drop folders anytime.
             </p>
           </div>
           
@@ -377,7 +376,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
               onClick={handleFolderDialogSelect}
               className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
             >
-              Choose Folder
+              Choose Files
             </button>
           </div>
         </div>
@@ -534,13 +533,9 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
         </>
       )}
       
-      <div className="flex items-center gap-2 text-white/40 text-sm">
-        <AlertTriangle size={16} className="text-yellow-400" />
+      <div className="mt-auto flex items-center gap-3 text-white/50 text-sm">
+        <AlertTriangle size={20} className="text-yellow-400" />
         <span>Files are never uploaded to our servers.</span>
-      </div>
-      
-      <div className="text-center mt-2 text-white/30 text-xs">
-        {isProcessing ? '' : 'Drag and drop multiple files or folders'}
       </div>
     </div>
   );

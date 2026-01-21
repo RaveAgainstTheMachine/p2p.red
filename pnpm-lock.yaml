@@ -35,7 +35,13 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+      streamsaver:
+        specifier: ^2.0.6
+        version: 2.0.6
     devDependencies:
+      '@types/node':
+        specifier: ^24.10.0
+        version: 24.10.8
       '@types/react':
         specifier: ^18.2.43
         version: 18.3.27
@@ -136,6 +142,9 @@ importers:
       peerjs:
         specifier: ^1.5.0
         version: 1.5.5
+      streamsaver:
+        specifier: ^2.0.6
+        version: 2.0.6
 
   packages/web:
     dependencies:
@@ -169,6 +178,9 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+      streamsaver:
+        specifier: ^2.0.6
+        version: 2.0.6
     devDependencies:
       '@types/react':
         specifier: ^18.2.43
@@ -1871,6 +1883,9 @@ packages:
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
+
+  streamsaver@2.0.6:
+    resolution: {integrity: sha512-LK4e7TfCV8HzuM0PKXuVUfKyCB1FtT9L0EGxsFk5Up8njj0bXK8pJM9+Wq2Nya7/jslmCQwRK39LFm55h7NBTw==}
 
   string_decoder@1.1.1:
     resolution: {integrity: sha512-n/ShnvDi6FHbbVfviro+WojiFzv+s8MPMHBczVePfUpDJLwoLT0ht1l4YwBCbi8pJAveEEdnkHyPyTP/mzRfwg==}
@@ -3664,6 +3679,8 @@ snapshots:
   slash@3.0.0: {}
 
   source-map-js@1.2.1: {}
+
+  streamsaver@2.0.6: {}
 
   string_decoder@1.1.1:
     dependencies:

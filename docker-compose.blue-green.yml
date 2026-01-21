@@ -13,6 +13,7 @@ services:
       - PEERJS_PATH=/peerjs
       - VITE_HOST=0.0.0.0
       - HOST_CHECK_DISABLED=true
+      - VITE_BUILD_VARIANT=blue
     networks:
       - p2p-network
     labels:
@@ -33,6 +34,7 @@ services:
       - PEERJS_PATH=/peerjs
       - VITE_HOST=0.0.0.0
       - HOST_CHECK_DISABLED=true
+      - VITE_BUILD_VARIANT=green
     networks:
       - p2p-network
     labels:

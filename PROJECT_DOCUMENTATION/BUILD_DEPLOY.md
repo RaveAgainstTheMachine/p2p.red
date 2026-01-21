@@ -131,6 +131,51 @@ docker run --rm --env-file /run/secrets/plausible.env \
   `docker exec -i p2p-postgres psql -U p2p_api_user -d p2p_metadata -c "ALTER USER p2p_api_user WITH PASSWORD '$PASS';"`
 - TURN credentials require `METADATA_API_ENV_FILE=/run/secrets/metadata.env` so the app reads `TURN_SECRET` from the rendered file.
 
+### Recent Prod Findings (2026-01-21)
+- Prod runtime host does **not** include full source/Dockerfiles; it only has compose + image tars.
+- Build `p2p-metadata-api` **locally**, ship tar to prod, then load + restart:
+```
+# Local build + save
+docker build -f metadata-api/Dockerfile -t p2p-metadata-api:latest /opt/p2p-file-share/metadata-api
+docker save -o /opt/p2p-file-share/images/metadata-api.tar p2p-metadata-api:latest
+
+# Copy to prod via WG
+scp -i /home/frosty/.ssh/p2p_deploy \
+  -o "ProxyCommand=ssh -i /home/frosty/.ssh/p2p_dev_key -W %h:%p debian@10.88.0.1" \
+  /opt/p2p-file-share/images/metadata-api.tar ubuntu@10.88.0.10:/tmp/metadata-api.tar
+
+# Move, load, restart (prod)
+ssh -i /home/frosty/.ssh/p2p_deploy \
+  -o "ProxyCommand=ssh -i /home/frosty/.ssh/p2p_dev_key -W %h:%p debian@10.88.0.1" \
+  ubuntu@10.88.0.10 \
+  "sudo mv /tmp/metadata-api.tar /opt/p2p-file-share/images/metadata-api.tar && \
+   sudo docker load -i /opt/p2p-file-share/images/metadata-api.tar && \
+   cd /opt/p2p-file-share && \
+   sudo METADATA_API_ENV_FILE=/run/secrets/metadata.env docker compose -f docker-compose.yml up -d --no-deps metadata-api"
+```
+- `deploy-metadata-api.sh` now supports `METADATA_TAR=/path/to/metadata-api.tar` and `SKIP_BUILD=1` to load prebuilt images.
+
+### Full Prod Image Rebuild + Tar Prep (Local)
+```
+# Build web app (blue/green images)
+docker build -f Dockerfile -t p2p-app-blue:latest /opt/p2p-file-share
+docker tag p2p-app-blue:latest p2p-app-green:latest
+
+# Build metadata API
+docker build -f metadata-api/Dockerfile -t p2p-metadata-api:latest /opt/p2p-file-share/metadata-api
+
+# Build PeerJS + Nginx
+docker build -f Dockerfile.peerjs -t p2p-peerjs:latest /opt/p2p-file-share
+docker build -f Dockerfile.nginx -t p2p-nginx:latest /opt/p2p-file-share
+
+# Save image tars
+docker save -o /opt/p2p-file-share/images/app-blue.tar p2p-app-blue:latest
+docker save -o /opt/p2p-file-share/images/app-green.tar p2p-app-green:latest
+docker save -o /opt/p2p-file-share/images/metadata-api.tar p2p-metadata-api:latest
+docker save -o /opt/p2p-file-share/images/peerjs.tar p2p-peerjs:latest
+docker save -o /opt/p2p-file-share/images/nginx.tar p2p-nginx:latest
+```
+
 ### 1) Deploy Metadata API (prod)
 ```
 SECRETS_ENV_FILE=/run/secrets/metadata.env ./deploy-metadata-api.sh

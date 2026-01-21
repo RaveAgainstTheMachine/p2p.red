@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
 const redis = require('redis');
 const bcrypt = require('bcryptjs');
+const net = require('net');
 const fs = require('fs');
 const dotenv = require('dotenv');
 
@@ -21,6 +22,7 @@ if (fs.existsSync(metadataEnvFile)) {
 const app = express();
 const PORT = process.env.PORT || 3001;
 const TURN_TTL_SECONDS = parseInt(process.env.TURN_TTL_SECONDS, 10) || 3600;
+const STATUS_TIMEOUT_MS = parseInt(process.env.STATUS_TIMEOUT_MS, 10) || 3000;
 
 // ============================================================================
 // Database & Cache Configuration
@@ -47,6 +49,38 @@ const redisClient = redis.createClient({
   password: process.env.REDIS_PASSWORD || undefined,
   database: process.env.REDIS_DB || 0,
 });
+
+const fetchWithTimeout = async (url, options = {}) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const checkHttp = async (url, options) => {
+  try {
+    const response = await fetchWithTimeout(url, options);
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+};
+
+const checkTcp = (host, port) =>
+  new Promise((resolve) => {
+    const socket = net.createConnection({ host, port, timeout: STATUS_TIMEOUT_MS }, () => {
+      socket.end();
+      resolve(true);
+    });
+    socket.on('error', () => resolve(false));
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
+  });
 
 redisClient.on('error', (err) => console.error('Redis Client Error:', err));
 redisClient.on('connect', () => console.log('✅ Redis connected'));
@@ -182,6 +216,76 @@ app.get('/api/turn-credentials', (req, res) => {
     console.error('Error generating TURN credentials:', error);
     res.status(503).json({ error: 'TURN credentials unavailable' });
   }
+});
+
+app.get('/api/status', async (req, res) => {
+  const forwardedProto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString();
+  const proto = forwardedProto.split(',')[0].trim();
+  const host = req.headers.host || 'p2p.red';
+  const isDevHost = host.startsWith('dev.');
+
+  const webUrl = process.env.WEB_STATUS_URL || `${proto}://${host}`;
+  const signalHost = process.env.SIGNAL_STATUS_HOST || (isDevHost ? 'dev-signal.p2p.red' : 'signal.p2p.red');
+  const signalUrl = process.env.SIGNAL_STATUS_URL || `https://${signalHost}/peerjs/id`;
+  const analyticsUrl = process.env.ANALYTICS_STATUS_URL || 'https://plausible.p2p.red/js/script.js';
+  const openBaoUrl = process.env.OPENBAO_STATUS_URL || 'https://bao.p2p.red/v1/sys/health';
+  const turnHost = process.env.TURN_STATUS_HOST || (isDevHost ? 'dev-turn.p2p.red' : 'turn1.p2p.red');
+  const turnPort = parseInt(process.env.TURN_STATUS_PORT || '3478', 10);
+
+  const [webOk, signalOk, analyticsOk, openBaoOk, turnOk] = await Promise.all([
+    checkHttp(webUrl, { method: 'HEAD' }),
+    checkHttp(signalUrl, { method: 'GET' }),
+    checkHttp(analyticsUrl, { method: 'HEAD' }),
+    checkHttp(openBaoUrl, { method: 'GET' }),
+    checkTcp(turnHost, turnPort)
+  ]);
+
+  let databaseOk = false;
+  let cacheOk = false;
+  try {
+    await pool.query('SELECT 1');
+    databaseOk = true;
+  } catch (error) {
+    databaseOk = false;
+  }
+
+  try {
+    await redisClient.ping();
+    cacheOk = true;
+  } catch (error) {
+    cacheOk = false;
+  }
+
+  const apiStatus = databaseOk && cacheOk ? 'online' : 'degraded';
+  const databaseStatus = databaseOk && cacheOk ? 'online' : databaseOk || cacheOk ? 'degraded' : 'offline';
+
+  const services = {
+    web: webOk ? 'online' : 'offline',
+    signal: signalOk ? 'online' : 'offline',
+    api: apiStatus,
+    databases: databaseStatus,
+    analytics: analyticsOk ? 'online' : 'offline',
+    turn: turnOk ? 'online' : 'offline',
+    secrets: openBaoOk ? 'online' : 'offline'
+  };
+
+  const statusValues = Object.values(services);
+  const hasOnline = statusValues.includes('online');
+  const hasOffline = statusValues.includes('offline');
+  const overall = hasOnline && hasOffline ? 'degraded' : hasOnline ? 'online' : 'offline';
+
+  res.json({
+    status: overall,
+    checkedAt: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    services,
+    details: {
+      databases: {
+        postgres: databaseOk ? 'online' : 'offline',
+        redis: cacheOk ? 'online' : 'offline'
+      }
+    }
+  });
 });
 
 // Health check

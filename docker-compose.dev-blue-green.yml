@@ -11,6 +11,7 @@ services:
         VITE_PEERJS_HOST: dev-signal.p2p.red
         VITE_PEERJS_PORT: 443
         VITE_PEERJS_SECURE: "true"
+        VITE_BUILD_VARIANT: blue
     container_name: p2p-app-blue
     restart: unless-stopped
     ports:
@@ -38,10 +39,11 @@ services:
         VITE_PEERJS_HOST: dev-signal.p2p.red
         VITE_PEERJS_PORT: 443
         VITE_PEERJS_SECURE: "true"
+        VITE_BUILD_VARIANT: green
     container_name: p2p-app-green
     restart: unless-stopped
     ports:
-      - "5174:3000"
+      - "5178:3000"
     environment:
       - NODE_ENV=production
       - PEERJS_HOST=dev-signal.p2p.red

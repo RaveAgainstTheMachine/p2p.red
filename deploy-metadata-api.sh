@@ -8,6 +8,8 @@ set -euo pipefail
 DEPLOY_ENV=${DEPLOY_ENV:-prod}
 METADATA_HEALTH_URL=${METADATA_HEALTH_URL:-"http://localhost:3001/health"}
 SECRETS_ENV_FILE=${SECRETS_ENV_FILE:-"/run/secrets/metadata.env"}
+METADATA_TAR=${METADATA_TAR:-""}
+SKIP_BUILD=${SKIP_BUILD:-0}
 
 echo "🚀 P2P Metadata API Deployment"
 echo "🧭 Deploy environment: $DEPLOY_ENV"
@@ -51,8 +53,22 @@ fi
 export METADATA_API_ENV_FILE="$SECRETS_ENV_FILE"
 
 # Build and start services
-echo "📦 Building Docker images..."
-docker compose --env-file "$SECRETS_ENV_FILE" -f docker-compose.metadata.yml build
+if [ -n "$METADATA_TAR" ]; then
+    if [ ! -f "$METADATA_TAR" ]; then
+        echo "❌ Metadata image tar missing: $METADATA_TAR"
+        exit 1
+    fi
+    echo "📦 Loading metadata API image from tar..."
+    docker load -i "$METADATA_TAR"
+    SKIP_BUILD=1
+fi
+
+if [ "$SKIP_BUILD" != "1" ]; then
+    echo "📦 Building Docker images..."
+    docker compose --env-file "$SECRETS_ENV_FILE" -f docker-compose.metadata.yml build
+else
+    echo "⏭️  Skipping build (prebuilt image loaded)."
+fi
 
 echo "🧹 Recreating metadata-api to avoid compose cache issues..."
 docker compose --env-file "$SECRETS_ENV_FILE" -f docker-compose.metadata.yml rm -f -s metadata-api || true

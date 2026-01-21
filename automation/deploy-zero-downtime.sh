@@ -9,7 +9,7 @@ USE_PREBUILT_IMAGES=${USE_PREBUILT_IMAGES:-0}
 SWITCH_GRACE_SECONDS=${SWITCH_GRACE_SECONDS:-5}
 POST_SWITCH_VERIFY_DELAY=${POST_SWITCH_VERIFY_DELAY:-5}
 OLD_ENV_STOP_DELAY=${OLD_ENV_STOP_DELAY:-15}
-export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-p2p-bluegreen}
+BLUEGREEN_PROJECT_NAME=${BLUEGREEN_PROJECT_NAME:-p2p-bluegreen}
 
 cd "$REPO_ROOT"
 
@@ -39,6 +39,10 @@ if [[ "$SITE_URL" != *"p2p.red"* ]]; then
     exit 1
 fi
 
+if [ -z "${METADATA_API_ENV_FILE:-}" ] && [ -f /run/secrets/metadata.env ]; then
+    export METADATA_API_ENV_FILE=/run/secrets/metadata.env
+fi
+
 if [ "$DEPLOY_ENV" = "prod" ] && [ "$USE_PREBUILT_IMAGES" != "1" ]; then
     echo "❌ Prod deploys must use prebuilt images (USE_PREBUILT_IMAGES=1)."
     echo "   Build locally with explicit VITE_BUILD_VARIANT and ship tars to prod."
@@ -48,7 +52,7 @@ fi
 ensure_nginx_running() {
     if ! docker compose ps --services --filter "status=running" | grep -q "^nginx$"; then
         echo "🧩 Nginx not running, starting..."
-        docker compose up -d --no-deps nginx
+        docker compose -f docker-compose.yml up -d --no-deps nginx
     fi
 }
 
@@ -86,7 +90,7 @@ else
     npm run build
 
     echo "🐳 Building container for $NEXT_ENV..."
-    docker compose -f docker-compose.blue-green.yml build app-$NEXT_ENV
+    COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml build app-$NEXT_ENV
 fi
 
 # Start new environment alongside current
@@ -94,7 +98,7 @@ echo "🚀 Starting $NEXT_ENV environment..."
 echo "🧹 Removing stale $NEXT_ENV containers (if any)..."
 docker rm -f "p2p-app-$NEXT_ENV" >/dev/null 2>&1 || true
 docker ps -a --format '{{.Names}}' | grep -E "(^|_)p2p-app-$NEXT_ENV$" | xargs -r docker rm -f || true
-docker compose -f docker-compose.blue-green.yml up -d app-$NEXT_ENV
+COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml up -d app-$NEXT_ENV
 
 # Wait for health check
 echo "⏳ Waiting for $NEXT_ENV to be healthy..."
@@ -102,9 +106,9 @@ sleep 10
 
 # Health check new environment (inside container)
 echo "🔍 Health checking $NEXT_ENV..."
-if ! docker compose -f docker-compose.blue-green.yml exec -T app-$NEXT_ENV node -e "require('http').get('http://localhost:3000',res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))"; then
+if ! COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml exec -T app-$NEXT_ENV node -e "require('http').get('http://localhost:3000',res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))"; then
     echo "❌ Health check failed for $NEXT_ENV"
-    docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
+    COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
     exit 1
 fi
 
@@ -125,11 +129,11 @@ fi
 
 # Switch traffic (update Nginx upstream)
 echo "🔄 Switching traffic to $NEXT_ENV..."
-sed -i "s/server p2p-app:3000;/server p2p-app-$NEXT_ENV:3000;/g" nginx.conf
+sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$NEXT_ENV:3000;/g" nginx.conf
 
 # Reload Nginx
 ensure_nginx_running
-docker compose exec nginx nginx -s reload
+docker compose -f docker-compose.yml exec nginx nginx -s reload
 
 echo "⏳ Grace period after switch (${SWITCH_GRACE_SECONDS}s)..."
 sleep "$SWITCH_GRACE_SECONDS"
@@ -142,10 +146,10 @@ sleep "$POST_SWITCH_VERIFY_DELAY"
 
 if ! curl -fs "$SITE_URL" > /dev/null; then
     echo "❌ Site verification failed - rolling back"
-    sed -i "s/server p2p-app-$NEXT_ENV:3000;/server p2p-app-$CURRENT_ENV:3000;/g" nginx.conf
+    sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$CURRENT_ENV:3000;/g" nginx.conf
     ensure_nginx_running
-    docker compose exec nginx nginx -s reload
-    docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
+    docker compose -f docker-compose.yml exec nginx nginx -s reload
+    COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
     exit 1
 fi
 
@@ -153,7 +157,7 @@ echo "⏳ Allowing old environment to drain (${OLD_ENV_STOP_DELAY}s)..."
 sleep "$OLD_ENV_STOP_DELAY"
 
 echo "✅ Deployment successful - stopping old environment"
-docker compose -f docker-compose.blue-green.yml stop app-$CURRENT_ENV
+COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$CURRENT_ENV
 
 echo "🎉 Zero-downtime deployment complete!"
 echo "📊 Active environment: $NEXT_ENV"

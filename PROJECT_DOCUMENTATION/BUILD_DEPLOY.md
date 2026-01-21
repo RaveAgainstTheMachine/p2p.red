@@ -58,6 +58,98 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 ## Prod Workflow (OVH VPS)
 
+## Blue/Green Zero-Downtime Deployment (Prod)
+
+This is the **authoritative** blue/green procedure. Always check which color is live **before** deploying and only deploy the inactive color.
+
+### A) Determine Which Color Is Live (Required)
+Use the nginx upstream because it is the source of truth for live traffic.
+```
+# On prod host
+cd /opt/p2p-file-share
+
+# Check live upstream in nginx.conf
+grep -n "p2p-app-" /opt/p2p-file-share/nginx.conf
+
+# Expected one of:
+#   server p2p-app-blue:3000;
+#   server p2p-app-green:3000;
+```
+Optional cross-checks:
+```
+docker ps --filter "label=version" --format "{{.Names}} {{.Labels}}"
+curl -s https://p2p.red | head -n 3
+```
+
+**Rule:**
+- If **blue** is live, deploy **green**.
+- If **green** is live, deploy **blue**.
+
+### B) Build + Transfer Images (Local → Prod)
+Prod runtime host does **not** have full source. Build locally and ship tars.
+```
+# Local build (set build indicator)
+export VITE_BUILD_VARIANT=green   # use blue when deploying blue
+
+docker build -f Dockerfile -t p2p-app-blue:latest /opt/p2p-file-share
+docker tag p2p-app-blue:latest p2p-app-green:latest
+docker build -f metadata-api/Dockerfile -t p2p-metadata-api:latest /opt/p2p-file-share/metadata-api
+docker build -f Dockerfile.peerjs -t p2p-peerjs:latest /opt/p2p-file-share
+docker build -f Dockerfile.nginx -t p2p-nginx:latest /opt/p2p-file-share
+
+docker save -o /opt/p2p-file-share/images/app-blue.tar p2p-app-blue:latest
+docker save -o /opt/p2p-file-share/images/app-green.tar p2p-app-green:latest
+docker save -o /opt/p2p-file-share/images/metadata-api.tar p2p-metadata-api:latest
+docker save -o /opt/p2p-file-share/images/peerjs.tar p2p-peerjs:latest
+docker save -o /opt/p2p-file-share/images/nginx.tar p2p-nginx:latest
+
+# Copy to prod via WG
+scp -i /home/frosty/.ssh/p2p_deploy \
+  -o "ProxyCommand=ssh -i /home/frosty/.ssh/p2p_dev_key -W %h:%p debian@10.88.0.1" \
+  /opt/p2p-file-share/images/*.tar ubuntu@10.88.0.10:/tmp/
+```
+
+### C) Load Images + Deploy Inactive Color (Prod)
+```
+# On prod host
+ssh -i /home/frosty/.ssh/p2p_deploy \
+  -o "ProxyCommand=ssh -i /home/frosty/.ssh/p2p_dev_key -W %h:%p debian@10.88.0.1" \
+  ubuntu@10.88.0.10
+
+sudo mv /tmp/*.tar /opt/p2p-file-share/images/
+sudo docker load -i /opt/p2p-file-share/images/app-blue.tar
+sudo docker load -i /opt/p2p-file-share/images/app-green.tar
+sudo docker load -i /opt/p2p-file-share/images/metadata-api.tar
+sudo docker load -i /opt/p2p-file-share/images/peerjs.tar
+sudo docker load -i /opt/p2p-file-share/images/nginx.tar
+
+cd /opt/p2p-file-share
+
+# Runtime services (metadata + peerjs + nginx)
+sudo METADATA_API_ENV_FILE=/run/secrets/metadata.env docker compose -f docker-compose.yml up -d
+
+# Zero-downtime app switch
+./automation/deploy-zero-downtime.sh
+```
+
+### D) Verify + Switch Outcome
+```
+curl -s https://p2p.red/api/status | jq
+curl -s https://p2p.red | head -n 3
+```
+Confirm the UI shows the expected **blue/green badge** and status panel is online.
+
+### E) Rollback (If Needed)
+```
+./automation/switch-upstream.sh blue
+./automation/switch-upstream.sh green
+```
+
+### Notes (Operational Guardrails)
+- **Never** deploy both colors at once.
+- Always deploy the **inactive** color and switch via nginx.
+- `automation/deploy-zero-downtime.sh` now checks **nginx.conf** to decide the active color.
+- If the build indicator is missing, recheck `VITE_BUILD_VARIANT` during local build.
 ### Signal Domain TLS (prod)
 `signal.p2p.red` has its own TLS cert and nginx server block (PeerJS only).
 Because the nginx container owns :80/:443, issue certs with a short nginx stop:

@@ -43,8 +43,19 @@ ensure_nginx_running() {
     fi
 }
 
-# Determine current active environment
-CURRENT_ENV=$(docker ps --filter "label=version" --format "table {{.Labels}}" | grep -E "(blue|green)" | head -1 | cut -d'=' -f2 || echo "blue")
+# Determine current active environment (prefer nginx.conf upstream)
+CURRENT_ENV=""
+if [[ -f nginx.conf ]]; then
+    if grep -q "p2p-app-green:3000" nginx.conf; then
+        CURRENT_ENV="green"
+    elif grep -q "p2p-app-blue:3000" nginx.conf; then
+        CURRENT_ENV="blue"
+    fi
+fi
+
+if [[ -z "$CURRENT_ENV" ]]; then
+    CURRENT_ENV=$(docker ps --filter "label=version" --format "table {{.Labels}}" | grep -E "(blue|green)" | head -1 | cut -d'=' -f2 || echo "blue")
+fi
 NEXT_ENV="green"
 if [ "$CURRENT_ENV" = "green" ]; then
     NEXT_ENV="blue"

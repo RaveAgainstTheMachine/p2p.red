@@ -135,10 +135,23 @@ sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$NEXT_ENV:3000;/g"
 ensure_nginx_running
 docker compose -f docker-compose.yml exec nginx nginx -s reload
 
+if ! grep -q "server p2p-app-$NEXT_ENV:3000;" nginx.conf; then
+    echo "❌ Upstream swap failed. nginx.conf does not point to $NEXT_ENV."
+    sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$CURRENT_ENV:3000;/g" nginx.conf
+    ensure_nginx_running
+    docker compose -f docker-compose.yml exec nginx nginx -s reload
+    COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
+    exit 1
+fi
+
 echo "⏳ Grace period after switch (${SWITCH_GRACE_SECONDS}s)..."
 sleep "$SWITCH_GRACE_SECONDS"
 
 echo "✅ Traffic switched to $NEXT_ENV"
+
+DEPLOY_LOG_PATH=${DEPLOY_LOG_PATH:-"$REPO_ROOT/automation/deploy.log"}
+DEPLOY_IMAGE_ID=$(docker inspect -f '{{.Image}}' "p2p-app-$NEXT_ENV" 2>/dev/null || echo "unknown")
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) env=$NEXT_ENV image=$DEPLOY_IMAGE_ID site=$SITE_URL" >> "$DEPLOY_LOG_PATH"
 
 # Wait and verify
 echo "⏳ Verifying live traffic..."
@@ -157,7 +170,11 @@ echo "⏳ Allowing old environment to drain (${OLD_ENV_STOP_DELAY}s)..."
 sleep "$OLD_ENV_STOP_DELAY"
 
 echo "✅ Deployment successful - stopping old environment"
-COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$CURRENT_ENV
+if grep -q "server p2p-app-$NEXT_ENV:3000;" nginx.conf; then
+    COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$CURRENT_ENV
+else
+    echo "⚠️  Skipping stop of $CURRENT_ENV: nginx.conf no longer points to $NEXT_ENV."
+fi
 
 echo "🎉 Zero-downtime deployment complete!"
 echo "📊 Active environment: $NEXT_ENV"

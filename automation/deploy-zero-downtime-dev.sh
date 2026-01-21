@@ -40,7 +40,7 @@ echo "🔄 Current: $CURRENT_ENV → Next: $NEXT_ENV"
 
 # Ensure dev ports are available for next environment
 if [ "$NEXT_ENV" = "green" ]; then
-    require_port_free 5174
+    require_port_free 5178
 else
     require_port_free 5173
 fi
@@ -49,7 +49,7 @@ fi
 echo "📦 Building $NEXT_ENV environment..."
 cd packages/web
 npm run build
-cd ..
+cd ../..
 
 # Build new container
 docker compose -f docker-compose.dev-blue-green.yml build app-$NEXT_ENV
@@ -65,7 +65,7 @@ sleep 10
 # Determine port for health check
 HEALTH_PORT="5173"
 if [ "$NEXT_ENV" = "green" ]; then
-    HEALTH_PORT="5174"
+    HEALTH_PORT="5178"
 fi
 
 # Health check new environment

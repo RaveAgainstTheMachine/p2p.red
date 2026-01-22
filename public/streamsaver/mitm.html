@@ -75,6 +75,13 @@ function onMessage(event) {
 
   const port = ports[0];
   port.onmessage = evt => {
+    if (evt.data?.debug) {
+      try {
+        window.parent?.postMessage({ type: 'streamsaver_debug', detail: evt.data.debug }, origin);
+      } catch (error) {
+        console.warn('[StreamSaver] Unable to notify parent about debug', error);
+      }
+    }
     if (evt.data.download) {
       try {
         window.parent?.postMessage({ type: 'streamsaver_download', url: evt.data.download }, origin);
@@ -90,6 +97,11 @@ function onMessage(event) {
 }
 
 registerWorker().then(() => {
+  try {
+    window.parent?.postMessage({ type: 'streamsaver_debug', detail: 'worker_ready' }, location.origin);
+  } catch (error) {
+    console.warn('[StreamSaver] Unable to notify parent about worker readiness', error);
+  }
   window.onmessage = onMessage;
   messages.forEach(onMessage);
   messages = [];

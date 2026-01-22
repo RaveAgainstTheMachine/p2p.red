@@ -259,6 +259,9 @@ function App() {
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'streamsaver_debug') {
+        console.log('🧪 StreamSaver debug:', event.data.detail);
+      }
       if (event.data?.type === 'streamsaver_download') {
         streamSaverDownloadReceived.current = true;
         if (streamSaverDownloadTimeout.current !== null) {

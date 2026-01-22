@@ -21,6 +21,11 @@ interface AdaptiveTransferProgress {
   maxCachedShardBytes?: number;
 }
 
+interface ReceiveOptions {
+  fileHandle?: any;
+  requireSave?: boolean;
+}
+
 interface ReceiverDeviceProfile {
   hardwareConcurrency?: number;
   deviceMemoryGB?: number;
@@ -904,17 +909,17 @@ export const useAdaptiveMultiStreamTransfer = () => {
   }, []);
 
   const receiveFileMultiStream = useCallback(async (
-    conn: DataConnection
-  ): Promise<Blob> => {
+    conn: DataConnection,
+    options?: ReceiveOptions
+  ): Promise<void> => {
     console.log('📥 receiveFileMultiStream STARTED (SHARD-BASED)');
     
-    return new Promise((resolve) => {
+    return new Promise<void>((resolve, reject) => {
       setIsTransferring(true);
       startTime.current = Date.now();
 
       let fileSize = 0;
       let expectedStreams = 0;
-      let fileName = 'download';
       let shardSize = 0;
       let shardCount = 0;
       let chunkHeaderBytes = 8;
@@ -1061,7 +1066,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           await writableStream.close();
           conn.send({ type: 'receiver_done', timestamp: Date.now() });
           setIsTransferring(false);
-          resolve(new Blob([]));
+          resolve();
           return;
         }
 
@@ -1070,20 +1075,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
           await streamWriter.close();
           conn.send({ type: 'receiver_done', timestamp: Date.now() });
           setIsTransferring(false);
-          resolve(new Blob([]));
+          resolve();
           return;
         }
 
-        const orderedShardIds = Array.from(shardStates.keys()).sort((a, b) => a - b);
-        const blobParts = orderedShardIds.map((id) => {
-          const state = shardStates.get(id);
-          const buffer = shardBuffers.get(id);
-          if (!state || !buffer) return new ArrayBuffer(0);
-          return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + state.total) as ArrayBuffer;
-        });
-        conn.send({ type: 'receiver_done', timestamp: Date.now() });
+        console.error('❌ No save method available after transfer');
         setIsTransferring(false);
-        resolve(new Blob(blobParts, { type: 'application/octet-stream' }));
+        reject(new Error('No save method available'));
       };
       
       // Shard tracking with CRC32 verification and immediate writes
@@ -1101,6 +1099,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let fileHandle: any = null;
       let writableStream: any = null;
       let useFileSystemAPI = false;
+      const requireSave = options?.requireSave ?? false;
 
       const setupDataChannelHandlers = () => {
         const pc = (conn as any).peerConnection;
@@ -1243,7 +1242,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
         if (data.type === 'multi_stream_start') {
           console.log('📥 receiveFileMultiStream STARTED (SHARD-BASED)');
           
-          fileName = data.fileName;
           fileSize = data.fileSize;
           expectedStreams = data.streamCount;
           shardSize = data.shardSize;
@@ -1270,18 +1268,14 @@ export const useAdaptiveMultiStreamTransfer = () => {
             });
           }
           
-          // Try File System Access API
-          if ('showSaveFilePicker' in window) {
+          if (options?.fileHandle) {
             try {
-              fileHandle = await (window as any).showSaveFilePicker({
-                suggestedName: fileName,
-                types: [{ description: 'All Files', accept: {'*/*': []} }]
-              });
+              fileHandle = options.fileHandle;
               writableStream = await fileHandle.createWritable({ keepExistingData: false });
               useFileSystemAPI = true;
               console.log('✅ File System Access API active');
             } catch (err) {
-              console.log('⚠️ File System Access API failed, using RAM');
+              console.error('❌ File System Access API failed', err);
               useFileSystemAPI = false;
             }
           }
@@ -1294,27 +1288,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
             console.log('✅ StreamSaver preflight active for receiver');
           }
 
-          if (!useFileSystemAPI && !useStreamSaver && supportsStreamSaver()) {
-            try {
-              streamSaver.mitm = '/streamsaver/mitm';
-              const fileStream = streamSaver.createWriteStream(fileName, { size: fileSize });
-              streamWriter = fileStream.getWriter();
-              useStreamSaver = true;
-              console.log('✅ StreamSaver enabled for receiver');
-            } catch (error) {
-              console.warn('⚠️ StreamSaver init failed, using in-memory fallback', error);
-              useStreamSaver = false;
-              streamWriter = null;
-            }
-          }
-
           if (!useFileSystemAPI && !useStreamSaver) {
-            shardStates.forEach((state, id) => {
-              if (!shardBuffers.has(id)) {
-                shardBuffers.set(id, new Uint8Array(state.total));
-                cachedShardBytes += state.total;
-              }
-            });
+            if (requireSave) {
+              console.error('❌ No save method available (File System Access + StreamSaver preflight unavailable)');
+              setIsTransferring(false);
+              reject(new Error('No save method available'));
+              return;
+            }
           }
           
           // Wait for peerConnection to be ready before setting up handlers
@@ -1514,14 +1494,15 @@ export const useAdaptiveMultiStreamTransfer = () => {
     conn: DataConnection,
     input: File | ReadableStream | null,
     fileName?: string,
-    totalSize?: number
-  ): Promise<Blob | void> => {
+    totalSize?: number,
+    options?: ReceiveOptions
+  ): Promise<void> => {
     const isSender = input !== null;
     
     if (isSender) {
       await sendFileMultiStream(conn, input, fileName, totalSize);
     } else {
-      return await receiveFileMultiStream(conn);
+      await receiveFileMultiStream(conn, options);
     }
   }, [sendFileMultiStream, receiveFileMultiStream]);
 

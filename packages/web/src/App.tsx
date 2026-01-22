@@ -687,7 +687,12 @@ function App() {
     }
 
     if (incomingFileInfo?.name && typeof incomingFileInfo.size === 'number') {
-      prepareStreamSaverDownload(incomingFileInfo.name, incomingFileInfo.size);
+      const prepared = prepareStreamSaverDownload(incomingFileInfo.name, incomingFileInfo.size);
+      if (!prepared) {
+        console.error('❌ StreamSaver preflight failed, cannot continue');
+        setStatus('error');
+        return;
+      }
     }
 
     await handleReceive(null);
@@ -819,27 +824,14 @@ function App() {
       } else {
         // Single file
         console.log('📂 Single file path - Starting adaptive multi-stream download');
-        const received = await transferFileAdaptive(conn, null as any);
-        if (received instanceof Blob && received.size > 0) {
-          // Trigger download
-          const url = URL.createObjectURL(received);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = incomingFileInfo?.name || 'download';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }
+        await transferFileAdaptive(conn, null as any, undefined, undefined, {
+          fileHandle: activeHandle,
+          requireSave: true
+        });
         
         // For streaming writes, file is already on disk
-        if (activeHandle) {
-          setStatus('complete');
-          console.log('✅ File saved successfully');
-        } else {
-          // Traditional download - file is already handled in receiveFile
-          setStatus('complete');
-        }
+        setStatus('complete');
+        console.log('✅ File saved successfully');
       }
       
       setStatus('complete');

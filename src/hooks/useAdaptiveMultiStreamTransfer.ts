@@ -1262,7 +1262,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
           if (!useFileSystemAPI && supportsStreamSaver()) {
             try {
-              streamSaver.mitm = '/streamsaver/mitm.html';
+              streamSaver.mitm = '/streamsaver/mitm';
               const fileStream = streamSaver.createWriteStream(fileName, { size: fileSize });
               streamWriter = fileStream.getWriter();
               useStreamSaver = true;

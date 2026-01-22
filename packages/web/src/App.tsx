@@ -318,7 +318,6 @@ function App() {
     
     try {
       const metadata = await getMetadata(shortKey, enteredPin);
-      console.log('📦 Retrieved metadata with PIN:', metadata);
       setSenderPeerId(metadata.peerId);
       setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize, expiresAt: metadata.expiresAt, fileType: metadata.fileType });
       setRequiresPin(false);
@@ -336,7 +335,6 @@ function App() {
 
   const handleProceedWithTransfer = async () => {
     if (!selectedFiles) return;
-    console.log('🔐 PIN state before transfer:', { pin, hasPin: !!pin, pinLength: pin?.length });
     setStatus('encrypting');
     const files = selectedFiles;
     
@@ -411,7 +409,6 @@ function App() {
           // Create short link via metadata API
           try {
             const pinToSend = pin && pin.length === 4 ? pin : undefined;
-            console.log('📤 Creating short link with PIN:', { hasPin: !!pinToSend, pinLength: pinToSend?.length });
             const shortKey = await createShortLink({
               peerId: peerId!,
               fileName: zipFileName,
@@ -486,7 +483,6 @@ function App() {
         // Create short link via metadata API
         try {
           const pinToSend = pin && pin.length === 4 ? pin : undefined;
-          console.log('📤 Creating short link with PIN:', { hasPin: !!pinToSend, pinLength: pinToSend?.length });
           const shortKey = await createShortLink({
             peerId: peerId!,
             fileName: zipFileName,
@@ -549,14 +545,13 @@ function App() {
         
         // Calculate total size for metadata
         let totalSize = 0;
-        for (let i = 0; i < files.length; i++) {
+        for (let i = 0; i <files.length; i++) {
           totalSize += files[i].size;
         }
         
         // Create short link via metadata API
         try {
           const pinToSend = pin && pin.length === 4 ? pin : undefined;
-          console.log('📤 Creating short link with PIN:', { hasPin: !!pinToSend, pinLength: pinToSend?.length });
           // Determine display name
           let displayName: string;
           if (isFolderSelection) {
@@ -638,7 +633,6 @@ function App() {
       // Create short link via metadata API
       try {
         const pinToSend = pin && pin.length === 4 ? pin : undefined;
-        console.log('📤 Creating short link with PIN:', { hasPin: !!pinToSend, pinLength: pinToSend?.length });
         const shortKey = await createShortLink({
           peerId: peerId!,
           fileName: fileToTransfer.name,
@@ -1319,6 +1313,10 @@ function App() {
                 <p>Yes. File data stays between browsers via WebRTC DataChannels; servers only help peers find each other.</p>
               </div>
               <div>
+                <h3 className="text-white font-semibold">How do you protect my privacy?</h3>
+                <p>Files are encrypted in your browser with AES-GCM and sent directly peer-to-peer. Signaling and metadata services only coordinate connections and never see file contents, and links expire after 24 hours (with optional PIN protection).</p>
+              </div>
+              <div>
                 <h3 className="text-white font-semibold">Do I need an account?</h3>
                 <p>No account required. Create a link and share it.</p>
               </div>
@@ -1337,36 +1335,59 @@ function App() {
 
       {/* Footer */}
       <footer className="relative z-10 mt-auto border-t border-white/10">
-        <div className="mx-auto w-full max-w-none px-[15px] py-3">
-          <div className="grid gap-3 md:grid-cols-[auto,1fr,auto] md:items-center">
-            <div className="flex items-center justify-start">
-              {buildIndicatorClass && buildIndicatorLabel && (
-                <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 shadow-lg shadow-black/20 backdrop-blur">
-                  <div className="inline-flex items-center gap-2">
-                    <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
-                    <span>{buildIndicatorLabel}</span>
-                  </div>
-                  {buildVersion && (
-                    <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50">
-                      {buildVersion}
+        <div className="mx-auto w-full max-w-none px-[15px] py-1">
+          <div className="grid gap-0.5">
+            <div className="flex flex-wrap items-center justify-center gap-x-[clamp(6px,1.8vw,14px)] gap-y-1 text-center text-[clamp(10px,2.2vw,14px)] text-white/60 max-[640px]:w-full max-[640px]:flex-nowrap max-[640px]:justify-between max-[640px]:gap-x-0 max-[640px]:text-[9px]">
+              <a
+                href="https://buymeacoffee.com/p2p.red"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center whitespace-nowrap leading-none text-yellow-400 transition-colors hover:text-yellow-300"
+              >
+                Support
+              </a>
+              <button
+                onClick={() => setCurrentPage('info')}
+                className="inline-flex items-center whitespace-nowrap leading-none text-white/60 transition-colors hover:text-white"
+              >
+                Info
+              </button>
+              <button
+                onClick={() => setCurrentPage('legal')}
+                className="inline-flex items-center whitespace-nowrap leading-none text-white/60 transition-colors hover:text-white"
+              >
+                Legal
+              </button>
+              <span className="inline-flex items-center whitespace-nowrap leading-none text-white/60">© 2026 p2p.red</span>
+              <a
+                href="https://cv.tee215.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group inline-flex items-center gap-1 whitespace-nowrap leading-none text-white/50"
+              >
+                <span className="whitespace-nowrap">Logo by</span>
+                <span className="text-blue-400 transition-colors group-hover:text-blue-300">Talal Al-Saymaree</span>
+              </a>
+            </div>
+            <div className="flex items-end justify-between gap-3">
+              <div className="flex items-end">
+                {buildIndicatorClass && buildIndicatorLabel && (
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 shadow-lg shadow-black/20 backdrop-blur">
+                    <div className="inline-flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
+                      <span>{buildIndicatorLabel}</span>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-white/60">
-              <a href="https://buymeacoffee.com/p2p.red" target="_blank" rel="noopener noreferrer" className="text-yellow-400 hover:text-yellow-300 transition-colors">Support</a>
-              <span className="text-white/40">•</span>
-              <button onClick={() => setCurrentPage('info')} className="text-white/60 hover:text-white transition-colors">How It Works</button>
-              <span className="text-white/40">•</span>
-              <button onClick={() => setCurrentPage('legal')} className="text-white/60 hover:text-white transition-colors">Legal</button>
-              <span className="text-white/40">•</span>
-              <span className="text-white/60">© 2026 p2p.red</span>
-              <span className="text-white/40">•</span>
-              <span className="text-white/50">Logo by <a href="https://cv.tee215.com/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors">Talal Al-Saymaree</a></span>
-            </div>
-            <div className="flex items-center justify-end">
-              <Monitoring placement="footer" />
+                    {buildVersion && (
+                      <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50">
+                        {buildVersion}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-end">
+                <Monitoring placement="footer" />
+              </div>
             </div>
           </div>
         </div>

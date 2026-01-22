@@ -90,74 +90,71 @@ export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) =
     return 'Degraded';
   };
 
-  if (!isVisible) {
-    return (
-      <div className={placement === 'footer' ? 'relative' : ''}>
-        <button
-          onClick={() => setIsVisible(true)}
+  return (
+    <div className={placement === 'footer' ? 'relative' : ''}>
+      <button
+        onClick={() => setIsVisible((prev) => !prev)}
+        className={
+          placement === 'footer'
+            ? 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 shadow-lg shadow-black/20 backdrop-blur transition-colors hover:bg-white/10 hover:text-white'
+            : 'fixed bottom-1 right-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/20'
+        }
+        title="Service Status"
+      >
+        <Activity size={20} className={placement === 'footer' ? 'text-white/70' : 'text-white/60'} />
+      </button>
+      {isVisible && (
+        <div
           className={
             placement === 'footer'
-              ? 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 shadow-lg shadow-black/20 backdrop-blur transition-colors hover:bg-white/10 hover:text-white'
-              : 'fixed bottom-1 right-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/20'
+              ? 'absolute bottom-full right-0 mb-2 z-40 w-64 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg'
+              : 'fixed bottom-1 right-4 z-50 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg'
           }
-          title="Service Status"
         >
-          <Activity size={20} className={placement === 'footer' ? 'text-white/70' : 'text-white/60'} />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={
-        placement === 'footer'
-          ? 'absolute bottom-full right-0 mb-2 z-40 w-64 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg'
-          : 'fixed bottom-1 right-4 z-50 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg'
-      }
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Activity size={16} className={getStatusColor(overallStatus)} />
-          <h3 className="text-sm font-semibold text-white">Service Status</h3>
-        </div>
-        <button
-          onClick={() => setIsVisible(false)}
-          className="text-white/60 hover:text-white text-xs"
-        >
-          ✕
-        </button>
-      </div>
-      
-      <div className="space-y-2 text-xs">
-        <div className="flex items-center justify-between">
-          <span className="text-white/60">Status:</span>
-          <span className={`${getStatusColor(overallStatus)} font-semibold`}>
-            ● {formatStatusLabel(overallStatus)}
-          </span>
-        </div>
-        <div className="mt-2 border-t border-white/10 pt-2">
-          <div className="space-y-1">
-            {services.map((service) => {
-              const rawStatus = serviceStatuses[service.key] || 'unknown';
-              const status = normalizeStatus(rawStatus);
-              return (
-                <div key={service.label} className="flex items-center justify-between">
-                  <span className="text-white/60">{service.label}</span>
-                  <span className={getStatusColor(status)}>
-                    ● {formatStatusLabel(status)}
-                  </span>
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Activity size={16} className={getStatusColor(overallStatus)} />
+              <h3 className="text-sm font-semibold text-white">Service Status</h3>
+            </div>
+            <button
+              onClick={() => setIsVisible(false)}
+              className="text-white/60 hover:text-white text-xs"
+            >
+              ✕
+            </button>
+          </div>
+          
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-white/60">Status:</span>
+              <span className={`${getStatusColor(overallStatus)} font-semibold`}>
+                ● {formatStatusLabel(overallStatus)}
+              </span>
+            </div>
+            <div className="mt-2 border-t border-white/10 pt-2">
+              <div className="space-y-1">
+                {services.map((service) => {
+                  const rawStatus = serviceStatuses[service.key] || 'unknown';
+                  const status = normalizeStatus(rawStatus);
+                  return (
+                    <div key={service.label} className="flex items-center justify-between">
+                      <span className="text-white/60">{service.label}</span>
+                      <span className={getStatusColor(status)}>
+                        ● {formatStatusLabel(status)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {lastCheckedAt && (
+              <div className="text-white/40 text-[10px]">
+                Last check: {new Date(lastCheckedAt).toLocaleTimeString()}
+              </div>
+            )}
           </div>
         </div>
-        {lastCheckedAt && (
-          <div className="text-white/40 text-[10px]">
-            Last check: {new Date(lastCheckedAt).toLocaleTimeString()}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };

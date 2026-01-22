@@ -125,10 +125,10 @@ function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
   const { isEncrypting } = useEncryption();
   const { transferProgress, isTransferring, resumeTransfer } = useFileTransfer();
-  const { transferProgress: adaptiveProgress, transferFileAdaptive } = useAdaptiveMultiStreamTransfer();
+  const { transferProgress: adaptiveProgress, transferFileAdaptive, prepareStreamSaverDownload } = useAdaptiveMultiStreamTransfer();
  
   const isAssistedConnection = (() => {
-    const ct = (adaptiveProgress as any)?.candidateType;
+    const ct = (adaptiveProgress as any)?.current?.candidateType;
     return typeof ct === 'string' && ct.toLowerCase().includes('relay');
   })();
   const [mode, setMode] = useState<'share' | 'receive'>('share');
@@ -670,11 +670,27 @@ function App() {
   };
 
   const handleChooseSaveLocation = async () => {
-    // The hook now handles File System Access API internally
-    // Just start the receive process
-    console.log('📁 Ready to receive file, waiting for user to start download');
     setPendingReceive(false);
-    await handleReceive(null); // Hook handles File System Access API
+
+    if ('showSaveFilePicker' in window && incomingFileInfo?.name) {
+      try {
+        const pickerHandle = await (window as any).showSaveFilePicker({
+          suggestedName: incomingFileInfo.name,
+          types: [{ description: 'All Files', accept: { '*/*': [] } }]
+        });
+        await handleReceive(pickerHandle);
+        await startFileReceive(pickerHandle);
+        return;
+      } catch (error) {
+        console.warn('⚠️ File picker cancelled, falling back to StreamSaver');
+      }
+    }
+
+    if (incomingFileInfo?.name && typeof incomingFileInfo.size === 'number') {
+      prepareStreamSaverDownload(incomingFileInfo.name, incomingFileInfo.size);
+    }
+
+    await handleReceive(null);
     await startFileReceive(null);
   };
 
@@ -1107,8 +1123,8 @@ function App() {
                       </div>
                     )}
                     <EnhancedProgressBar 
-                      progress={adaptiveProgress} 
-                      label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`} 
+                      progress={adaptiveProgress.current} 
+                      label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.current.activeStreams} streams, ${adaptiveProgress.current.networkQuality})`} 
                       showETA={true}
                       showSpeed={true}
                     />
@@ -1159,8 +1175,8 @@ function App() {
                     </div>
                   )}
                   <EnhancedProgressBar 
-                    progress={adaptiveProgress} 
-                    label={`Receiving file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}
+                    progress={adaptiveProgress.current} 
+                    label={`Receiving file (Adaptive Multi-Stream: ${adaptiveProgress.current.activeStreams} streams, ${adaptiveProgress.current.networkQuality})`}
                     showETA={true}
                     showSpeed={true}
                   />

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useRef, useCallback } from 'react';
 import { DataConnection } from 'peerjs';
 import streamSaver from 'streamsaver';
 import { MultiStreamOrchestrator } from '../utils/multiStreamOrchestrator';
@@ -108,7 +108,7 @@ function finalizeCRC32(crc: number): string {
 }
 
 export const useAdaptiveMultiStreamTransfer = () => {
-  const [transferProgress, setTransferProgress] = useState<AdaptiveTransferProgress>({
+  const transferProgress = useRef<AdaptiveTransferProgress>({
     bytesTransferred: 0,
     totalBytes: 0,
     percentage: 0,
@@ -119,8 +119,18 @@ export const useAdaptiveMultiStreamTransfer = () => {
     adaptiveChunkSize: 256 * 1024 // Start with 256KB
   });
 
-  const [isTransferring, setIsTransferring] = useState(false);
+  const isTransferring = useRef<boolean>(false);
+  const preparedStreamWriterRef = useRef<WritableStreamDefaultWriter<Uint8Array> | null>(null);
+  const preparedStreamMetaRef = useRef<{ fileName: string; fileSize: number } | null>(null);
   const startTime = useRef<number>(0);
+
+  const setIsTransferring = useCallback((value: boolean) => {
+    isTransferring.current = value;
+  }, []);
+
+  const setTransferProgress = useCallback((next: AdaptiveTransferProgress) => {
+    transferProgress.current = next;
+  }, []);
 
 
   // Create multiple parallel DataChannels using orchestrator
@@ -877,6 +887,22 @@ export const useAdaptiveMultiStreamTransfer = () => {
   }, [createParallelChannels, setTransferProgress]);
 
   // Receive file with shard-based tracking
+  const prepareStreamSaverDownload = useCallback((fileName: string, fileSize: number) => {
+    if (!supportsStreamSaver()) return false;
+    try {
+      streamSaver.mitm = '/streamsaver/mitm';
+      const fileStream = streamSaver.createWriteStream(fileName, { size: fileSize });
+      preparedStreamWriterRef.current = fileStream.getWriter();
+      preparedStreamMetaRef.current = { fileName, fileSize };
+      return true;
+    } catch (error) {
+      console.warn('⚠️ StreamSaver preflight failed', error);
+      preparedStreamWriterRef.current = null;
+      preparedStreamMetaRef.current = null;
+      return false;
+    }
+  }, []);
+
   const receiveFileMultiStream = useCallback(async (
     conn: DataConnection
   ): Promise<Blob> => {
@@ -1259,7 +1285,15 @@ export const useAdaptiveMultiStreamTransfer = () => {
             }
           }
 
-          if (!useFileSystemAPI && supportsStreamSaver()) {
+          if (!useFileSystemAPI && preparedStreamWriterRef.current) {
+            streamWriter = preparedStreamWriterRef.current;
+            preparedStreamWriterRef.current = null;
+            preparedStreamMetaRef.current = null;
+            useStreamSaver = true;
+            console.log('✅ StreamSaver preflight active for receiver');
+          }
+
+          if (!useFileSystemAPI && !useStreamSaver && supportsStreamSaver()) {
             try {
               streamSaver.mitm = '/streamsaver/mitm';
               const fileStream = streamSaver.createWriteStream(fileName, { size: fileSize });
@@ -1493,6 +1527,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
   return {
     transferFileAdaptive,
     transferProgress,
-    isTransferring
+    isTransferring,
+    prepareStreamSaverDownload
   };
 };

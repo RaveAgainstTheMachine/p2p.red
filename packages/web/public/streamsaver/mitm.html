@@ -76,6 +76,11 @@ function onMessage(event) {
   const port = ports[0];
   port.onmessage = evt => {
     if (evt.data.download) {
+      try {
+        window.parent?.postMessage({ type: 'streamsaver_download', url: evt.data.download }, origin);
+      } catch (error) {
+        console.warn('[StreamSaver] Unable to notify parent about download', error);
+      }
       window.location.href = evt.data.download;
     }
   };

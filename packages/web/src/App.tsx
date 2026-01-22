@@ -140,6 +140,8 @@ function App() {
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string; fileType?: string} | null>(null);
+  const streamSaverDownloadExpected = useRef(false);
+  const streamSaverDownloadReceived = useRef(false);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [requiresPin, setRequiresPin] = useState<boolean>(false);
@@ -252,6 +254,18 @@ function App() {
       if (twitterDesc) twitterDesc.setAttribute('content', description);
     }
   }, [mode, incomingFileInfo, senderPeerId]);
+
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'streamsaver_download') {
+        streamSaverDownloadReceived.current = true;
+        console.log('✅ StreamSaver download started');
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   useEffect(() => {
     console.log('🔍 Mode detection useEffect running:', {
@@ -693,6 +707,8 @@ function App() {
         setStatus('error');
         return;
       }
+      streamSaverDownloadExpected.current = true;
+      streamSaverDownloadReceived.current = false;
     }
 
     await handleReceive(null);
@@ -828,8 +844,13 @@ function App() {
           fileHandle: activeHandle,
           requireSave: true
         });
-        
-        // For streaming writes, file is already on disk
+
+        if (!activeHandle && streamSaverDownloadExpected.current && !streamSaverDownloadReceived.current) {
+          console.error('❌ StreamSaver download did not start');
+          setStatus('error');
+          return;
+        }
+
         setStatus('complete');
         console.log('✅ File saved successfully');
       }

@@ -142,6 +142,7 @@ function App() {
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string; fileType?: string} | null>(null);
   const streamSaverDownloadExpected = useRef(false);
   const streamSaverDownloadReceived = useRef(false);
+  const streamSaverDownloadTimeout = useRef<number | null>(null);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [requiresPin, setRequiresPin] = useState<boolean>(false);
@@ -260,6 +261,10 @@ function App() {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'streamsaver_download') {
         streamSaverDownloadReceived.current = true;
+        if (streamSaverDownloadTimeout.current !== null) {
+          window.clearTimeout(streamSaverDownloadTimeout.current);
+          streamSaverDownloadTimeout.current = null;
+        }
         console.log('✅ StreamSaver download started');
       }
     };
@@ -709,6 +714,15 @@ function App() {
       }
       streamSaverDownloadExpected.current = true;
       streamSaverDownloadReceived.current = false;
+      if (streamSaverDownloadTimeout.current !== null) {
+        window.clearTimeout(streamSaverDownloadTimeout.current);
+      }
+      streamSaverDownloadTimeout.current = window.setTimeout(() => {
+        if (streamSaverDownloadExpected.current && !streamSaverDownloadReceived.current) {
+          console.error('❌ StreamSaver download prompt did not appear');
+          setStatus('error');
+        }
+      }, 4000);
     }
 
     await handleReceive(null);

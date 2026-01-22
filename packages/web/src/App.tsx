@@ -701,7 +701,7 @@ function App() {
     }
 
     if (incomingFileInfo?.name && typeof incomingFileInfo.size === 'number') {
-      const prepared = prepareStreamSaverDownload(incomingFileInfo.name, incomingFileInfo.size);
+      const prepared = await prepareStreamSaverDownload(incomingFileInfo.name, incomingFileInfo.size);
       if (!prepared) {
         console.error('❌ StreamSaver preflight failed, cannot continue');
         setStatus('error');

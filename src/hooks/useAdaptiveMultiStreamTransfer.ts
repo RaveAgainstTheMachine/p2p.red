@@ -892,13 +892,15 @@ export const useAdaptiveMultiStreamTransfer = () => {
   }, [createParallelChannels, setTransferProgress]);
 
   // Receive file with shard-based tracking
-  const prepareStreamSaverDownload = useCallback((fileName: string, fileSize: number) => {
+  const prepareStreamSaverDownload = useCallback(async (fileName: string, fileSize: number) => {
     if (!supportsStreamSaver()) return false;
     try {
       streamSaver.mitm = '/streamsaver/mitm';
       const fileStream = streamSaver.createWriteStream(fileName, { size: fileSize });
-      preparedStreamWriterRef.current = fileStream.getWriter();
+      const writer = fileStream.getWriter();
+      preparedStreamWriterRef.current = writer;
       preparedStreamMetaRef.current = { fileName, fileSize };
+      await writer.write(new Uint8Array(0));
       return true;
     } catch (error) {
       console.warn('⚠️ StreamSaver preflight failed', error);

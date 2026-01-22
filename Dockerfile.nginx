@@ -5,6 +5,8 @@ COPY nginx.conf /etc/nginx/nginx.conf
 
 # Copy built frontend
 COPY dist /usr/share/nginx/html
+# Ensure StreamSaver assets are up to date
+COPY public/streamsaver /usr/share/nginx/html/streamsaver
 
 # Expose ports
 EXPOSE 80 443

@@ -143,6 +143,7 @@ function App() {
   const streamSaverDownloadExpected = useRef(false);
   const streamSaverDownloadReceived = useRef(false);
   const streamSaverDownloadTimeout = useRef<number | null>(null);
+  const streamSaverPromptFailed = useRef(false);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [requiresPin, setRequiresPin] = useState<boolean>(false);
@@ -264,6 +265,7 @@ function App() {
       }
       if (event.data?.type === 'streamsaver_download') {
         streamSaverDownloadReceived.current = true;
+        streamSaverPromptFailed.current = false;
         if (streamSaverDownloadTimeout.current !== null) {
           window.clearTimeout(streamSaverDownloadTimeout.current);
           streamSaverDownloadTimeout.current = null;
@@ -467,7 +469,9 @@ function App() {
                 setStatus('transferring');
                 try {
                   await transferFileAdaptive(conn, zipStream, zipFileName, totalSize);
-                  setStatus('complete');
+                  if (!streamSaverPromptFailed.current) {
+                    setStatus('complete');
+                  }
                 } catch (error) {
                   console.error('Multi-stream ZIP transfer failed:', error);
                   setStatus('error');
@@ -717,12 +721,14 @@ function App() {
       }
       streamSaverDownloadExpected.current = true;
       streamSaverDownloadReceived.current = false;
+      streamSaverPromptFailed.current = false;
       if (streamSaverDownloadTimeout.current !== null) {
         window.clearTimeout(streamSaverDownloadTimeout.current);
       }
       streamSaverDownloadTimeout.current = window.setTimeout(() => {
         if (streamSaverDownloadExpected.current && !streamSaverDownloadReceived.current) {
           console.error('❌ StreamSaver download prompt did not appear');
+          streamSaverPromptFailed.current = true;
           setStatus('error');
         }
       }, 4000);
@@ -864,12 +870,15 @@ function App() {
 
         if (!activeHandle && streamSaverDownloadExpected.current && !streamSaverDownloadReceived.current) {
           console.error('❌ StreamSaver download did not start');
+          streamSaverPromptFailed.current = true;
           setStatus('error');
           return;
         }
 
-        setStatus('complete');
-        console.log('✅ File saved successfully');
+        if (!streamSaverPromptFailed.current) {
+          setStatus('complete');
+          console.log('✅ File saved successfully');
+        }
       }
       
       setStatus('complete');

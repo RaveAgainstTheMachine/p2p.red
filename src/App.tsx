@@ -158,16 +158,15 @@ function App() {
   const themeToggleRef = useRef<HTMLDivElement | null>(null);
   const [enableZip, setEnableZip] = useState<boolean>(true);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
-  const buildVariant = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
+  const buildVariantRaw = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
+  const buildVariant = buildVariantRaw || 'dev';
   const buildVersion = (import.meta as any)?.env?.VITE_BUILD_VERSION;
   const buildIndicatorClass = buildVariant === 'blue'
     ? 'bg-blue-400'
     : buildVariant === 'green'
       ? 'bg-emerald-400'
-      : null;
-  const buildIndicatorLabel = buildVariant === 'blue' || buildVariant === 'green'
-    ? buildVariant
-    : null;
+      : 'bg-slate-400';
+  const buildIndicatorLabel = buildVariant;
 
   const copyShareLinkToClipboard = async (link: string) => {
     try {
@@ -888,7 +887,7 @@ function App() {
       
       <div ref={themeToggleRef} className="fixed top-4 right-4 z-30">
         <div
-          className={`flex h-10 items-center justify-center gap-1 overflow-hidden border border-white/15 bg-black/30 text-white/80 shadow-lg transition-[width,border-radius,padding] duration-200 ease-out ${isThemeMenuOpen ? 'w-28 rounded-2xl px-2' : 'w-10 rounded-full'}`}
+          className={`flex h-10 items-center justify-center gap-1 overflow-hidden border border-white/10 bg-white/5 text-white/80 shadow-lg shadow-black/20 backdrop-blur transition-[width,border-radius,padding] duration-200 ease-out ${isThemeMenuOpen ? 'w-28 rounded-2xl px-2' : 'w-10 rounded-full'}`}
           onMouseEnter={() => setIsThemeMenuOpen(true)}
           onMouseLeave={(event) => {
             if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
@@ -1337,43 +1336,46 @@ function App() {
       </div>
 
       {/* Footer */}
-      <footer className="relative z-10 mt-auto py-3 pb-16 border-t border-white/10">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-center gap-3 text-sm">
-            <a href="https://buymeacoffee.com/p2p.red" target="_blank" rel="noopener noreferrer" className="text-yellow-400 hover:text-yellow-300 transition-colors">Support</a>
-            <span className="text-white/40">•</span>
-            <button onClick={() => setCurrentPage('info')} className="text-white/60 hover:text-white transition-colors">How It Works</button>
-            <span className="text-white/40">•</span>
-            <button onClick={() => setCurrentPage('legal')} className="text-white/60 hover:text-white transition-colors">Legal</button>
-            <span className="text-white/40">•</span>
-            <span className="text-white/60">© 2026 p2p.red</span>
-            <span className="text-white/40">•</span>
-            <span className="text-white/50">Logo by <a href="https://cv.tee215.com/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors">Talal Al-Saymaree</a></span>
+      <footer className="relative z-10 mt-auto border-t border-white/10">
+        <div className="mx-auto w-full max-w-none px-[15px] py-3">
+          <div className="grid gap-3 md:grid-cols-[auto,1fr,auto] md:items-center">
+            <div className="flex items-center justify-start">
+              {buildIndicatorClass && buildIndicatorLabel && (
+                <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 shadow-lg shadow-black/20 backdrop-blur">
+                  <div className="inline-flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
+                    <span>{buildIndicatorLabel}</span>
+                  </div>
+                  {buildVersion && (
+                    <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50">
+                      {buildVersion}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-white/60">
+              <a href="https://buymeacoffee.com/p2p.red" target="_blank" rel="noopener noreferrer" className="text-yellow-400 hover:text-yellow-300 transition-colors">Support</a>
+              <span className="text-white/40">•</span>
+              <button onClick={() => setCurrentPage('info')} className="text-white/60 hover:text-white transition-colors">How It Works</button>
+              <span className="text-white/40">•</span>
+              <button onClick={() => setCurrentPage('legal')} className="text-white/60 hover:text-white transition-colors">Legal</button>
+              <span className="text-white/40">•</span>
+              <span className="text-white/60">© 2026 p2p.red</span>
+              <span className="text-white/40">•</span>
+              <span className="text-white/50">Logo by <a href="https://cv.tee215.com/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors">Talal Al-Saymaree</a></span>
+            </div>
+            <div className="flex items-center justify-end">
+              <Monitoring placement="footer" />
+            </div>
           </div>
         </div>
       </footer>
-
-      {buildIndicatorClass && buildIndicatorLabel && (
-        <div className="fixed bottom-24 left-1/2 z-40 flex -translate-x-1/2 justify-center">
-          <div className="rounded-xl border border-white/10 bg-black/50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80 shadow-lg">
-            <div className="inline-flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
-              <span>{buildIndicatorLabel}</span>
-            </div>
-            {buildVersion && (
-              <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50">
-                {buildVersion}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Cookie/Privacy Banner */}
       <CookieBanner />
       
       {/* Monitoring */}
-      <Monitoring />
 
       {/* Clipboard Notification */}
       {showClipboardNotification && (

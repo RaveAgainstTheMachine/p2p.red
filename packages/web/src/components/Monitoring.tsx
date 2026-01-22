@@ -11,7 +11,13 @@ interface StatusResponse {
   services?: Record<string, ServiceStatus>;
 }
 
-export const Monitoring: React.FC = () => {
+type MonitoringPlacement = 'fixed' | 'footer';
+
+interface MonitoringProps {
+  placement?: MonitoringPlacement;
+}
+
+export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) => {
   const statusUrl = import.meta.env.PROD
     ? `${window.location.origin}/api/status`
     : 'http://localhost:3001/api/status';
@@ -86,18 +92,30 @@ export const Monitoring: React.FC = () => {
 
   if (!isVisible) {
     return (
-      <button
-        onClick={() => setIsVisible(true)}
-        className="fixed bottom-1 right-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/20"
-        title="Service Status"
-      >
-        <Activity size={20} className="text-white/60" />
-      </button>
+      <div className={placement === 'footer' ? 'relative' : ''}>
+        <button
+          onClick={() => setIsVisible(true)}
+          className={
+            placement === 'footer'
+              ? 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 shadow-lg shadow-black/20 backdrop-blur transition-colors hover:bg-white/10 hover:text-white'
+              : 'fixed bottom-1 right-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/20'
+          }
+          title="Service Status"
+        >
+          <Activity size={20} className={placement === 'footer' ? 'text-white/70' : 'text-white/60'} />
+        </button>
+      </div>
     );
   }
 
   return (
-    <div className="fixed bottom-1 right-4 z-50 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg">
+    <div
+      className={
+        placement === 'footer'
+          ? 'absolute bottom-full right-0 mb-2 z-40 w-64 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg'
+          : 'fixed bottom-1 right-4 z-50 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg'
+      }
+    >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Activity size={16} className={getStatusColor(overallStatus)} />

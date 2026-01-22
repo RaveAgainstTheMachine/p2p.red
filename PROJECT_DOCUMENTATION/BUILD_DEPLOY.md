@@ -62,6 +62,10 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 This is the **authoritative** blue/green procedure. Always check which color is live **before** deploying and only deploy the inactive color.
 
+**UI/UX confirmation requirement (prod):**
+- Any UI/UX changes must be reviewed and explicitly confirmed by the project owner **before** running a production release.
+- If confirmation is pending, stop after local verification and wait.
+
 ### A) Determine Which Color Is Live (Required)
 Use the nginx upstream because it is the source of truth for live traffic.
 ```
@@ -167,6 +171,7 @@ Confirm the UI shows the expected **blue/green badge** and the build **version**
 - Always deploy the **inactive** color and switch via nginx.
 - `automation/deploy-zero-downtime.sh` checks **nginx.conf** to decide the active color.
 - Prod deploys require **prebuilt images** (`USE_PREBUILT_IMAGES=1`) to prevent local builds on prod.
+- UI/UX changes require explicit project-owner confirmation **before** prod release.
 - Build images only via `automation/build-prod-images.sh` (labels `p2p.build_variant` are enforced).
 - If the build indicator is missing or wrong, rebuild locally (do not proceed).
 - Deploy script now **copies nginx.conf into the nginx container** before reload to avoid stale upstreams.

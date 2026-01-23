@@ -11,6 +11,7 @@ RUN npm ci --only=production
 
 # Copy application code
 COPY server.js ./
+COPY utils ./utils
 COPY .env.example ./.env
 
 # Create non-root user

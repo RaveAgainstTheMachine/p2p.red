@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import Peer, { DataConnection } from 'peerjs';
+import { peerJsConfig } from '../config/environments';
 
 const TURN_HOSTS = ['turn1.p2p.red', 'turn2.p2p.red'];
 const TURN_TCP_PORT = 3478;
@@ -91,10 +92,10 @@ export const useWebRTC = () => {
       }
 
       const newPeer = new Peer({
-        host: 'p2p.red',
-        port: 443,
-        path: '/peerjs',
-        secure: true,
+        host: peerJsConfig.host,
+        port: peerJsConfig.port,
+        path: peerJsConfig.path,
+        secure: peerJsConfig.secure,
         config: {
           iceServers,
           iceCandidatePoolSize: 10,

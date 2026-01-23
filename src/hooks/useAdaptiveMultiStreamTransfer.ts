@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { DataConnection } from 'peerjs';
 import streamSaver from 'streamsaver';
 import { MultiStreamOrchestrator } from '../utils/multiStreamOrchestrator';
@@ -46,8 +46,18 @@ interface ShardState {
   channelId: number;
 }
 
+interface EncryptionState {
+  enabled: boolean;
+  key: CryptoKey;
+  ivBytes: number;
+  tagBytes: number;
+}
+
 const MAX_INDEXEDDB_CACHE_BYTES = 512 * 1024 * 1024;
 const LOW_INDEXEDDB_CACHE_BYTES = 384 * 1024 * 1024;
+const ECDH_IV_BYTES = 12;
+const ECDH_TAG_BYTES = 16;
+const ECDH_INFO = new TextEncoder().encode('p2p.red/webrtc-ecdh-v1');
 
 const supportsStreamSaver = () =>
   typeof window !== 'undefined' &&
@@ -112,8 +122,170 @@ function finalizeCRC32(crc: number): string {
   return ((crc ^ 0xFFFFFFFF) >>> 0).toString(16).padStart(8, '0');
 }
 
+const toBase64 = (data: ArrayBuffer | Uint8Array) =>
+  btoa(String.fromCharCode(...new Uint8Array(data)));
+
+const fromBase64 = (value: string) =>
+  Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
+
+const toArrayBuffer = (value: Uint8Array) =>
+  new Uint8Array(value).buffer;
+
+const createEcdhKeyPair = async () =>
+  crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    ['deriveBits']
+  ) as Promise<CryptoKeyPair>;
+
+const exportEcdhPublicKey = async (publicKey: CryptoKey) =>
+  toBase64(await crypto.subtle.exportKey('raw', publicKey));
+
+const importEcdhPublicKey = async (encoded: string) =>
+  crypto.subtle.importKey(
+    'raw',
+    fromBase64(encoded),
+    { name: 'ECDH', namedCurve: 'P-256' },
+    false,
+    []
+  );
+
+const hashSalt = async (value: Uint8Array) =>
+  new Uint8Array(await crypto.subtle.digest('SHA-256', toArrayBuffer(value)));
+
+const deriveAesKey = async (
+  privateKey: CryptoKey,
+  peerPublicKey: CryptoKey,
+  salt: Uint8Array
+) => {
+  const sharedBits = await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: peerPublicKey },
+    privateKey,
+    256
+  );
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    sharedBits,
+    'HKDF',
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: toArrayBuffer(salt),
+      info: ECDH_INFO
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+};
+
+const buildAad = (shardId: number, attemptId: number) => {
+  const aad = new Uint8Array(8);
+  const view = new DataView(aad.buffer);
+  view.setUint32(0, shardId, true);
+  view.setUint32(4, attemptId, true);
+  return aad;
+};
+
+const encryptChunk = async (
+  key: CryptoKey,
+  shardId: number,
+  attemptId: number,
+  data: Uint8Array,
+  ivBytes: number
+) => {
+  const iv = crypto.getRandomValues(new Uint8Array(ivBytes));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: buildAad(shardId, attemptId) },
+    key,
+    toArrayBuffer(data)
+  );
+  return { iv, encrypted: new Uint8Array(encrypted) };
+};
+
+const decryptChunk = async (
+  key: CryptoKey,
+  shardId: number,
+  attemptId: number,
+  iv: Uint8Array,
+  data: Uint8Array
+) => {
+  const ivBuffer = new Uint8Array(iv);
+  return crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: ivBuffer, additionalData: buildAad(shardId, attemptId) },
+    key,
+    toArrayBuffer(data)
+  );
+};
+
+type CryptoWorkerClient = {
+  init: (key: CryptoKey, ivBytes: number) => Promise<void>;
+  encrypt: (shardId: number, attemptId: number, data: Uint8Array) => Promise<{ iv: Uint8Array; encrypted: Uint8Array }>;
+  decrypt: (shardId: number, attemptId: number, iv: Uint8Array, data: Uint8Array) => Promise<{ decrypted: Uint8Array }>;
+  crc32: (crc: number, data: Uint8Array) => Promise<number>;
+  terminate: () => void;
+};
+
+const createCryptoWorkerClient = (): CryptoWorkerClient | null => {
+  if (typeof Worker === 'undefined') return null;
+  let worker: Worker | null = null;
+  try {
+    worker = new Worker(new URL('../workers/transferCryptoWorker.ts', import.meta.url), { type: 'module' });
+  } catch (error) {
+    console.warn('⚠️ Crypto worker unavailable', error);
+    return null;
+  }
+  let requestId = 0;
+  const pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>();
+  worker.onmessage = (event: MessageEvent<{ id: number; ok: boolean; result?: any; error?: string }>) => {
+    const payload = event.data;
+    const entry = pending.get(payload.id);
+    if (!entry) return;
+    pending.delete(payload.id);
+    if (payload.ok) {
+      entry.resolve(payload.result);
+    } else {
+      entry.reject(new Error(payload.error || 'Crypto worker error'));
+    }
+  };
+
+  const request = (type: string, data: Record<string, unknown>) =>
+    new Promise<any>((resolve, reject) => {
+      if (!worker) {
+        reject(new Error('Crypto worker terminated'));
+        return;
+      }
+      const id = requestId++;
+      pending.set(id, { resolve, reject });
+      worker.postMessage({ id, type, ...data });
+    });
+
+  return {
+    init: async (key, ivBytes) => {
+      await request('init', { key, ivBytes });
+    },
+    encrypt: async (shardId, attemptId, data) =>
+      request('encrypt', { shardId, attemptId, data }),
+    decrypt: async (shardId, attemptId, iv, data) =>
+      request('decrypt', { shardId, attemptId, iv, data }),
+    crc32: async (crc, data) => {
+      const result = await request('crc32', { crc, data });
+      return result.crc as number;
+    },
+    terminate: () => {
+      worker?.terminate();
+      worker = null;
+    }
+  };
+};
+
 export const useAdaptiveMultiStreamTransfer = () => {
-  const transferProgress = useRef<AdaptiveTransferProgress>({
+  const [transferProgressState, setTransferProgressState] = useState<AdaptiveTransferProgress>({
     bytesTransferred: 0,
     totalBytes: 0,
     percentage: 0,
@@ -121,8 +293,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
     timeRemaining: 0,
     activeStreams: 0,
     networkQuality: 'good',
-    adaptiveChunkSize: 256 * 1024 // Start with 256KB
+    adaptiveChunkSize: 256 * 1024, // Start with 256KB
+    shardProgress: undefined
   });
+  const transferProgress = useRef<AdaptiveTransferProgress>(transferProgressState);
 
   const isTransferring = useRef<boolean>(false);
   const preparedStreamWriterRef = useRef<WritableStreamDefaultWriter<Uint8Array> | null>(null);
@@ -135,6 +309,105 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
   const setTransferProgress = useCallback((next: AdaptiveTransferProgress) => {
     transferProgress.current = next;
+    setTransferProgressState(next);
+  }, []);
+
+  const performEcdhHandshake = useCallback(async (
+    conn: DataConnection,
+    role: 'sender' | 'receiver',
+    transferId?: string
+  ): Promise<{ state: EncryptionState; transferId: string }> => {
+    const timeoutMs = 10000;
+    const encoder = new TextEncoder();
+
+    if (role === 'sender' && !transferId) {
+      throw new Error('Missing transferId for sender ECDH handshake');
+    }
+
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const cleanup = () => {
+        if (done) return;
+        done = true;
+        conn.off('data', handler);
+      };
+
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error('ECDH handshake timed out'));
+      }, timeoutMs);
+
+      let localKeyPair: CryptoKeyPair | null = null;
+      let localTransferId = transferId || '';
+
+      const finishHandshake = async (peerPubKeyB64: string) => {
+        if (!localKeyPair) {
+          localKeyPair = await createEcdhKeyPair();
+        }
+        const peerPublicKey = await importEcdhPublicKey(peerPubKeyB64);
+        const salt = await hashSalt(encoder.encode(localTransferId));
+        const key = await deriveAesKey(localKeyPair.privateKey, peerPublicKey, salt);
+        clearTimeout(timer);
+        cleanup();
+        resolve({
+          state: {
+            enabled: true,
+            key,
+            ivBytes: ECDH_IV_BYTES,
+            tagBytes: ECDH_TAG_BYTES
+          },
+          transferId: localTransferId
+        });
+      };
+
+      const handler = async (data: any) => {
+        if (role === 'receiver' && data?.type === 'ecdh_init') {
+          localTransferId = String(data.transferId || '');
+          if (!localTransferId) {
+            clearTimeout(timer);
+            cleanup();
+            reject(new Error('ECDH handshake missing transferId'));
+            return;
+          }
+          localKeyPair = await createEcdhKeyPair();
+          const pubKey = await exportEcdhPublicKey(localKeyPair.publicKey);
+          conn.send({
+            type: 'ecdh_reply',
+            transferId: localTransferId,
+            pubKey,
+            ivBytes: ECDH_IV_BYTES,
+            tagBytes: ECDH_TAG_BYTES
+          });
+          await finishHandshake(String(data.pubKey || ''));
+        }
+
+        if (role === 'sender' && data?.type === 'ecdh_reply') {
+          if (!localTransferId || data.transferId !== localTransferId) return;
+          await finishHandshake(String(data.pubKey || ''));
+        }
+      };
+
+      conn.on('data', handler);
+
+      if (role === 'sender') {
+        (async () => {
+          localKeyPair = await createEcdhKeyPair();
+          const pubKey = await exportEcdhPublicKey(localKeyPair.publicKey);
+          conn.send({
+            type: 'ecdh_init',
+            transferId: localTransferId,
+            pubKey,
+            ivBytes: ECDH_IV_BYTES,
+            tagBytes: ECDH_TAG_BYTES,
+            protocolVersion: 3
+          });
+        })().catch((error) => {
+          clearTimeout(timer);
+          cleanup();
+          reject(error);
+        });
+      }
+    });
   }, []);
 
 
@@ -177,6 +450,89 @@ export const useAdaptiveMultiStreamTransfer = () => {
       const isFile = input instanceof File;
       const fileSize = isFile ? input.size : (totalSize || 0);
       const name = fileName || (isFile ? input.name : 'download');
+
+      const transferId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      let encryptionState: EncryptionState | null = null;
+      const cryptoWorker = createCryptoWorkerClient();
+      const perfNow = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const perfStats = {
+        encryptMs: 0,
+        encryptBytes: 0,
+        crcMs: 0,
+        crcBytes: 0,
+        bufferWaitMs: 0
+      };
+      const logPerf = (label: string) => {
+        const crcPerMb = perfStats.crcBytes > 0 ? (perfStats.crcMs / (perfStats.crcBytes / (1024 * 1024))).toFixed(2) : '0';
+        const encPerMb = perfStats.encryptBytes > 0 ? (perfStats.encryptMs / (perfStats.encryptBytes / (1024 * 1024))).toFixed(2) : '0';
+        console.log(`⚙️ ${label} perf`, {
+          encryptMs: Math.round(perfStats.encryptMs),
+          encryptBytesMB: +(perfStats.encryptBytes / (1024 * 1024)).toFixed(1),
+          encryptMsPerMB: encPerMb,
+          crcMs: Math.round(perfStats.crcMs),
+          crcBytesMB: +(perfStats.crcBytes / (1024 * 1024)).toFixed(1),
+          crcMsPerMB: crcPerMb,
+          bufferWaitMs: Math.round(perfStats.bufferWaitMs)
+        });
+      };
+
+      try {
+        const handshake = await performEcdhHandshake(conn, 'sender', transferId);
+        encryptionState = handshake.state;
+        if (encryptionState?.enabled && cryptoWorker) {
+          try {
+            await cryptoWorker.init(encryptionState.key, encryptionState.ivBytes);
+          } catch (error) {
+            console.warn('⚠️ Crypto worker init failed, falling back to main thread', error);
+            cryptoWorker.terminate();
+          }
+        }
+      } catch (error) {
+        console.error('❌ ECDH handshake failed (sender):', error);
+        setIsTransferring(false);
+        cryptoWorker?.terminate();
+        reject(error instanceof Error ? error : new Error('ECDH handshake failed'));
+        return;
+      }
+
+      const perfInterval = setInterval(() => {
+        logPerf('sender');
+      }, 5000);
+
+      const chunkHeaderBytes = encryptionState?.enabled
+        ? 8 + encryptionState.ivBytes
+        : 8;
+
+      const buildChunkMessage = async (chunkData: Uint8Array, shardId: number, attemptId: number) => {
+        if (encryptionState?.enabled) {
+          const start = perfNow();
+          const { iv, encrypted } = cryptoWorker
+            ? await cryptoWorker.encrypt(shardId, attemptId, chunkData)
+            : await encryptChunk(
+                encryptionState.key,
+                shardId,
+                attemptId,
+                chunkData,
+                encryptionState.ivBytes
+              );
+          perfStats.encryptMs += perfNow() - start;
+          perfStats.encryptBytes += chunkData.byteLength;
+          const message = new Uint8Array(8 + encryptionState.ivBytes + encrypted.length);
+          const view = new DataView(message.buffer);
+          view.setUint32(0, shardId, true);
+          view.setUint32(4, attemptId, true);
+          message.set(iv, 8);
+          message.set(encrypted, 8 + encryptionState.ivBytes);
+          return message;
+        }
+
+        const message = new Uint8Array(8 + chunkData.length);
+        const view = new DataView(message.buffer);
+        view.setUint32(0, shardId, true);
+        view.setUint32(4, attemptId, true);
+        message.set(chunkData, 8);
+        return message;
+      };
 
       // Measure initial speed to determine shard size
       let estimatedSpeed = 50 * 1024 * 1024; // Default: 50 MB/s
@@ -289,8 +645,14 @@ export const useAdaptiveMultiStreamTransfer = () => {
           streamCount: numChannels,
           shardSize: SHARD_SIZE,
           shardCount: shards.length,
-          protocolVersion: 2,
-          chunkHeaderBytes: 8,
+          protocolVersion: 3,
+          chunkHeaderBytes,
+          transferId,
+          encryption: {
+            enabled: true,
+            ivBytes: encryptionState?.ivBytes ?? ECDH_IV_BYTES,
+            tagBytes: encryptionState?.tagBytes ?? ECDH_TAG_BYTES
+          },
           timestamp: Date.now()
         });
 
@@ -364,6 +726,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
         const waitForChannelBufferRoom = async (channel: RTCDataChannel) => {
           while (channel.bufferedAmount > CHANNEL_BUFFER_HIGH_WATERMARK) {
+            const waitStart = perfNow();
             await new Promise<void>((resolve) => {
               let done = false;
               const onLow = () => {
@@ -380,6 +743,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 resolve();
               }, 50);
             });
+            perfStats.bufferWaitMs += perfNow() - waitStart;
           }
         };
 
@@ -390,6 +754,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
         });
 
         let totalBytesTransferred = 0;
+        let totalCrc32 = 0xFFFFFFFF;
         const CHUNK_SIZE = 252 * 1024; // 252KB chunks (4 bytes reserved for shard ID header)
         let lastLoggedPercentage = 0;
         let lastUiProgressUpdateTs = 0;
@@ -412,6 +777,34 @@ export const useAdaptiveMultiStreamTransfer = () => {
             const resolveWait = cacheWaiters.shift();
             if (resolveWait) resolveWait();
           }
+        };
+
+        const updateTotalCrc = (chunk: Uint8Array) => {
+          const start = perfNow();
+          if (cryptoWorker) {
+            return cryptoWorker.crc32(totalCrc32, chunk).then((next) => {
+              totalCrc32 = next;
+              perfStats.crcMs += perfNow() - start;
+              perfStats.crcBytes += chunk.byteLength;
+            });
+          }
+          totalCrc32 = updateCRC32(totalCrc32, chunk);
+          perfStats.crcMs += perfNow() - start;
+          perfStats.crcBytes += chunk.byteLength;
+          return Promise.resolve();
+        };
+
+        const computeShardCrc = async (chunk: Uint8Array) => {
+          const start = perfNow();
+          let crc = 0xFFFFFFFF;
+          if (cryptoWorker) {
+            crc = await cryptoWorker.crc32(crc, chunk);
+          } else {
+            crc = updateCRC32(crc, chunk);
+          }
+          perfStats.crcMs += perfNow() - start;
+          perfStats.crcBytes += chunk.byteLength;
+          return finalizeCRC32(crc);
         };
 
         // Handle shard confirmations and retransmission requests (must be active during transfer
@@ -449,7 +842,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
               }
 
               const attemptId = shardAttemptIds.get(shard.id) ?? 0;
-              const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
+              const shardCRC = await computeShardCrc(shardData);
 
               conn.send({
                 type: 'shard_start',
@@ -463,26 +856,25 @@ export const useAdaptiveMultiStreamTransfer = () => {
             }
           } else if (data.type === 'retransmit_shards') {
             console.log(`📡 Retransmit request for ${data.shardIds.length} shards`);
-            
+
             for (const shardId of data.shardIds) {
               const shard = shards[shardId];
               if (!shard) continue;
               const channel = channels[shard.channelId];
-              
+
               if (channel.readyState !== 'open') {
                 console.error(`❌ Channel ${shard.channelId} closed, cannot retransmit shard ${shardId}`);
                 continue;
               }
-              
+
               console.log(`🔄 Retransmitting shard ${shardId} (${(shard.size/1024/1024).toFixed(1)}MB)`);
-              
+
               // Get shard data from File or cache
               let shardData: Uint8Array;
               if (isFile) {
                 const shardBlob = (input as File).slice(shard.offset, shard.offset + shard.size);
                 shardData = new Uint8Array(await shardBlob.arrayBuffer());
               } else {
-                // Use cached shard data from stream
                 const cached = shardCache.get(shardId);
                 if (!cached) {
                   console.error(`❌ Shard ${shardId} not in cache, cannot retransmit`);
@@ -495,8 +887,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
               shardAttemptIds.set(shard.id, attemptId);
 
               // Calculate per-shard CRC32 (needed so receiver can verify retransmits)
-              const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
-              
+              const shardCRC = await computeShardCrc(shardData);
+
               conn.send({
                 type: 'shard_start',
                 shardId: shard.id,
@@ -516,18 +908,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 }
 
                 await waitForChannelBufferRoom(channel);
-                
-                const message = new Uint8Array(8 + chunkData.length);
-                const view = new DataView(message.buffer);
-                view.setUint32(0, shard.id, true);
-                view.setUint32(4, attemptId, true);
-                message.set(chunkData, 8);
-                
+
+                const message = await buildChunkMessage(chunkData, shard.id, attemptId);
                 channel.send(message.buffer);
                 sentBytes += chunkData.length;
               }
             }
-            
+
             conn.send({
               type: 'retransmit_complete',
               timestamp: Date.now()
@@ -536,6 +923,27 @@ export const useAdaptiveMultiStreamTransfer = () => {
         };
 
         conn.on('data', messageHandler);
+
+        // For Files: Precompute total CRC32 in deterministic order
+        if (isFile) {
+          const computeTotalCrcForFile = async () => {
+            let crc = 0xFFFFFFFF;
+            for (const shard of shards) {
+              const shardBlob = (input as File).slice(shard.offset, shard.offset + shard.size);
+              const shardData = new Uint8Array(await shardBlob.arrayBuffer());
+              const start = perfNow();
+              if (cryptoWorker) {
+                crc = await cryptoWorker.crc32(crc, shardData);
+              } else {
+                crc = updateCRC32(crc, shardData);
+              }
+              perfStats.crcMs += perfNow() - start;
+              perfStats.crcBytes += shardData.byteLength;
+            }
+            return crc;
+          };
+          totalCrc32 = await computeTotalCrcForFile();
+        }
 
         // For Files: Use parallel shard sending
         if (isFile) {
@@ -559,7 +967,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
               const attemptId = shardAttemptIds.get(shard.id) ?? 0;
               
               // Calculate per-shard CRC32
-              const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
+              const shardCRC = await computeShardCrc(shardData);
               
               // Send shard metadata with CRC32
               conn.send({
@@ -585,12 +993,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 await waitForChannelBufferRoom(channel);
                 
                 // Send chunk with shard ID
-                const message = new Uint8Array(8 + chunkData.length);
-                const view = new DataView(message.buffer);
-                view.setUint32(0, shard.id, true);
-                view.setUint32(4, attemptId, true);
-                message.set(chunkData, 8);
-                
+                const message = await buildChunkMessage(chunkData, shard.id, attemptId);
                 channel.send(message.buffer);
                 sentBytes += chunkData.length;
                 shard.bytesTransferred += chunkData.length;
@@ -652,6 +1055,12 @@ export const useAdaptiveMultiStreamTransfer = () => {
           while (true) {
             const { done, value } = await reader.read();
             
+            if (done) break;
+
+            if (value) {
+              await updateTotalCrc(value);
+            }
+            
             if (value) {
               let valueOffset = 0;
               
@@ -697,7 +1106,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   cachedShardBytes += shardData.length;
                   
                   // Calculate per-shard CRC32
-                  const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
+                  const shardCRC = await computeShardCrc(shardData);
 
                   const attemptId = shardAttemptIds.get(shard.id) ?? 0;
                   
@@ -725,12 +1134,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
                     await waitForChannelBufferRoom(channel);
                     
-                    const message = new Uint8Array(8 + chunkData.length);
-                    const view = new DataView(message.buffer);
-                    view.setUint32(0, shard.id, true);
-                    view.setUint32(4, attemptId, true);
-                    message.set(chunkData, 8);
-                    
+                    const message = await buildChunkMessage(chunkData, shard.id, attemptId);
                     channel.send(message.buffer);
                     sentBytes += chunkData.length;
                   }
@@ -777,65 +1181,57 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 }
               }
             }
-            
-            if (done) {
-              // Send final partial shard if any (only if we haven't already sent all shards)
-              if (currentShardFilled > 0 && currentShardIndex < shards.length) {
-                const shard = shards[currentShardIndex];
-                if (!shard) {
-                  console.log('✅ All shards sent, stream complete');
-                  break;
-                }
-                const shardData = currentShardBuffer.slice(0, currentShardFilled);
-                
-                // Cache final shard until confirmed
-                await waitForCacheRoom(shardData.length);
-                shardCache.set(shard.id, shardData);
-                cachedShardBytes += shardData.length;
-                
-                // Calculate per-shard CRC32
-                const shardCRC = finalizeCRC32(updateCRC32(0xFFFFFFFF, shardData));
+          }
 
-                const attemptId = shardAttemptIds.get(shard.id) ?? 0;
-                
-                const channel = channels[shard.channelId];
-                
-                conn.send({
-                  type: 'shard_start',
-                  shardId: shard.id,
-                  offset: shard.offset,
-                  size: shardData.length,
-                  channelId: shard.channelId,
-                  attemptId,
-                  crc32: shardCRC
-                });
-                
-                let sentBytes = 0;
-                while (sentBytes < shardData.length) {
-                  const chunkData = shardData.subarray(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+          // Send final partial shard if any (only if we haven't already sent all shards)
+          if (currentShardFilled > 0 && currentShardIndex < shards.length) {
+            const shard = shards[currentShardIndex];
+            if (!shard) {
+              console.log('✅ All shards sent, stream complete');
+            } else {
+              const shardData = currentShardBuffer.slice(0, currentShardFilled);
+              
+              // Cache final shard until confirmed
+              await waitForCacheRoom(shardData.length);
+              shardCache.set(shard.id, shardData);
+              cachedShardBytes += shardData.length;
+              
+              // Calculate per-shard CRC32
+              const shardCRC = await computeShardCrc(shardData);
 
-                  while (receiverBackpressureLevel === 'high') {
-                    await new Promise(resolve => setTimeout(resolve, 10));
-                  }
-                  
-                  while (channel.bufferedAmount > 1 * 1024 * 1024) {
-                    await new Promise(resolve => setTimeout(resolve, 10));
-                  }
-                  
-                  const message = new Uint8Array(8 + chunkData.length);
-                  const view = new DataView(message.buffer);
-                  view.setUint32(0, shard.id, true);
-                  view.setUint32(4, attemptId, true);
-                  message.set(chunkData, 8);
-                  
-                  channel.send(message.buffer);
-                  sentBytes += chunkData.length;
+              const attemptId = shardAttemptIds.get(shard.id) ?? 0;
+              
+              const channel = channels[shard.channelId];
+              
+              conn.send({
+                type: 'shard_start',
+                shardId: shard.id,
+                offset: shard.offset,
+                size: shardData.length,
+                channelId: shard.channelId,
+                attemptId,
+                crc32: shardCRC
+              });
+              
+              let sentBytes = 0;
+              while (sentBytes < shardData.length) {
+                const chunkData = shardData.subarray(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
+
+                while (receiverBackpressureLevel === 'high') {
+                  await new Promise(resolve => setTimeout(resolve, 10));
                 }
                 
-                totalBytesTransferred += shardData.length;
-                shard.status = 'complete';
+                while (channel.bufferedAmount > 1 * 1024 * 1024) {
+                  await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                
+                const message = await buildChunkMessage(chunkData, shard.id, attemptId);
+                channel.send(message.buffer);
+                sentBytes += chunkData.length;
               }
-              break;
+              
+              totalBytesTransferred += shardData.length;
+              shard.status = 'complete';
             }
           }
         }
@@ -853,6 +1249,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
         conn.send({
           type: 'multi_stream_complete',
           bytesTransferred: totalBytesTransferred,
+          totalBytes: totalBytesTransferred,
+          totalCrc32: finalizeCRC32(totalCrc32),
           fileSize,
           timestamp: Date.now()
         });
@@ -878,12 +1276,17 @@ export const useAdaptiveMultiStreamTransfer = () => {
         conn.off('data', receiverBackpressureHandler);
 
         channels.forEach(ch => ch.close());
+        clearInterval(perfInterval);
+        logPerf('sender-final');
+        cryptoWorker?.terminate();
         setIsTransferring(false);
         clearInterval(qualityInterval);
         resolve();
       } catch (error) {
         console.error('❌ Shard transfer error:', error);
         conn.off('data', receiverBackpressureHandler);
+        clearInterval(perfInterval);
+        cryptoWorker?.terminate();
         setIsTransferring(false);
         clearInterval(qualityInterval);
         reject(error);
@@ -895,7 +1298,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
   const prepareStreamSaverDownload = useCallback(async (fileName: string, fileSize: number) => {
     if (!supportsStreamSaver()) return false;
     try {
-      streamSaver.mitm = '/streamsaver/mitm';
+      streamSaver.mitm = '/streamsaver/mitm.html';
       const fileStream = streamSaver.createWriteStream(fileName, { size: fileSize });
       const writer = fileStream.getWriter();
       preparedStreamWriterRef.current = writer;
@@ -920,7 +1323,36 @@ export const useAdaptiveMultiStreamTransfer = () => {
       setIsTransferring(true);
       startTime.current = Date.now();
 
+      const cryptoWorker = createCryptoWorkerClient();
+      const perfNow = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const perfStats = {
+        decryptMs: 0,
+        decryptBytes: 0,
+        crcMs: 0,
+        crcBytes: 0,
+        writeWaitMs: 0
+      };
+      const logPerf = (label: string) => {
+        const crcPerMb = perfStats.crcBytes > 0 ? (perfStats.crcMs / (perfStats.crcBytes / (1024 * 1024))).toFixed(2) : '0';
+        const decPerMb = perfStats.decryptBytes > 0 ? (perfStats.decryptMs / (perfStats.decryptBytes / (1024 * 1024))).toFixed(2) : '0';
+        console.log(`⚙️ ${label} perf`, {
+          decryptMs: Math.round(perfStats.decryptMs),
+          decryptBytesMB: +(perfStats.decryptBytes / (1024 * 1024)).toFixed(1),
+          decryptMsPerMB: decPerMb,
+          crcMs: Math.round(perfStats.crcMs),
+          crcBytesMB: +(perfStats.crcBytes / (1024 * 1024)).toFixed(1),
+          crcMsPerMB: crcPerMb,
+          writeWaitMs: Math.round(perfStats.writeWaitMs)
+        });
+      };
+      const perfInterval = setInterval(() => {
+        logPerf('receiver');
+      }, 5000);
+
       let fileSize = 0;
+      let expectedTotalBytes: number | null = null;
+      let expectedTotalCrc32: string | null = null;
+      let totalCrc32 = 0xFFFFFFFF;
       let expectedStreams = 0;
       let shardSize = 0;
       let shardCount = 0;
@@ -929,6 +1361,26 @@ export const useAdaptiveMultiStreamTransfer = () => {
       const MAX_META_RESEND_ATTEMPTS = 3;
       let bytesReceived = 0;
       let lastLoggedPercentage = 0;
+
+      let transferId = '';
+
+      let encryptionState: EncryptionState | null = null;
+      let encryptionEnabled = false;
+      let encryptionIvBytes = 0;
+      const handshakePromise = performEcdhHandshake(conn, 'receiver')
+        .then((result) => {
+          encryptionState = result.state;
+          encryptionEnabled = result.state.enabled;
+          encryptionIvBytes = result.state.ivBytes;
+          if (!transferId) {
+            transferId = result.transferId;
+          }
+        })
+        .catch((error) => {
+          console.error('❌ ECDH handshake failed (receiver):', error);
+          setIsTransferring(false);
+          reject(error instanceof Error ? error : new Error('ECDH handshake failed'));
+        });
 
       let networkQuality: AdaptiveTransferProgress['networkQuality'] = 'good';
       let rttMs: number | undefined;
@@ -939,10 +1391,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
       let useStreamSaver = false;
       let streamWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
-      let transferId = '';
       let cachedShardBytes = 0;
       let nextShardToWrite = 0;
       const storedShardIds = new Set<number>();
+      let streamSaverBytesWritten = 0;
 
       const MAX_WRITE_BUFFER_BYTES = 512 * 1024 * 1024;
       const HIGH_WATERMARK_BYTES = 384 * 1024 * 1024;
@@ -954,8 +1406,44 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let receiverBackpressureLevel: 'low' | 'high' = 'low';
       const writeQueue: Array<{ position: number; data: Uint8Array; size: number }> = [];
 
-      const verifyAndConfirmShard = (shardId: number, shardState: { received: number; total: number; complete: boolean; expectedCRC: string; currentCRC: number; attemptId: number; offset: number; }) => {
-        if (!shardState.expectedCRC) return;
+      const resetShardForRetry = async (shardId: number, shardState: { received: number; total: number; complete: boolean; expectedCRC: string; currentCRC: number; attemptId: number; offset: number; }) => {
+        if (shardState.received > 0) {
+          bytesReceived = Math.max(0, bytesReceived - shardState.received);
+        }
+        shardState.received = 0;
+        shardState.complete = false;
+        shardState.currentCRC = 0xFFFFFFFF;
+        shardState.attemptId += 1;
+
+        const existingBuffer = shardBuffers.get(shardId);
+        if (existingBuffer) {
+          cachedShardBytes = Math.max(0, cachedShardBytes - existingBuffer.byteLength);
+          shardBuffers.delete(shardId);
+        }
+
+        if (storedShardIds.has(shardId) && transferId) {
+          storedShardIds.delete(shardId);
+          await deleteShard(transferId, shardId);
+        }
+
+        maybeSendBackpressure();
+      };
+
+      const updateCrc = async (crc: number, data: Uint8Array) => {
+        const start = perfNow();
+        let next = crc;
+        if (cryptoWorker) {
+          next = await cryptoWorker.crc32(crc, data);
+        } else {
+          next = updateCRC32(crc, data);
+        }
+        perfStats.crcMs += perfNow() - start;
+        perfStats.crcBytes += data.byteLength;
+        return next;
+      };
+
+      const verifyAndConfirmShard = async (shardId: number, shardState: { received: number; total: number; complete: boolean; expectedCRC: string; currentCRC: number; attemptId: number; offset: number; }) => {
+        if (!shardState.expectedCRC) return false;
         const actualCRC = finalizeCRC32(shardState.currentCRC);
         if (actualCRC === shardState.expectedCRC) {
           shardState.complete = true;
@@ -964,18 +1452,17 @@ export const useAdaptiveMultiStreamTransfer = () => {
             shardId: shardId,
             timestamp: Date.now()
           });
-          return;
+          return true;
         }
 
         console.error(`❌ Shard ${shardId} CRC32 mismatch! Expected: ${shardState.expectedCRC}, Got: ${actualCRC}`);
+        await resetShardForRetry(shardId, shardState);
         conn.send({
           type: 'retransmit_shards',
           shardIds: [shardId],
           timestamp: Date.now()
         });
-        shardState.received = 0;
-        shardState.complete = false;
-        shardState.currentCRC = 0xFFFFFFFF;
+        return false;
       };
 
       const maybeSendBackpressure = () => {
@@ -1004,12 +1491,35 @@ export const useAdaptiveMultiStreamTransfer = () => {
             data = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + state.total) as ArrayBuffer;
             shardBuffers.delete(nextShardToWrite);
             cachedShardBytes = Math.max(0, cachedShardBytes - state.total);
-          } else {
+          }
+
+          if (!data) {
             data = await getShard(transferId, nextShardToWrite);
           }
 
-          if (!data) break;
-          await streamWriter.write(new Uint8Array(data));
+          if (!data) {
+            console.error('❌ StreamSaver missing shard data', { shardId: nextShardToWrite });
+            break;
+          }
+          try {
+            if (streamWriter.ready) {
+              await streamWriter.ready;
+            }
+            const chunk = new Uint8Array(data);
+            await streamWriter.write(chunk);
+            streamSaverBytesWritten += chunk.byteLength;
+            if (streamSaverBytesWritten === chunk.byteLength) {
+              console.log('✅ StreamSaver first write', { bytes: chunk.byteLength, shardId: nextShardToWrite });
+              if (typeof window !== 'undefined') {
+                window.postMessage({ type: 'streamsaver_download', detail: 'first_write' }, window.location.origin);
+              }
+            }
+          } catch (error) {
+            console.error('❌ StreamSaver write failed', error);
+            setIsTransferring(false);
+            reject(error instanceof Error ? error : new Error('StreamSaver write failed'));
+            return;
+          }
           await deleteShard(transferId, nextShardToWrite);
           storedShardIds.delete(nextShardToWrite);
           nextShardToWrite += 1;
@@ -1043,8 +1553,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
       const enqueueWrite = async (position: number, data: Uint8Array) => {
         const size = data.byteLength;
         while (queuedOrInFlightBytes + size > MAX_WRITE_BUFFER_BYTES) {
+          const waitStart = perfNow();
           maybeSendBackpressure();
           await new Promise(resolve => setTimeout(resolve, 10));
+          perfStats.writeWaitMs += perfNow() - waitStart;
         }
         queuedOrInFlightBytes += size;
         writeQueue.push({ position, data, size });
@@ -1059,14 +1571,37 @@ export const useAdaptiveMultiStreamTransfer = () => {
           .filter(([_, state]) => !state.complete)
           .map(([id]) => id);
         if (missingShards.length > 0) return;
+        if (expectedTotalBytes !== null && bytesReceived !== expectedTotalBytes) {
+          console.error('❌ Total bytes mismatch', {
+            received: bytesReceived,
+            expected: expectedTotalBytes
+          });
+          setIsTransferring(false);
+          reject(new Error('Total bytes mismatch'));
+          return;
+        }
+        if (expectedTotalCrc32) {
+          const actualTotalCrc32 = finalizeCRC32(totalCrc32);
+          if (actualTotalCrc32 !== expectedTotalCrc32) {
+            console.error('❌ Total CRC32 mismatch', {
+              expected: expectedTotalCrc32,
+              actual: actualTotalCrc32
+            });
+            setIsTransferring(false);
+            reject(new Error('Total CRC32 mismatch'));
+            return;
+          }
+        }
         finalizeStarted = true;
-
         if (useFileSystemAPI && writableStream) {
           while (queuedOrInFlightBytes > 0 || inFlightWrites > 0 || writeQueue.length > 0) {
             await new Promise(resolve => setTimeout(resolve, 50));
           }
           await writableStream.close();
           conn.send({ type: 'receiver_done', timestamp: Date.now() });
+          clearInterval(perfInterval);
+          logPerf('receiver-final');
+          cryptoWorker?.terminate();
           setIsTransferring(false);
           resolve();
           return;
@@ -1074,14 +1609,37 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
         if (useStreamSaver && streamWriter) {
           await flushStreamWriter();
+          const expectedSize = expectedTotalBytes ?? fileSize;
+          if (streamSaverBytesWritten !== expectedSize) {
+            const resolvedBytes = Math.max(bytesReceived, streamSaverBytesWritten);
+            if (streamSaverBytesWritten < expectedSize) {
+              console.error('❌ StreamSaver byte count mismatch', {
+                written: streamSaverBytesWritten,
+                expected: expectedSize
+              });
+              setIsTransferring(false);
+              reject(new Error('StreamSaver wrote fewer bytes than expected'));
+              return;
+            }
+            console.warn('⚠️ StreamSaver byte count mismatch (zip overhead or stream sizing)', {
+              written: streamSaverBytesWritten,
+              expected: expectedSize,
+              resolved: resolvedBytes
+            });
+          }
           await streamWriter.close();
           conn.send({ type: 'receiver_done', timestamp: Date.now() });
+          clearInterval(perfInterval);
+          logPerf('receiver-final');
+          cryptoWorker?.terminate();
           setIsTransferring(false);
           resolve();
           return;
         }
 
         console.error('❌ No save method available after transfer');
+        clearInterval(perfInterval);
+        cryptoWorker?.terminate();
         setIsTransferring(false);
         reject(new Error('No save method available'));
       };
@@ -1115,23 +1673,74 @@ export const useAdaptiveMultiStreamTransfer = () => {
         pc.ondatachannel = (event: RTCDataChannelEvent) => {
           console.log(`📡 Received DataChannel: ${event.channel.label}`);
           const channel = event.channel;
+          try {
+            channel.binaryType = 'arraybuffer';
+          } catch {
+            // ignore
+          }
 
           channel.onmessage = async (event) => {
-            if (!(event.data instanceof ArrayBuffer)) return;
+            let payload: ArrayBuffer | null = null;
+            if (event.data instanceof ArrayBuffer) {
+              payload = event.data;
+            } else if (event.data instanceof Blob) {
+              payload = await event.data.arrayBuffer();
+            } else {
+              return;
+            }
             
-            const message = new Uint8Array(event.data);
+            const message = new Uint8Array(payload);
+            if (!encryptionState && chunkHeaderBytes > 8) {
+              return;
+            }
+            if (shardStates.size === 0) {
+              return;
+            }
             if (message.byteLength < chunkHeaderBytes) return;
             const view = new DataView(message.buffer);
             const shardId = view.getUint32(0, true);
             const attemptId = chunkHeaderBytes >= 8 ? view.getUint32(4, true) : 0;
-            const chunkData = message.subarray(chunkHeaderBytes);
-            
+            let chunkData = message.subarray(chunkHeaderBytes);
+
+            if (encryptionEnabled) {
+              if (!encryptionState) {
+                console.error('❌ Encrypted chunk received before ECDH handshake');
+                return;
+              }
+              const ivStart = 8;
+              const ivEnd = ivStart + encryptionIvBytes;
+              if (message.byteLength <= ivEnd) return;
+              const iv = message.subarray(ivStart, ivEnd);
+              const encryptedPayload = message.subarray(ivEnd);
+              try {
+                const start = perfNow();
+                if (cryptoWorker) {
+                  const { decrypted } = await cryptoWorker.decrypt(shardId, attemptId, iv, encryptedPayload);
+                  chunkData = new Uint8Array(decrypted);
+                } else {
+                  const decrypted = await decryptChunk(
+                    encryptionState.key,
+                    shardId,
+                    attemptId,
+                    iv,
+                    encryptedPayload
+                  );
+                  chunkData = new Uint8Array(decrypted);
+                }
+                perfStats.decryptMs += perfNow() - start;
+                perfStats.decryptBytes += chunkData.byteLength;
+              } catch (error) {
+                console.error('❌ Failed to decrypt chunk', error);
+                return;
+              }
+            }
+
             // Update shard state
             if (!shardStates.has(shardId)) {
               console.error(`❌ Received data for unknown shard ${shardId}`);
               return;
             }
-            
+
             const shardState = shardStates.get(shardId)!;
 
             if (shardState.complete) {
@@ -1139,10 +1748,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
             }
 
             if (attemptId > shardState.attemptId) {
+              await resetShardForRetry(shardId, shardState);
               shardState.attemptId = attemptId;
-              shardState.received = 0;
-              shardState.complete = false;
-              shardState.currentCRC = 0xFFFFFFFF;
             }
 
             if (attemptId !== shardState.attemptId) {
@@ -1158,10 +1765,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
             const prevReceived = shardState.received;
             shardState.received += accepted.length;
             bytesReceived += accepted.length;
-            
-            // Update incremental CRC32
-            shardState.currentCRC = updateCRC32(shardState.currentCRC, accepted);
-            
+
+            // Update incremental CRC32 for this shard
+            shardState.currentCRC = await updateCrc(shardState.currentCRC, accepted);
+
             // Write chunk to disk immediately (non-blocking)
             if (useFileSystemAPI && writableStream) {
               const chunkOffset = shardState.offset + prevReceived;
@@ -1179,19 +1786,28 @@ export const useAdaptiveMultiStreamTransfer = () => {
               }
               shardBuffer.set(accepted, prevReceived);
             }
-            
+
             // Shard complete? Verify CRC32
             if (shardState.received >= shardState.total) {
               if (!shardState.expectedCRC) {
                 return;
               }
               console.log(`🔍 Shard ${shardId} complete: ${shardState.received}/${shardState.total} bytes, expectedCRC: ${shardState.expectedCRC}`);
-              verifyAndConfirmShard(shardId, shardState);
+              const shardVerified = await verifyAndConfirmShard(shardId, shardState);
 
-              if (useStreamSaver && streamWriter) {
-                if (!storedShardIds.has(shardId) && shardId !== nextShardToWrite) {
-                  const shardBuffer = shardBuffers.get(shardId);
-                  if (shardBuffer) {
+              if (shardVerified) {
+                const shardBuffer = shardBuffers.get(shardId);
+                if (shardBuffer) {
+                  totalCrc32 = await updateCrc(totalCrc32, shardBuffer);
+                }
+              }
+
+              if (shardVerified && useStreamSaver && streamWriter) {
+                const shardBuffer = shardBuffers.get(shardId);
+                if (!shardBuffer) {
+                  console.warn('⚠️ StreamSaver shard buffer missing on completion', { shardId });
+                } else if (!storedShardIds.has(shardId)) {
+                  if (cachedShardBytes > MAX_INDEXEDDB_CACHE_BYTES) {
                     const data = shardBuffer.buffer.slice(shardBuffer.byteOffset, shardBuffer.byteOffset + shardState.total) as ArrayBuffer;
                     await putShard(transferId, shardId, data);
                     storedShardIds.add(shardId);
@@ -1203,22 +1819,19 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 await flushStreamWriter();
               }
             }
-            
-            // Note: Disk writes happen immediately per chunk (non-blocking)
-            // This prevents RAM buffering while maintaining transfer speed
-            
+
             // Update progress
             const now = Date.now();
             const elapsed = (now - startTime.current) / 1000;
             const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
             const currentPercentage = Math.floor(Math.min(1, bytesReceived / fileSize) * 100);
-            
+
             // Log every 10% milestone
             if (currentPercentage >= lastLoggedPercentage + 10) {
               console.log(`📥 ${currentPercentage}% received (${(bytesReceived/1024/1024/1024).toFixed(2)}GB / ${(fileSize/1024/1024/1024).toFixed(2)}GB) @ ${(speed/1024/1024).toFixed(1)}MB/s`);
               lastLoggedPercentage = currentPercentage;
             }
-            
+
             setTransferProgress({
               bytesTransferred: bytesReceived,
               totalBytes: fileSize,
@@ -1243,39 +1856,84 @@ export const useAdaptiveMultiStreamTransfer = () => {
       const handleMainMessage = async (data: any) => {
         if (data.type === 'multi_stream_start') {
           console.log('📥 receiveFileMultiStream STARTED (SHARD-BASED)');
-          
+
+          try {
+            await handshakePromise;
+          } catch (error) {
+            console.error('❌ ECDH handshake failed before metadata:', error);
+            return;
+          }
+
+          if (encryptionState?.enabled && cryptoWorker) {
+            try {
+              await cryptoWorker.init(encryptionState.key, encryptionState.ivBytes);
+            } catch (error) {
+              console.warn('⚠️ Crypto worker init failed, falling back to main thread', error);
+              cryptoWorker.terminate();
+            }
+          }
+
           fileSize = data.fileSize;
           expectedStreams = data.streamCount;
           shardSize = data.shardSize;
           shardCount = data.shardCount;
-          chunkHeaderBytes = data.chunkHeaderBytes === 8 ? 8 : 4;
+          chunkHeaderBytes = data.chunkHeaderBytes;
           metaResendAttempts = 0;
-          transferId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-          
-          console.log(`📊 Expecting ${shardCount} shards of ${(shardSize/1024/1024).toFixed(0)}MB each`);
-          
+          if (!transferId) {
+            transferId = String(data.transferId || '');
+          }
+
+          if (!transferId) {
+            console.error('❌ Missing transferId for encrypted transfer');
+            setIsTransferring(false);
+            reject(new Error('Missing transferId'));
+            return;
+          }
+
+          if (!data.encryption?.enabled) {
+            console.error('❌ Encryption metadata missing from sender');
+            setIsTransferring(false);
+            reject(new Error('Encryption required'));
+            return;
+          }
+
+          if (data.encryption?.enabled && !encryptionState) {
+            console.error('❌ Encryption metadata received without ECDH key');
+            setIsTransferring(false);
+            reject(new Error('Encryption handshake missing'));
+            return;
+          }
+
+          if (data.encryption?.enabled) {
+            encryptionEnabled = true;
+            encryptionIvBytes = data.encryption.ivBytes ?? encryptionIvBytes;
+            chunkHeaderBytes = 8 + encryptionIvBytes;
+          }
+
+          console.log(`📊 Expecting ${shardCount} shards of ${(shardSize / 1024 / 1024).toFixed(0)}MB each`);
+
           // Initialize shard states
           for (let i = 0; i < shardCount; i++) {
             const offset = i * shardSize;
             const remaining = Math.max(0, fileSize - offset);
             const total = Math.min(shardSize, remaining);
-            shardStates.set(i, { 
-              received: 0, 
+            shardStates.set(i, {
+              received: 0,
               total,
-              complete: false, 
-              expectedCRC: '', 
+              complete: false,
+              expectedCRC: '',
               currentCRC: 0xFFFFFFFF,
               attemptId: 0,
               offset
             });
           }
-          
+
           if (options?.fileHandle) {
             try {
               fileHandle = options.fileHandle;
               writableStream = await fileHandle.createWritable({ keepExistingData: false });
               useFileSystemAPI = true;
-              console.log('✅ File System Access API active');
+              console.log('✅ File System Access API active', { name: fileHandle?.name ?? 'unnamed' });
             } catch (err) {
               console.error('❌ File System Access API failed', err);
               useFileSystemAPI = false;
@@ -1298,7 +1956,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
               return;
             }
           }
-          
+
           // Wait for peerConnection to be ready before setting up handlers
           await new Promise<void>((resolve) => {
             const checkConnection = () => {
@@ -1434,6 +2092,12 @@ export const useAdaptiveMultiStreamTransfer = () => {
           console.log('✅ Transfer complete signal');
 
           completeSignalReceived = true;
+          if (typeof data.totalBytes === 'number') {
+            expectedTotalBytes = data.totalBytes;
+          }
+          if (typeof data.totalCrc32 === 'string') {
+            expectedTotalCrc32 = data.totalCrc32;
+          }
 
           const requestMissingAfterSettle = (retriesLeft: number) => {
             const states = Array.from(shardStates.entries());
@@ -1510,7 +2174,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
   return {
     transferFileAdaptive,
-    transferProgress,
+    transferProgress: transferProgressState,
     isTransferring,
     prepareStreamSaverDownload
   };

@@ -11,6 +11,7 @@ const bcrypt = require('bcryptjs');
 const net = require('net');
 const fs = require('fs');
 const dotenv = require('dotenv');
+const { isValidShortKey } = require('./utils/shortKey');
 
 const metadataEnvFile = process.env.METADATA_ENV_FILE || '/run/secrets/metadata.env';
 if (fs.existsSync(metadataEnvFile)) {
@@ -23,6 +24,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const TURN_TTL_SECONDS = parseInt(process.env.TURN_TTL_SECONDS, 10) || 3600;
 const STATUS_TIMEOUT_MS = parseInt(process.env.STATUS_TIMEOUT_MS, 10) || 3000;
+const BODY_SIZE_LIMIT = process.env.BODY_SIZE_LIMIT || '100kb';
 
 // ============================================================================
 // Database & Cache Configuration
@@ -102,10 +104,21 @@ const formatFileSize = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 const generateShareHTML = (metadata) => {
-  const title = `Download: ${metadata.fileName}`;
+  const safeFileName = escapeHtml(metadata.fileName || 'File');
   const description = `File size: ${formatFileSize(metadata.fileSize)} • Link expires in 24h • Secure P2P transfer`;
-  const url = `https://p2p.red/#${metadata.shortKey}`;
+  const safeDescription = escapeHtml(description);
+  const shortKey = encodeURIComponent(metadata.shortKey || '');
+  const url = `https://p2p.red/#${shortKey}`;
+  const title = `Download: ${safeFileName}`;
   
   return `<!DOCTYPE html>
 <html lang="en">
@@ -113,20 +126,20 @@ const generateShareHTML = (metadata) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
-  <meta name="description" content="${description}">
+  <meta name="description" content="${safeDescription}">
   
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="${url}">
   <meta property="og:title" content="${title}">
-  <meta property="og:description" content="${description}">
+  <meta property="og:description" content="${safeDescription}">
   <meta property="og:site_name" content="p2p.red">
   
   <!-- Twitter -->
   <meta property="twitter:card" content="summary">
   <meta property="twitter:url" content="${url}">
   <meta property="twitter:title" content="${title}">
-  <meta property="twitter:description" content="${description}">
+  <meta property="twitter:description" content="${safeDescription}">
   
   <meta http-equiv="refresh" content="0;url=${url}">
 </head>
@@ -150,7 +163,13 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || 'https://p2p.red',
   credentials: true,
 }));
-app.use(express.json());
+morgan.token('url', (req) => {
+  const url = req.originalUrl || req.url || '';
+  return url.replace(/([?&]pin=)[^&]+/gi, '$1[redacted]');
+});
+
+app.use(express.json({ limit: BODY_SIZE_LIMIT }));
+app.use(express.urlencoded({ limit: BODY_SIZE_LIMIT, extended: false }));
 app.use(morgan('combined'));
 
 // Rate limiting
@@ -219,17 +238,13 @@ app.get('/api/turn-credentials', (req, res) => {
 });
 
 app.get('/api/status', async (req, res) => {
-  const forwardedProto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString();
-  const proto = forwardedProto.split(',')[0].trim();
-  const host = req.headers.host || 'p2p.red';
-  const isDevHost = host.startsWith('dev.');
-
-  const webUrl = process.env.WEB_STATUS_URL || `${proto}://${host}`;
-  const signalHost = process.env.SIGNAL_STATUS_HOST || (isDevHost ? 'dev-signal.p2p.red' : 'signal.p2p.red');
+  const isDev = (process.env.NODE_ENV || 'development') !== 'production';
+  const webUrl = process.env.WEB_STATUS_URL || (isDev ? 'https://dev.p2p.red' : 'https://p2p.red');
+  const signalHost = process.env.SIGNAL_STATUS_HOST || (isDev ? 'dev-signal.p2p.red' : 'signal.p2p.red');
   const signalUrl = process.env.SIGNAL_STATUS_URL || `https://${signalHost}/peerjs/id`;
   const analyticsUrl = process.env.ANALYTICS_STATUS_URL || 'https://plausible.p2p.red/js/script.js';
   const openBaoUrl = process.env.OPENBAO_STATUS_URL || 'https://bao.p2p.red/v1/sys/health';
-  const turnHost = process.env.TURN_STATUS_HOST || (isDevHost ? 'dev-turn.p2p.red' : 'turn1.p2p.red');
+  const turnHost = process.env.TURN_STATUS_HOST || (isDev ? 'dev-turn.p2p.red' : 'turn1.p2p.red');
   const turnPort = parseInt(process.env.TURN_STATUS_PORT || '3478', 10);
 
   const [webOk, signalOk, analyticsOk, openBaoOk, turnOk] = await Promise.all([
@@ -460,6 +475,8 @@ app.get('/share/:key', async (req, res) => {
     }
     
     const metadata = result.rows[0];
+    const safeFileName = escapeHtml(metadata.file_name);
+    const safeFileType = escapeHtml(metadata.file_type);
     
     // Helper function to format file size
     function formatFileSize(bytes) {
@@ -477,14 +494,14 @@ app.get('/share/:key', async (req, res) => {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${metadata.file_name} - P2P File Share</title>
-    <meta name="description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage." />
+    <title>${safeFileName} - P2P File Share</title>
+    <meta name="description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage." />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://p2p.red/#${key}" />
-    <meta property="og:title" content="${metadata.file_name} - Shared via P2P" />
-    <meta property="og:description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. Download directly from sender." />
+    <meta property="og:title" content="${safeFileName} - Shared via P2P" />
+    <meta property="og:description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. Download directly from sender." />
     <meta property="og:site_name" content="p2p.red" />
     <meta property="og:image" content="https://p2p.red/logo.svg" />
     <meta property="og:image:width" content="400" />
@@ -494,60 +511,21 @@ app.get('/share/:key', async (req, res) => {
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://p2p.red/#${key}" />
-    <meta name="twitter:title" content="${metadata.file_name} - Shared via P2P" />
-    <meta name="twitter:description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption." />
+    <meta name="twitter:title" content="${safeFileName} - Shared via P2P" />
+    <meta name="twitter:description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption." />
     <meta name="twitter:image" content="https://p2p.red/logo.svg" />
     <meta name="twitter:image:alt" content="P2P File Share Logo" />
     
     <!-- Redirect to main app after 1 second -->
     <meta http-equiv="refresh" content="1; url=https://p2p.red/#${key}" />
     
-    <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        margin: 0;
-        padding: 20px;
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-      }
-      .container {
-        text-align: center;
-        max-width: 600px;
-        background: rgba(255, 255, 255, 0.1);
-        padding: 40px;
-        border-radius: 20px;
-        backdrop-filter: blur(10px);
-      }
-      .icon {
-        font-size: 4rem;
-        margin-bottom: 20px;
-      }
-      h1 {
-        margin: 0 0 10px 0;
-        font-size: 2rem;
-      }
-      .file-info {
-        font-size: 1.2rem;
-        opacity: 0.9;
-        margin: 10px 0;
-      }
-      .redirect {
-        margin-top: 30px;
-        font-size: 0.9rem;
-        opacity: 0.7;
-      }
-    </style>
   </head>
   <body>
     <div class="container">
       <div class="icon">📁</div>
-      <h1>${metadata.file_name}</h1>
+      <h1>${safeFileName}</h1>
       <div class="file-info">
-        ${metadata.file_type} file • ${formatFileSize(metadata.file_size)}
+        ${safeFileType} file • ${formatFileSize(metadata.file_size)}
       </div>
       <div class="file-info">
         Shared securely with P2P encryption
@@ -557,10 +535,6 @@ app.get('/share/:key', async (req, res) => {
       </div>
     </div>
     
-    <script>
-      // Immediate redirect for better UX
-      window.location.href = 'https://p2p.red/#${key}';
-    </script>
   </body>
 </html>`;
     
@@ -579,9 +553,6 @@ app.get('/share/:key', async (req, res) => {
   </head>
   <body>
     <p>Redirecting to P2P File Share...</p>
-    <script>
-      window.location.href = 'https://p2p.red/#${req.params.key}';
-    </script>
   </body>
 </html>`;
     
@@ -594,10 +565,11 @@ app.get('/share/:key', async (req, res) => {
 app.get('/api/metadata/:key', async (req, res) => {
   try {
     const { key } = req.params;
-    const { pin, html } = req.query; // Check for html parameter
+    const pin = req.get('x-p2p-pin') || req.query.pin;
+    const { html } = req.query; // Check for html parameter
     
     // Validation
-    if (!key || key.length !== 16 || !/^[a-zA-Z0-9]{16}$/.test(key)) {
+    if (!isValidShortKey(key)) {
       return res.status(400).json({
         error: 'Invalid key format',
       });
@@ -629,6 +601,8 @@ app.get('/api/metadata/:key', async (req, res) => {
         }
         
         const metadata = result.rows[0];
+        const safeFileName = escapeHtml(metadata.file_name);
+        const safeFileType = escapeHtml(metadata.file_type);
         
         // Helper function to format file size
         function formatFileSize(bytes) {
@@ -646,14 +620,14 @@ app.get('/api/metadata/:key', async (req, res) => {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${metadata.file_name} - P2P File Share</title>
-    <meta name="description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage." />
+    <title>${safeFileName} - P2P File Share</title>
+    <meta name="description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage." />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://p2p.red/#${key}" />
-    <meta property="og:title" content="${metadata.file_name} - Shared via P2P" />
-    <meta property="og:description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. Download directly from sender." />
+    <meta property="og:title" content="${safeFileName} - Shared via P2P" />
+    <meta property="og:description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. Download directly from sender." />
     <meta property="og:site_name" content="p2p.red" />
     <meta property="og:image" content="https://p2p.red/logo.svg" />
     <meta property="og:image:width" content="400" />
@@ -663,60 +637,20 @@ app.get('/api/metadata/:key', async (req, res) => {
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://p2p.red/#${key}" />
-    <meta name="twitter:title" content="${metadata.file_name} - Shared via P2P" />
-    <meta name="twitter:description" content="An ${metadata.file_type} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption." />
+    <meta name="twitter:title" content="${safeFileName} - Shared via P2P" />
+    <meta name="twitter:description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption." />
     <meta name="twitter:image" content="https://p2p.red/logo.svg" />
     <meta name="twitter:image:alt" content="P2P File Share Logo" />
     
     <!-- Redirect to main app after 1 second -->
     <meta http-equiv="refresh" content="1; url=https://p2p.red/#${key}" />
-    
-    <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        margin: 0;
-        padding: 20px;
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-      }
-      .container {
-        text-align: center;
-        max-width: 600px;
-        background: rgba(255, 255, 255, 0.1);
-        padding: 40px;
-        border-radius: 20px;
-        backdrop-filter: blur(10px);
-      }
-      .icon {
-        font-size: 4rem;
-        margin-bottom: 20px;
-      }
-      h1 {
-        margin: 0 0 10px 0;
-        font-size: 2rem;
-      }
-      .file-info {
-        font-size: 1.2rem;
-        opacity: 0.9;
-        margin: 10px 0;
-      }
-      .redirect {
-        margin-top: 30px;
-        font-size: 0.9rem;
-        opacity: 0.7;
-      }
-    </style>
   </head>
   <body>
     <div class="container">
       <div class="icon">📁</div>
-      <h1>${metadata.file_name}</h1>
+      <h1>${safeFileName}</h1>
       <div class="file-info">
-        ${metadata.file_type} file • ${formatFileSize(metadata.file_size)}
+        ${safeFileType} file • ${formatFileSize(metadata.file_size)}
       </div>
       <div class="file-info">
         Shared securely with P2P encryption
@@ -726,10 +660,6 @@ app.get('/api/metadata/:key', async (req, res) => {
       </div>
     </div>
     
-    <script>
-      // Immediate redirect for better UX
-      window.location.href = 'https://p2p.red/#${key}';
-    </script>
   </body>
 </html>`;
         
@@ -748,9 +678,6 @@ app.get('/api/metadata/:key', async (req, res) => {
   </head>
   <body>
     <p>Redirecting to P2P File Share...</p>
-    <script>
-      window.location.href = 'https://p2p.red/#${key}';
-    </script>
   </body>
 </html>`;
         

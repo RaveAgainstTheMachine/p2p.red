@@ -1,9 +1,16 @@
-<!--
-  mitm.html is the lite "man in the middle"
-  This is only meant to signal the opener's messageChannel to
-  the service worker. Keeping it alive helps the SW stay active.
--->
-<script>
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>StreamSaver MITM</title>
+  </head>
+  <body>
+    <!--
+      mitm.html is the lite "man in the middle"
+      This is only meant to signal the opener's messageChannel to
+      the service worker. Keeping it alive helps the SW stay active.
+    -->
+    <script>
 let keepAlive = () => {
   keepAlive = () => {};
   const ping = location.href.substr(0, location.href.lastIndexOf('/')) + '/ping';
@@ -70,8 +77,8 @@ function onMessage(event) {
 
   data.pathname = data.pathname.replace(/^\/+/g, '');
 
-  const org = origin.replace(/(^\w+:|^)\/\//, '');
-  data.url = new URL(`${scope + org}/${data.pathname}`).toString();
+  const baseUrl = scope || `${origin}/`;
+  data.url = new URL(data.pathname, baseUrl).toString();
 
   const port = ports[0];
   const notifyParent = (payload) => {
@@ -110,4 +117,6 @@ registerWorker().then(() => {
   messages.forEach(onMessage);
   messages = [];
 });
-</script>
+    </script>
+  </body>
+</html>

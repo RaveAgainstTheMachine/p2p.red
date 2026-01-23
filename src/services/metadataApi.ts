@@ -3,9 +3,12 @@
  * Handles communication with the metadata API server for short link generation
  */
 
-const API_BASE_URL = import.meta.env.PROD
-  ? 'https://p2p.red/api'
-  : 'http://localhost:3001/api';
+const apiEnvBase = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+const API_BASE_URL = apiEnvBase
+  ? `${apiEnvBase}/api`
+  : import.meta.env.PROD
+    ? 'https://p2p.red/api'
+    : 'http://localhost:3001/api';
 
 export interface TransferMetadata {
   peerId: string;
@@ -69,11 +72,10 @@ export async function getMetadata(key: string, pin?: string): Promise<TransferMe
       throw new Error('Invalid short link key format');
     }
 
-    const url = pin 
-      ? `${API_BASE_URL}/metadata/${key}?pin=${encodeURIComponent(pin)}`
-      : `${API_BASE_URL}/metadata/${key}`;
-    
-    const response = await fetch(url);
+    const url = `${API_BASE_URL}/metadata/${key}`;
+    const response = await fetch(url, {
+      headers: pin ? { 'x-p2p-pin': pin } : undefined,
+    });
 
     if (!response.ok) {
       const error = await response.json();

@@ -46,8 +46,18 @@ interface ShardState {
   channelId: number;
 }
 
+interface EncryptionState {
+  enabled: boolean;
+  key: CryptoKey;
+  ivBytes: number;
+  tagBytes: number;
+}
+
 const MAX_INDEXEDDB_CACHE_BYTES = 512 * 1024 * 1024;
 const LOW_INDEXEDDB_CACHE_BYTES = 384 * 1024 * 1024;
+const ECDH_IV_BYTES = 12;
+const ECDH_TAG_BYTES = 16;
+const ECDH_INFO = new TextEncoder().encode('p2p.red/webrtc-ecdh-v1');
 
 const supportsStreamSaver = () =>
   typeof window !== 'undefined' &&
@@ -112,6 +122,107 @@ function finalizeCRC32(crc: number): string {
   return ((crc ^ 0xFFFFFFFF) >>> 0).toString(16).padStart(8, '0');
 }
 
+const toBase64 = (data: ArrayBuffer | Uint8Array) =>
+  btoa(String.fromCharCode(...new Uint8Array(data)));
+
+const fromBase64 = (value: string) =>
+  Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
+
+const toArrayBuffer = (value: Uint8Array) =>
+  new Uint8Array(value).buffer;
+
+const createEcdhKeyPair = async () =>
+  crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    ['deriveBits']
+  ) as Promise<CryptoKeyPair>;
+
+const exportEcdhPublicKey = async (publicKey: CryptoKey) =>
+  toBase64(await crypto.subtle.exportKey('raw', publicKey));
+
+const importEcdhPublicKey = async (encoded: string) =>
+  crypto.subtle.importKey(
+    'raw',
+    fromBase64(encoded),
+    { name: 'ECDH', namedCurve: 'P-256' },
+    false,
+    []
+  );
+
+const hashSalt = async (value: Uint8Array) =>
+  new Uint8Array(await crypto.subtle.digest('SHA-256', toArrayBuffer(value)));
+
+const deriveAesKey = async (
+  privateKey: CryptoKey,
+  peerPublicKey: CryptoKey,
+  salt: Uint8Array
+) => {
+  const sharedBits = await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: peerPublicKey },
+    privateKey,
+    256
+  );
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    sharedBits,
+    'HKDF',
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: toArrayBuffer(salt),
+      info: ECDH_INFO
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+};
+
+const buildAad = (shardId: number, attemptId: number) => {
+  const aad = new Uint8Array(8);
+  const view = new DataView(aad.buffer);
+  view.setUint32(0, shardId, true);
+  view.setUint32(4, attemptId, true);
+  return aad;
+};
+
+const encryptChunk = async (
+  key: CryptoKey,
+  shardId: number,
+  attemptId: number,
+  data: Uint8Array,
+  ivBytes: number
+) => {
+  const iv = crypto.getRandomValues(new Uint8Array(ivBytes));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: buildAad(shardId, attemptId) },
+    key,
+    toArrayBuffer(data)
+  );
+  return { iv, encrypted: new Uint8Array(encrypted) };
+};
+
+const decryptChunk = async (
+  key: CryptoKey,
+  shardId: number,
+  attemptId: number,
+  iv: Uint8Array,
+  data: Uint8Array
+) => {
+  const ivBuffer = new Uint8Array(iv);
+  return crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: ivBuffer, additionalData: buildAad(shardId, attemptId) },
+    key,
+    toArrayBuffer(data)
+  );
+};
+
 export const useAdaptiveMultiStreamTransfer = () => {
   const transferProgress = useRef<AdaptiveTransferProgress>({
     bytesTransferred: 0,
@@ -135,6 +246,104 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
   const setTransferProgress = useCallback((next: AdaptiveTransferProgress) => {
     transferProgress.current = next;
+  }, []);
+
+  const performEcdhHandshake = useCallback(async (
+    conn: DataConnection,
+    role: 'sender' | 'receiver',
+    transferId?: string
+  ): Promise<{ state: EncryptionState; transferId: string }> => {
+    const timeoutMs = 10000;
+    const encoder = new TextEncoder();
+
+    if (role === 'sender' && !transferId) {
+      throw new Error('Missing transferId for sender ECDH handshake');
+    }
+
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const cleanup = () => {
+        if (done) return;
+        done = true;
+        conn.off('data', handler);
+      };
+
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error('ECDH handshake timed out'));
+      }, timeoutMs);
+
+      let localKeyPair: CryptoKeyPair | null = null;
+      let localTransferId = transferId || '';
+
+      const finishHandshake = async (peerPubKeyB64: string) => {
+        if (!localKeyPair) {
+          localKeyPair = await createEcdhKeyPair();
+        }
+        const peerPublicKey = await importEcdhPublicKey(peerPubKeyB64);
+        const salt = await hashSalt(encoder.encode(localTransferId));
+        const key = await deriveAesKey(localKeyPair.privateKey, peerPublicKey, salt);
+        clearTimeout(timer);
+        cleanup();
+        resolve({
+          state: {
+            enabled: true,
+            key,
+            ivBytes: ECDH_IV_BYTES,
+            tagBytes: ECDH_TAG_BYTES
+          },
+          transferId: localTransferId
+        });
+      };
+
+      const handler = async (data: any) => {
+        if (role === 'receiver' && data?.type === 'ecdh_init') {
+          localTransferId = String(data.transferId || '');
+          if (!localTransferId) {
+            clearTimeout(timer);
+            cleanup();
+            reject(new Error('ECDH handshake missing transferId'));
+            return;
+          }
+          localKeyPair = await createEcdhKeyPair();
+          const pubKey = await exportEcdhPublicKey(localKeyPair.publicKey);
+          conn.send({
+            type: 'ecdh_reply',
+            transferId: localTransferId,
+            pubKey,
+            ivBytes: ECDH_IV_BYTES,
+            tagBytes: ECDH_TAG_BYTES
+          });
+          await finishHandshake(String(data.pubKey || ''));
+        }
+
+        if (role === 'sender' && data?.type === 'ecdh_reply') {
+          if (!localTransferId || data.transferId !== localTransferId) return;
+          await finishHandshake(String(data.pubKey || ''));
+        }
+      };
+
+      conn.on('data', handler);
+
+      if (role === 'sender') {
+        (async () => {
+          localKeyPair = await createEcdhKeyPair();
+          const pubKey = await exportEcdhPublicKey(localKeyPair.publicKey);
+          conn.send({
+            type: 'ecdh_init',
+            transferId: localTransferId,
+            pubKey,
+            ivBytes: ECDH_IV_BYTES,
+            tagBytes: ECDH_TAG_BYTES,
+            protocolVersion: 3
+          });
+        })().catch((error) => {
+          clearTimeout(timer);
+          cleanup();
+          reject(error);
+        });
+      }
+    });
   }, []);
 
 
@@ -177,6 +386,49 @@ export const useAdaptiveMultiStreamTransfer = () => {
       const isFile = input instanceof File;
       const fileSize = isFile ? input.size : (totalSize || 0);
       const name = fileName || (isFile ? input.name : 'download');
+
+      const transferId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      let encryptionState: EncryptionState | null = null;
+
+      try {
+        const handshake = await performEcdhHandshake(conn, 'sender', transferId);
+        encryptionState = handshake.state;
+      } catch (error) {
+        console.error('❌ ECDH handshake failed (sender):', error);
+        setIsTransferring(false);
+        reject(error instanceof Error ? error : new Error('ECDH handshake failed'));
+        return;
+      }
+
+      const chunkHeaderBytes = encryptionState?.enabled
+        ? 8 + encryptionState.ivBytes
+        : 8;
+
+      const buildChunkMessage = async (chunkData: Uint8Array, shardId: number, attemptId: number) => {
+        if (encryptionState?.enabled) {
+          const { iv, encrypted } = await encryptChunk(
+            encryptionState.key,
+            shardId,
+            attemptId,
+            chunkData,
+            encryptionState.ivBytes
+          );
+          const message = new Uint8Array(8 + encryptionState.ivBytes + encrypted.length);
+          const view = new DataView(message.buffer);
+          view.setUint32(0, shardId, true);
+          view.setUint32(4, attemptId, true);
+          message.set(iv, 8);
+          message.set(encrypted, 8 + encryptionState.ivBytes);
+          return message;
+        }
+
+        const message = new Uint8Array(8 + chunkData.length);
+        const view = new DataView(message.buffer);
+        view.setUint32(0, shardId, true);
+        view.setUint32(4, attemptId, true);
+        message.set(chunkData, 8);
+        return message;
+      };
 
       // Measure initial speed to determine shard size
       let estimatedSpeed = 50 * 1024 * 1024; // Default: 50 MB/s
@@ -289,8 +541,14 @@ export const useAdaptiveMultiStreamTransfer = () => {
           streamCount: numChannels,
           shardSize: SHARD_SIZE,
           shardCount: shards.length,
-          protocolVersion: 2,
-          chunkHeaderBytes: 8,
+          protocolVersion: 3,
+          chunkHeaderBytes,
+          transferId,
+          encryption: {
+            enabled: true,
+            ivBytes: encryptionState?.ivBytes ?? ECDH_IV_BYTES,
+            tagBytes: encryptionState?.tagBytes ?? ECDH_TAG_BYTES
+          },
           timestamp: Date.now()
         });
 
@@ -517,12 +775,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
                 await waitForChannelBufferRoom(channel);
                 
-                const message = new Uint8Array(8 + chunkData.length);
-                const view = new DataView(message.buffer);
-                view.setUint32(0, shard.id, true);
-                view.setUint32(4, attemptId, true);
-                message.set(chunkData, 8);
-                
+                const message = await buildChunkMessage(chunkData, shard.id, attemptId);
                 channel.send(message.buffer);
                 sentBytes += chunkData.length;
               }
@@ -585,12 +838,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 await waitForChannelBufferRoom(channel);
                 
                 // Send chunk with shard ID
-                const message = new Uint8Array(8 + chunkData.length);
-                const view = new DataView(message.buffer);
-                view.setUint32(0, shard.id, true);
-                view.setUint32(4, attemptId, true);
-                message.set(chunkData, 8);
-                
+                const message = await buildChunkMessage(chunkData, shard.id, attemptId);
                 channel.send(message.buffer);
                 sentBytes += chunkData.length;
                 shard.bytesTransferred += chunkData.length;
@@ -725,12 +973,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
                     await waitForChannelBufferRoom(channel);
                     
-                    const message = new Uint8Array(8 + chunkData.length);
-                    const view = new DataView(message.buffer);
-                    view.setUint32(0, shard.id, true);
-                    view.setUint32(4, attemptId, true);
-                    message.set(chunkData, 8);
-                    
+                    const message = await buildChunkMessage(chunkData, shard.id, attemptId);
                     channel.send(message.buffer);
                     sentBytes += chunkData.length;
                   }
@@ -822,12 +1065,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     await new Promise(resolve => setTimeout(resolve, 10));
                   }
                   
-                  const message = new Uint8Array(8 + chunkData.length);
-                  const view = new DataView(message.buffer);
-                  view.setUint32(0, shard.id, true);
-                  view.setUint32(4, attemptId, true);
-                  message.set(chunkData, 8);
-                  
+                  const message = await buildChunkMessage(chunkData, shard.id, attemptId);
                   channel.send(message.buffer);
                   sentBytes += chunkData.length;
                 }
@@ -930,6 +1168,25 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let bytesReceived = 0;
       let lastLoggedPercentage = 0;
 
+      let transferId = '';
+      let encryptionState: EncryptionState | null = null;
+      let encryptionEnabled = false;
+      let encryptionIvBytes = 0;
+      const handshakePromise = performEcdhHandshake(conn, 'receiver')
+        .then((result) => {
+          encryptionState = result.state;
+          encryptionEnabled = result.state.enabled;
+          encryptionIvBytes = result.state.ivBytes;
+          if (!transferId) {
+            transferId = result.transferId;
+          }
+        })
+        .catch((error) => {
+          console.error('❌ ECDH handshake failed (receiver):', error);
+          setIsTransferring(false);
+          reject(error instanceof Error ? error : new Error('ECDH handshake failed'));
+        });
+
       let networkQuality: AdaptiveTransferProgress['networkQuality'] = 'good';
       let rttMs: number | undefined;
       let candidateType: string | undefined;
@@ -939,10 +1196,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
       let useStreamSaver = false;
       let streamWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
-      let transferId = '';
       let cachedShardBytes = 0;
       let nextShardToWrite = 0;
       const storedShardIds = new Set<number>();
+      let streamSaverBytesWritten = 0;
 
       const MAX_WRITE_BUFFER_BYTES = 512 * 1024 * 1024;
       const HIGH_WATERMARK_BYTES = 384 * 1024 * 1024;
@@ -1004,12 +1261,32 @@ export const useAdaptiveMultiStreamTransfer = () => {
             data = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + state.total) as ArrayBuffer;
             shardBuffers.delete(nextShardToWrite);
             cachedShardBytes = Math.max(0, cachedShardBytes - state.total);
-          } else {
+          }
+
+          if (!data) {
             data = await getShard(transferId, nextShardToWrite);
           }
 
-          if (!data) break;
-          await streamWriter.write(new Uint8Array(data));
+          if (!data) {
+            console.error('❌ StreamSaver missing shard data', { shardId: nextShardToWrite });
+            break;
+          }
+          try {
+            if (streamWriter.ready) {
+              await streamWriter.ready;
+            }
+            const chunk = new Uint8Array(data);
+            await streamWriter.write(chunk);
+            streamSaverBytesWritten += chunk.byteLength;
+            if (streamSaverBytesWritten === chunk.byteLength) {
+              console.log('✅ StreamSaver first write', { bytes: chunk.byteLength, shardId: nextShardToWrite });
+            }
+          } catch (error) {
+            console.error('❌ StreamSaver write failed', error);
+            setIsTransferring(false);
+            reject(error instanceof Error ? error : new Error('StreamSaver write failed'));
+            return;
+          }
           await deleteShard(transferId, nextShardToWrite);
           storedShardIds.delete(nextShardToWrite);
           nextShardToWrite += 1;
@@ -1073,6 +1350,15 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
         if (useStreamSaver && streamWriter) {
           await flushStreamWriter();
+          if (streamSaverBytesWritten !== fileSize) {
+            console.error('❌ StreamSaver byte count mismatch', {
+              written: streamSaverBytesWritten,
+              expected: fileSize
+            });
+            setIsTransferring(false);
+            reject(new Error('StreamSaver wrote fewer bytes than expected'));
+            return;
+          }
           await streamWriter.close();
           conn.send({ type: 'receiver_done', timestamp: Date.now() });
           setIsTransferring(false);
@@ -1119,11 +1405,42 @@ export const useAdaptiveMultiStreamTransfer = () => {
             if (!(event.data instanceof ArrayBuffer)) return;
             
             const message = new Uint8Array(event.data);
+            if (!encryptionState && chunkHeaderBytes > 8) {
+              return;
+            }
+            if (shardStates.size === 0) {
+              return;
+            }
             if (message.byteLength < chunkHeaderBytes) return;
             const view = new DataView(message.buffer);
             const shardId = view.getUint32(0, true);
             const attemptId = chunkHeaderBytes >= 8 ? view.getUint32(4, true) : 0;
-            const chunkData = message.subarray(chunkHeaderBytes);
+            let chunkData = message.subarray(chunkHeaderBytes);
+
+            if (encryptionEnabled) {
+              if (!encryptionState) {
+                console.error('❌ Encrypted chunk received before ECDH handshake');
+                return;
+              }
+              const ivStart = 8;
+              const ivEnd = ivStart + encryptionIvBytes;
+              if (message.byteLength <= ivEnd) return;
+              const iv = message.subarray(ivStart, ivEnd);
+              const encryptedPayload = message.subarray(ivEnd);
+              try {
+                const decrypted = await decryptChunk(
+                  encryptionState.key,
+                  shardId,
+                  attemptId,
+                  iv,
+                  encryptedPayload
+                );
+                chunkData = new Uint8Array(decrypted);
+              } catch (error) {
+                console.error('❌ Failed to decrypt chunk', error);
+                return;
+              }
+            }
             
             // Update shard state
             if (!shardStates.has(shardId)) {
@@ -1188,7 +1505,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
               verifyAndConfirmShard(shardId, shardState);
 
               if (useStreamSaver && streamWriter) {
-                if (!storedShardIds.has(shardId) && shardId !== nextShardToWrite) {
+                if (!storedShardIds.has(shardId)) {
                   const shardBuffer = shardBuffers.get(shardId);
                   if (shardBuffer) {
                     const data = shardBuffer.buffer.slice(shardBuffer.byteOffset, shardBuffer.byteOffset + shardState.total) as ArrayBuffer;
@@ -1196,6 +1513,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
                     storedShardIds.add(shardId);
                     shardBuffers.delete(shardId);
                     cachedShardBytes = Math.max(0, cachedShardBytes - shardState.total);
+                  } else {
+                    console.warn('⚠️ StreamSaver shard buffer missing on completion', { shardId });
                   }
                 }
 
@@ -1243,13 +1562,49 @@ export const useAdaptiveMultiStreamTransfer = () => {
         if (data.type === 'multi_stream_start') {
           console.log('📥 receiveFileMultiStream STARTED (SHARD-BASED)');
           
+          try {
+            await handshakePromise;
+          } catch (error) {
+            console.error('❌ ECDH handshake failed before metadata:', error);
+            return;
+          }
+
           fileSize = data.fileSize;
           expectedStreams = data.streamCount;
           shardSize = data.shardSize;
           shardCount = data.shardCount;
-          chunkHeaderBytes = data.chunkHeaderBytes === 8 ? 8 : 4;
+          chunkHeaderBytes = data.chunkHeaderBytes;
           metaResendAttempts = 0;
-          transferId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          if (!transferId) {
+            transferId = String(data.transferId || '');
+          }
+
+          if (!transferId) {
+            console.error('❌ Missing transferId for encrypted transfer');
+            setIsTransferring(false);
+            reject(new Error('Missing transferId'));
+            return;
+          }
+
+          if (!data.encryption?.enabled) {
+            console.error('❌ Encryption metadata missing from sender');
+            setIsTransferring(false);
+            reject(new Error('Encryption required'));
+            return;
+          }
+
+          if (data.encryption?.enabled && !encryptionState) {
+            console.error('❌ Encryption metadata received without ECDH key');
+            setIsTransferring(false);
+            reject(new Error('Encryption handshake missing'));
+            return;
+          }
+
+          if (data.encryption?.enabled) {
+            encryptionEnabled = true;
+            encryptionIvBytes = data.encryption.ivBytes ?? encryptionIvBytes;
+            chunkHeaderBytes = 8 + encryptionIvBytes;
+          }
           
           console.log(`📊 Expecting ${shardCount} shards of ${(shardSize/1024/1024).toFixed(0)}MB each`);
           

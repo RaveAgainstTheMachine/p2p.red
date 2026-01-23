@@ -6,9 +6,28 @@ interface PerformanceDebugProps {
   onClose: () => void;
 }
 
+interface PerformanceLogEntry {
+  timestamp: number;
+  event: string;
+  data: unknown;
+}
+
+interface PerformanceMetrics {
+  avgCpuLag: number;
+  avgReceiverSpeed: number;
+  avgUpdateFrequency: number;
+  totalChunksProcessed: number;
+  bottlenecks?: string[];
+}
+
+interface PerformanceReport {
+  recentLogs: PerformanceLogEntry[];
+  performanceAnalysis: PerformanceMetrics;
+}
+
 export const PerformanceDebug: React.FC<PerformanceDebugProps> = ({ isVisible, onClose }) => {
   const [logs, setLogs] = useState<string[]>([]);
-  const [metrics, setMetrics] = useState<any>(null);
+  const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
 
   useEffect(() => {
@@ -17,9 +36,9 @@ export const PerformanceDebug: React.FC<PerformanceDebugProps> = ({ isVisible, o
     const updateInterval = setInterval(() => {
       try {
         const report = performanceMonitor.generateReport();
-        const parsed = JSON.parse(report);
+        const parsed = JSON.parse(report) as PerformanceReport;
         
-        setLogs(parsed.recentLogs.map((log: any) => 
+        setLogs(parsed.recentLogs.map((log) => 
           `[${new Date(log.timestamp).toISOString().substr(14, 8)}] ${log.event}: ${JSON.stringify(log.data)}`
         ));
         

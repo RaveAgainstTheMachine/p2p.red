@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { AlertTriangle, Shield, XCircle } from 'lucide-react';
 
 interface FileTypeWarningProps {
@@ -11,29 +11,17 @@ const DANGEROUS_EXTENSIONS = [
   '.app', '.dmg', '.pkg', '.deb', '.rpm', '.sh', '.bash', '.ps1', '.msi'
 ];
 
-export const FileTypeWarning: React.FC<FileTypeWarningProps> = ({ fileName, file }) => {
-  const [magicByteCheck, setMagicByteCheck] = useState<{
-    checked: boolean;
-    isDangerous: boolean;
-    reason: string | null;
-    mismatch: boolean;
-    mismatchWarning: string | null;
-  }>({ checked: false, isDangerous: false, reason: null, mismatch: false, mismatchWarning: null });
+export const FileTypeWarning: React.FC<FileTypeWarningProps> = ({ fileName }) => {
+  const magicByteCheck = {
+    checked: true,
+    isDangerous: false,
+    reason: null as string | null,
+    mismatch: false,
+    mismatchWarning: null as string | null
+  };
 
   const extension = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
   const isDangerousByExtension = DANGEROUS_EXTENSIONS.includes(extension);
-
-  useEffect(() => {
-    // Temporarily disable magic byte validation to prevent Safe Browsing blocks
-    // TODO: Re-enable when we have better file handling
-    setMagicByteCheck({
-      checked: true,
-      isDangerous: false,
-      reason: null,
-      mismatch: false,
-      mismatchWarning: null
-    });
-  }, [file]);
 
   const showWarning = isDangerousByExtension || magicByteCheck.isDangerous || magicByteCheck.mismatch;
 

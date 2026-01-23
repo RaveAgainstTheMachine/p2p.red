@@ -6,7 +6,7 @@ interface EnvironmentConfig {
     path: string;
     secure: boolean;
     config?: {
-      iceServers: any[];
+      iceServers: RTCIceServer[];
       sdpSemantics: string;
     };
   };

@@ -262,6 +262,15 @@ function App() {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'streamsaver_debug') {
         console.log('🧪 StreamSaver debug:', event.data.detail);
+        if (event.data.detail === 'Download started') {
+          streamSaverDownloadReceived.current = true;
+          streamSaverPromptFailed.current = false;
+          if (streamSaverDownloadTimeout.current !== null) {
+            window.clearTimeout(streamSaverDownloadTimeout.current);
+            streamSaverDownloadTimeout.current = null;
+          }
+          console.log('✅ StreamSaver download started (debug)');
+        }
       }
       if (event.data?.type === 'streamsaver_download') {
         streamSaverDownloadReceived.current = true;
@@ -707,7 +716,7 @@ function App() {
         await handleReceive(pickerHandle);
         await startFileReceive(pickerHandle);
         return;
-      } catch (error) {
+      } catch {
         console.warn('⚠️ File picker cancelled, falling back to StreamSaver');
       }
     }
@@ -727,9 +736,7 @@ function App() {
       }
       streamSaverDownloadTimeout.current = window.setTimeout(() => {
         if (streamSaverDownloadExpected.current && !streamSaverDownloadReceived.current) {
-          console.error('❌ StreamSaver download prompt did not appear');
-          streamSaverPromptFailed.current = true;
-          setStatus('error');
+          console.warn('⚠️ StreamSaver download prompt did not appear yet');
         }
       }, 4000);
     }
@@ -869,10 +876,7 @@ function App() {
         });
 
         if (!activeHandle && streamSaverDownloadExpected.current && !streamSaverDownloadReceived.current) {
-          console.error('❌ StreamSaver download did not start');
-          streamSaverPromptFailed.current = true;
-          setStatus('error');
-          return;
+          console.warn('⚠️ StreamSaver download event not received; verify the file in Downloads.');
         }
 
         if (!streamSaverPromptFailed.current) {

@@ -34,7 +34,8 @@ export const Info: React.FC<InfoProps> = ({ onBack }) => {
             <section>
               <h2 className="text-xl font-semibold text-white mb-3">Privacy + Encryption</h2>
               <p className="leading-relaxed mb-2">
-                Files are encrypted in your browser with AES-GCM before transfer. We never store file contents.
+                Files are encrypted in your browser with AES-GCM before transfer. Session keys are derived
+                via ECDH over the WebRTC DataChannel, so no keys are shared in URLs or sent to servers.
               </p>
               <p className="text-sm text-white/60">
                 We temporarily store minimal metadata (filename, size, peer IDs) for up to 24 hours to help peers connect.

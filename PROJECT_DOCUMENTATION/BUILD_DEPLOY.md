@@ -37,11 +37,57 @@ Health check:
 curl http://localhost:3001/health
 ```
 
+If running the web app on a custom local port, align CORS:
+```
+# Example for Vite at http://127.0.0.1:5180
+CORS_ORIGIN=http://127.0.0.1:5180 docker compose -f docker-compose.metadata.yml up -d --force-recreate metadata-api
+```
+
+Initialize the metadata DB schema (first-time only):
+```
+docker exec -i p2p-postgres psql -U p2p_api_user -d p2p_metadata < /opt/p2p-file-share/metadata-api/db/init.sql
+```
+
 ### 3) Start Dev Web (Vite)
 ```
 cd /opt/p2p-file-share/packages/web
 pnpm install
 pnpm dev -- --host 0.0.0.0 --port 5173
+```
+
+For root dev (Vite at a custom port), set API base and restart Vite:
+```
+# /opt/p2p-file-share/.env.local
+VITE_API_URL=http://127.0.0.1:3001
+```
+
+Note: `/js/script.js` 404s locally unless Plausible is proxied; safe to ignore in dev.
+
+### Dev Docker Image Storage (200GB disk)
+Images are stored on the 200GB disk mounted at `/mnt/docker`.
+
+Mount + persist:
+```
+sudo mount /dev/sdb1 /mnt/docker
+sudo tee -a /etc/fstab >/dev/null <<'EOF'
+UUID=0e52eef1-9039-4d96-bcc2-2cb6dd14fcce /mnt/docker ext4 defaults,noatime 0 2
+EOF
+```
+
+Docker data root:
+```
+sudo tee /etc/docker/daemon.json >/dev/null <<'EOF'
+{
+  "data-root": "/mnt/docker"
+}
+EOF
+sudo systemctl restart docker
+```
+
+Verify:
+```
+docker info -f '{{.DockerRootDir}}'
+df -hT /mnt/docker
 ```
 
 ### 4) Start Dev PeerJS (Docker)

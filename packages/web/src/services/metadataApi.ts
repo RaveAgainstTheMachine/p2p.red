@@ -22,6 +22,13 @@ export interface ShortLinkResponse {
   expiresAt: string;
 }
 
+interface ApiErrorResponse {
+  error?: string;
+  message?: string;
+  requiresPin?: boolean;
+  remainingAttempts?: number;
+}
+
 /**
  * Store transfer metadata and get short link key
  */
@@ -47,7 +54,7 @@ export async function createShortLink(metadata: TransferMetadata, pin?: string):
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error: ApiErrorResponse = await response.json();
       throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
     }
 
@@ -76,7 +83,7 @@ export async function getMetadata(key: string, pin?: string): Promise<TransferMe
     const response = await fetch(url);
 
     if (!response.ok) {
-      const error = await response.json();
+      const error: ApiErrorResponse = await response.json();
       
       if (response.status === 404) {
         throw new Error('Link not found or has expired');
@@ -85,12 +92,12 @@ export async function getMetadata(key: string, pin?: string): Promise<TransferMe
         throw new Error('Link has expired');
       }
       if (response.status === 401 && error.requiresPin) {
-        const err: any = new Error('PIN_REQUIRED');
+        const err = new Error('PIN_REQUIRED') as Error & { requiresPin?: boolean };
         err.requiresPin = true;
         throw err;
       }
       if (response.status === 403) {
-        const err: any = new Error(error.message || 'Invalid PIN');
+        const err = new Error(error.message || 'Invalid PIN') as Error & { remainingAttempts?: number };
         err.remainingAttempts = error.remainingAttempts;
         throw err;
       }

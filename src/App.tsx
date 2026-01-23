@@ -88,7 +88,7 @@ const resetMetaTags = () => {
       tag.content = content;
     }
   };
-  
+
   const updateMetaName = (name: string, content: string) => {
     let tag = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
     if (tag) {
@@ -136,6 +136,7 @@ function App() {
   const [status, setStatus] = useState<'idle' | 'encrypting' | 'waiting' | 'connecting' | 'transferring' | 'complete' | 'error'>('idle');
   const [selectedFiles, setSelectedFiles] = useState<File[] | null>(null);
   const [pin, setPin] = useState<string>('');
+  const [e2ePinOverride, setE2ePinOverride] = useState<string | null>(null);
   const [senderPeerId, setSenderPeerId] = useState<string | null>(null);
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
@@ -158,6 +159,7 @@ function App() {
     }
     return 'system';
   });
+  const [currentHash, setCurrentHash] = useState<string>(window.location.hash);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const themeToggleRef = useRef<HTMLDivElement | null>(null);
   const [enableZip, setEnableZip] = useState<boolean>(true);
@@ -188,9 +190,23 @@ function App() {
   }, [initializePeer]);
 
   useEffect(() => {
+    if ((import.meta as any).env?.VITE_E2E) {
+      (window as any).__peerConnected = isConnected;
+    }
+  }, [isConnected]);
+
+  useEffect(() => {
     document.documentElement.setAttribute('data-theme', themePreference);
     localStorage.setItem('theme', themePreference);
   }, [themePreference]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentHash(window.location.hash);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -262,6 +278,15 @@ function App() {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'streamsaver_debug') {
         console.log('🧪 StreamSaver debug:', event.data.detail);
+        if (event.data.detail === 'Download started') {
+          streamSaverDownloadReceived.current = true;
+          streamSaverPromptFailed.current = false;
+          if (streamSaverDownloadTimeout.current !== null) {
+            window.clearTimeout(streamSaverDownloadTimeout.current);
+            streamSaverDownloadTimeout.current = null;
+          }
+          console.log('✅ StreamSaver download started (debug)');
+        }
       }
       if (event.data?.type === 'streamsaver_download') {
         streamSaverDownloadReceived.current = true;
@@ -279,19 +304,19 @@ function App() {
 
   useEffect(() => {
     console.log('🔍 Mode detection useEffect running:', {
-      hasHash: !!window.location.hash,
-      hash: window.location.hash,
+      hasHash: !!currentHash,
+      hash: currentHash,
       hasPeer: !!peer,
       isConnected,
       connectionState,
     });
     
     // Auto-detect mode: receive if hash present, otherwise share
-    if (window.location.hash && peer && isConnected) {
+    if (currentHash && peer && isConnected) {
       console.log('📥 Hash detected and peer ready, fetching metadata...');
       setMode('receive');
       
-      const shortKey = window.location.hash.substring(1);
+      const shortKey = currentHash.substring(1);
       console.log('Short key:', shortKey);
       
       // Fetch metadata from API
@@ -320,7 +345,7 @@ function App() {
             setStatus('error');
           }
         });
-    } else if (!window.location.hash) {
+    } else if (!currentHash) {
       console.log('No hash present, setting share mode');
       setMode('share');
       // Reset meta tags to default
@@ -328,7 +353,7 @@ function App() {
     } else {
       console.log('Hash present but peer not ready, waiting...');
     }
-  }, [window.location.hash, peer, isConnected]);
+  }, [currentHash, peer, isConnected]);
 
   const handleFileSelect = (files: File[]) => {
     setSelectedFiles(files);
@@ -361,6 +386,10 @@ function App() {
     if (!selectedFiles) return;
     setStatus('encrypting');
     const files = selectedFiles;
+    const effectivePin = (import.meta as any).env?.VITE_E2E && e2ePinOverride !== null
+      ? e2ePinOverride
+      : pin;
+    const pinToSend = effectivePin && effectivePin.length === 4 ? effectivePin : undefined;
     
     try {
       // Debug: Log all files received
@@ -432,7 +461,6 @@ function App() {
           
           // Create short link via metadata API
           try {
-            const pinToSend = pin && pin.length === 4 ? pin : undefined;
             const shortKey = await createShortLink({
               peerId: peerId!,
               fileName: zipFileName,
@@ -508,7 +536,6 @@ function App() {
         
         // Create short link via metadata API
         try {
-          const pinToSend = pin && pin.length === 4 ? pin : undefined;
           const shortKey = await createShortLink({
             peerId: peerId!,
             fileName: zipFileName,
@@ -577,7 +604,6 @@ function App() {
         
         // Create short link via metadata API
         try {
-          const pinToSend = pin && pin.length === 4 ? pin : undefined;
           // Determine display name
           let displayName: string;
           if (isFolderSelection) {
@@ -658,7 +684,6 @@ function App() {
       
       // Create short link via metadata API
       try {
-        const pinToSend = pin && pin.length === 4 ? pin : undefined;
         const shortKey = await createShortLink({
           peerId: peerId!,
           fileName: fileToTransfer.name,
@@ -727,9 +752,7 @@ function App() {
       }
       streamSaverDownloadTimeout.current = window.setTimeout(() => {
         if (streamSaverDownloadExpected.current && !streamSaverDownloadReceived.current) {
-          console.error('❌ StreamSaver download prompt did not appear');
-          streamSaverPromptFailed.current = true;
-          setStatus('error');
+          console.warn('⚠️ StreamSaver download prompt did not appear yet');
         }
       }, 4000);
     }
@@ -737,6 +760,30 @@ function App() {
     await handleReceive(null);
     await startFileReceive(null);
   };
+
+  useEffect(() => {
+    if (!(import.meta as any).env?.VITE_E2E) return;
+
+    (window as any).__e2e = {
+      setFiles: (files: File[]) => setSelectedFiles(files),
+      setPin: (value: string) => {
+        setPin(value);
+        setE2ePinOverride(value);
+      },
+      setZip: (value: boolean) => setEnableZip(value),
+      createLink: () => handleProceedWithTransfer(),
+      getShareLink: () => shareLink,
+      getStatus: () => status,
+      getPendingReceive: () => pendingReceive,
+      getIncomingFileInfo: () => incomingFileInfo,
+      verifyPin: (value: string) => handlePinVerification(value),
+      startDownload: () => handleChooseSaveLocation()
+    };
+
+    return () => {
+      delete (window as any).__e2e;
+    };
+  }, [shareLink, status, pendingReceive, incomingFileInfo, handleChooseSaveLocation, handleProceedWithTransfer]);
 
   const handleReceive = async (handle?: any) => {
     // Use passed handle or fall back to state
@@ -869,10 +916,7 @@ function App() {
         });
 
         if (!activeHandle && streamSaverDownloadExpected.current && !streamSaverDownloadReceived.current) {
-          console.error('❌ StreamSaver download did not start');
-          streamSaverPromptFailed.current = true;
-          setStatus('error');
-          return;
+          console.warn('⚠️ StreamSaver download event not received; verify the file in Downloads.');
         }
 
         if (!streamSaverPromptFailed.current) {
@@ -1162,8 +1206,8 @@ function App() {
                       </div>
                     )}
                     <EnhancedProgressBar 
-                      progress={adaptiveProgress.current} 
-                      label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.current.activeStreams} streams, ${adaptiveProgress.current.networkQuality})`} 
+                      progress={adaptiveProgress} 
+                      label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`} 
                       showETA={true}
                       showSpeed={true}
                     />
@@ -1214,8 +1258,8 @@ function App() {
                     </div>
                   )}
                   <EnhancedProgressBar 
-                    progress={adaptiveProgress.current} 
-                    label={`Receiving file (Adaptive Multi-Stream: ${adaptiveProgress.current.activeStreams} streams, ${adaptiveProgress.current.networkQuality})`}
+                    progress={adaptiveProgress} 
+                    label={`Receiving file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}
                     showETA={true}
                     showSpeed={true}
                   />

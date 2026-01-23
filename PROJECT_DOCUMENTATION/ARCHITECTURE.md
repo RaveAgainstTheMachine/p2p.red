@@ -297,6 +297,8 @@
 
 ### Data Security
 - End-to-end encryption for file transfers (client-side)
+- ECDH key exchange over WebRTC DataChannel; AES-GCM keys derived via HKDF
+- No URL-hash key sharing (session keys never sent to server)
 - No file content stored on servers
 - Metadata expires after 24 hours
 - No user tracking or PII collection

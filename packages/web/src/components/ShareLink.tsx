@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Share2, Copy, Check, QrCode, Mail, Smartphone } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -10,13 +10,8 @@ interface ShareLinkProps {
 export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
-  const [canShare, setCanShare] = useState(false);
+  const canShare = typeof navigator !== 'undefined' && !!navigator.share;
   const qrRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Check if Web Share API is available (mobile browsers)
-    setCanShare(!!navigator.share);
-  }, []);
 
   const handleCopy = async () => {
     try {

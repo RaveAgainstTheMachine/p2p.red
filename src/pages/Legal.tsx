@@ -82,7 +82,7 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
                 <li><strong>Automatic Deletion:</strong> All metadata automatically deleted after 24 hours</li>
                 <li><strong>No User Accounts:</strong> No registration, no personal information collected</li>
                 <li><strong>No Logs:</strong> We do not log IP addresses, file contents, or user-identifiable information</li>
-                <li><strong>Encryption Keys:</strong> Generated in your browser, never transmitted to or accessible by servers</li>
+                <li><strong>Encryption Keys:</strong> Generated in your browser and derived via ECDH for each session; never transmitted to or accessible by servers</li>
                 <li><strong>Right to Erasure:</strong> Data automatically erased after 24 hours (no manual request needed)</li>
               </ul>
             </section>

@@ -61,8 +61,14 @@ sync_nginx_config() {
     docker cp "$REPO_ROOT/nginx.conf" p2p-nginx:/etc/nginx/nginx.conf
 }
 
+sync_streamsaver_assets() {
+    ensure_nginx_running
+    docker cp "$REPO_ROOT/public/streamsaver" p2p-nginx:/usr/share/nginx/html
+}
+
 # Determine current active environment (prefer nginx.conf upstream)
 sync_nginx_config
+sync_streamsaver_assets
 CURRENT_ENV=""
 if [[ -f nginx.conf ]]; then
     if grep -q "p2p-app-green:3000" nginx.conf; then

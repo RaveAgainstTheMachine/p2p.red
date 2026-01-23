@@ -56,7 +56,7 @@ export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) =
           setLastCheckedAt(data.checkedAt || null);
         }
       } catch (error) {
-        // Service health check failed
+        console.warn('Service health check failed', error);
       }
     };
 
@@ -64,7 +64,7 @@ export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) =
     const interval = setInterval(checkHealth, 60000); // Check every minute
 
     return () => clearInterval(interval);
-  }, []);
+  }, [statusUrl]);
 
   const services = [
     { key: 'web', label: 'Web' },

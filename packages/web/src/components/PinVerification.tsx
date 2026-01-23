@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, createRef } from 'react';
 import { Lock, AlertCircle } from 'lucide-react';
 
 interface PinVerificationProps {
@@ -15,23 +15,25 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
   isVerifying = false 
 }) => {
   const [digits, setDigits] = useState(['', '', '', '']);
-  const inputRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-  ];
+  const inputRefs = useMemo(() => (
+    [
+      createRef<HTMLInputElement>(),
+      createRef<HTMLInputElement>(),
+      createRef<HTMLInputElement>(),
+      createRef<HTMLInputElement>()
+    ]
+  ), []);
 
   useEffect(() => {
     inputRefs[0].current?.focus();
-  }, []);
+  }, [inputRefs]);
 
   useEffect(() => {
     if (error) {
       setDigits(['', '', '', '']);
       setTimeout(() => inputRefs[0].current?.focus(), 100);
     }
-  }, [error]);
+  }, [error, inputRefs]);
 
   const handleDigitChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;

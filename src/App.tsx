@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import type { DataConnection } from 'peerjs';
 import { useWebRTC } from './hooks/useWebRTC';
 import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
@@ -19,6 +20,7 @@ import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
 import { Legal } from './pages/Legal';
+import { Landing } from './pages/Landing';
 
 // Meta tag management for rich link previews
 const updateMetaTags = (metadata: any) => {
@@ -40,7 +42,7 @@ const updateMetaTags = (metadata: any) => {
     tag.content = content;
     console.log('🏷️ Updated meta tag:', property, '=', content);
   };
-  
+
   const updateMetaName = (name: string, content: string) => {
     let tag = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
     if (!tag) {
@@ -73,7 +75,7 @@ const updateMetaTags = (metadata: any) => {
   updateMetaName('twitter:image', `${window.location.origin}/favicon.svg`);
   
   // Update basic meta description
-  updateMetaName('description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage.`);
+  updateMetaName('description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage.`);
   
   console.log('✅ Meta tags updated successfully');
 };
@@ -100,17 +102,17 @@ const resetMetaTags = () => {
   updateMetaTag('og:type', 'website');
   updateMetaTag('og:url', 'https://p2p.red/');
   updateMetaTag('og:title', 'P2P File Share - Secure File Sharing');
-  updateMetaTag('og:description', 'Share files securely with end-to-end encryption. True peer-to-peer transfer, no server storage.');
+  updateMetaTag('og:description', 'Share files securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage.');
   updateMetaTag('og:site_name', 'p2p.red');
   
   // Reset Twitter Card tags
   updateMetaName('twitter:card', 'summary');
   updateMetaName('twitter:url', 'https://p2p.red/');
   updateMetaName('twitter:title', 'P2P File Share - Secure File Sharing');
-  updateMetaName('twitter:description', 'Share files securely with end-to-end encryption. True peer-to-peer transfer, no server storage.');
+  updateMetaName('twitter:description', 'Share files securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage.');
   
   // Reset basic meta description
-  updateMetaName('description', 'Share files securely with end-to-end encryption. True peer-to-peer transfer, no server storage, no tracking.');
+  updateMetaName('description', 'Share files securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage, no tracking.');
 };
 
 const formatFileSize = (bytes: number): string => {
@@ -120,6 +122,8 @@ const formatFileSize = (bytes: number): string => {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
+
+const RELAY_SIZE_LIMIT_BYTES = 100 * 1024 * 1024 * 1024;
 
 function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
@@ -151,7 +155,9 @@ function App() {
   const [pinError, setPinError] = useState<string>('');
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
-  const [currentPage, setCurrentPage] = useState<'home' | 'legal' | 'info'>('home');
+  const [currentPage, setCurrentPage] = useState<'landing' | 'home' | 'legal' | 'info'>(
+    window.location.hash ? 'home' : 'landing'
+  );
   const [themePreference, setThemePreference] = useState<'system' | 'light' | 'dark'>(() => {
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') {
@@ -164,6 +170,7 @@ function App() {
   const themeToggleRef = useRef<HTMLDivElement | null>(null);
   const [enableZip, setEnableZip] = useState<boolean>(true);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
+  const [transferErrorMessage, setTransferErrorMessage] = useState<string>('');
   const [isFaqExpanded, setIsFaqExpanded] = useState<boolean>(false);
   const buildVariantRaw = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
   const buildVariant = buildVariantRaw || 'dev';
@@ -184,6 +191,63 @@ function App() {
     } catch (err) {
       console.error('Failed to copy share link:', err);
     }
+  };
+
+  const getCandidateType = async (conn: DataConnection): Promise<string | undefined> => {
+    const pc = (conn as any).peerConnection as RTCPeerConnection | undefined;
+    if (!pc || typeof pc.getStats !== 'function') return undefined;
+
+    const stats = await pc.getStats();
+    let localCandidateType: string | undefined;
+    let remoteCandidateType: string | undefined;
+    let localCandidateId: string | undefined;
+    let remoteCandidateId: string | undefined;
+
+    stats.forEach((report: any) => {
+      if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+        localCandidateId = report.localCandidateId;
+        remoteCandidateId = report.remoteCandidateId;
+      }
+    });
+
+    if (localCandidateId || remoteCandidateId) {
+      stats.forEach((report: any) => {
+        if (localCandidateId && report.id === localCandidateId) {
+          localCandidateType = report.candidateType;
+        }
+        if (remoteCandidateId && report.id === remoteCandidateId) {
+          remoteCandidateType = report.candidateType;
+        }
+      });
+    }
+
+    if (localCandidateType && remoteCandidateType) {
+      return `${localCandidateType}/${remoteCandidateType}`;
+    }
+    return localCandidateType || remoteCandidateType;
+  };
+
+  const confirmRelayTransfer = async (conn: DataConnection, totalSize: number): Promise<boolean> => {
+    const candidateType = await getCandidateType(conn);
+    const isRelay = typeof candidateType === 'string' && candidateType.toLowerCase().includes('relay');
+    if (!isRelay) return true;
+
+    if (totalSize > RELAY_SIZE_LIMIT_BYTES) {
+      setTransferErrorMessage(`Relay transfers are limited to ${formatFileSize(RELAY_SIZE_LIMIT_BYTES)}. Your selection is ${formatFileSize(totalSize)}. Try a direct connection or reduce size.`);
+      setStatus('error');
+      conn.close();
+      return false;
+    }
+
+    const confirmMessage = `This connection requires a relay and is limited to ${formatFileSize(RELAY_SIZE_LIMIT_BYTES)}. Your transfer is ${formatFileSize(totalSize)}. Continue?`;
+    if (!window.confirm(confirmMessage)) {
+      setTransferErrorMessage('Relay transfer cancelled before starting.');
+      setStatus('error');
+      conn.close();
+      return false;
+    }
+
+    return true;
   };
 
   useEffect(() => {
@@ -208,6 +272,12 @@ function App() {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  useEffect(() => {
+    if (currentHash) {
+      setCurrentPage('home');
+    }
+  }, [currentHash]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -484,6 +554,9 @@ function App() {
             peer.on('connection', async (conn) => {
               console.log('Sender: Incoming connection from receiver:', conn.peer);
               conn.on('open', async () => {
+                if (!(await confirmRelayTransfer(conn, totalSize))) {
+                  return;
+                }
                 // Only handle the first successful connection
                 if (connectionHandled) {
                   console.log('Connection already handled, closing additional connection');
@@ -559,6 +632,9 @@ function App() {
           peer.on('connection', async (conn) => {
             console.log('Sender: Incoming connection from receiver:', conn.peer);
             conn.on('open', async () => {
+              if (!(await confirmRelayTransfer(conn, file.size))) {
+                return;
+              }
               // Only handle the first successful connection
               if (connectionHandled) {
                 console.log('Connection already handled, closing additional connection');
@@ -641,6 +717,9 @@ function App() {
           peer.on('connection', async (conn) => {
             console.log('Sender: Incoming connection from receiver:', conn.peer);
             conn.on('open', async () => {
+              if (!(await confirmRelayTransfer(conn, totalSize))) {
+                return;
+              }
               console.log('Sender: Connection open, starting multiple file transfer');
               setShowEncryptionIndicator(true);
               setIsEncryptedConnection(true);
@@ -706,6 +785,9 @@ function App() {
         peer.on('connection', async (conn) => {
           console.log('Sender: Incoming connection from receiver:', conn.peer);
           conn.on('open', async () => {
+            if (!(await confirmRelayTransfer(conn, fileToTransfer.size))) {
+              return;
+            }
             console.log('Sender: Connection open, starting file transfer');
             setShowEncryptionIndicator(true);
             setIsEncryptedConnection(true);
@@ -965,6 +1047,16 @@ function App() {
 
 
   // Page routing
+  if (currentPage === 'landing') {
+    return (
+      <Landing
+        onStart={() => setCurrentPage('home')}
+        onInfo={() => setCurrentPage('info')}
+        onLegal={() => setCurrentPage('legal')}
+      />
+    );
+  }
+
   if (currentPage === 'legal') {
     return <Legal onBack={() => setCurrentPage('home')} />;
   }
@@ -1046,7 +1138,7 @@ function App() {
             <Logo size="medium" />
           </div>
           <p className="text-white/80 text-base">
-            Privacy-first file sharing with true peer-to-peer transfer
+            Privacy-first file sharing with direct P2P and relay fallback
           </p>
           
           {/* Connection Status Alerts */}
@@ -1200,7 +1292,7 @@ function App() {
                           <div className="mt-2 space-y-1 text-sm text-white/70">
                             <div>Disable VPN/proxy and retry</div>
                             <div>Try a different network (home Wi-Fi vs mobile hotspot)</div>
-                            <div>On home routers, enabling UPnP can help direct connections</div>
+                            <div>On home routers, UPnP can help direct connections (only enable if you understand the risks)</div>
                             <div>Ensure UDP/WebRTC is allowed by firewall/router</div>
                           </div>
                         </details>
@@ -1249,13 +1341,13 @@ function App() {
                         <summary className="cursor-pointer text-sm text-white/70 hover:text-white/90 transition-colors">
                           Tips to improve speed
                         </summary>
-                        <div className="mt-2 space-y-1 text-sm text-white/70">
-                          <div>Disable VPN/proxy and retry</div>
-                          <div>Try a different network (home Wi-Fi vs mobile hotspot)</div>
-                          <div>On home routers, enabling UPnP can help direct connections</div>
-                          <div>Ensure UDP/WebRTC is allowed by firewall/router</div>
-                        </div>
-                      </details>
+                          <div className="mt-2 space-y-1 text-sm text-white/70">
+                            <div>Disable VPN/proxy and retry</div>
+                            <div>Try a different network (home Wi-Fi vs mobile hotspot)</div>
+                            <div>On home routers, UPnP can help direct connections (only enable if you understand the risks)</div>
+                            <div>Ensure UDP/WebRTC is allowed by firewall/router</div>
+                          </div>
+                        </details>
                     </div>
                   )}
                   <EnhancedProgressBar 
@@ -1342,26 +1434,17 @@ function App() {
                   </p>
                 </div>
               )}
-              
               {status === 'error' && (
                 <div>
                   <div className="text-6xl mb-4">❌</div>
                   <h3 className="text-xl font-semibold text-white mb-2">
-                    Connection failed
+                    Transfer Failed
                   </h3>
-                  <p className="text-white/60 mb-4">
-                    Please check the share link and try again
+                  <p className="text-white/80">
+                    {transferErrorMessage || 'There was an error during the transfer. Please try again.'}
                   </p>
                   {transferProgress.percentage > 0 && transferProgress.percentage < 100 && (
                     <div className="flex justify-center mt-4">
-                      {/* <ResumeButton
-                        onClick={() => {
-                          const resumeFromChunk = Math.floor(transferProgress.bytesTransferred / (64 * 1024));
-                          handleResume(resumeFromChunk);
-                        }}
-                        disabled={false}
-                        progress={transferProgress.percentage}
-                      /> */}
                       <button 
                         onClick={() => handleResume(0)}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
@@ -1380,9 +1463,9 @@ function App() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
           <div className="glass-card p-6 text-center">
             <Shield className="text-blue-400 mx-auto mb-4" size={32} />
-            <h3 className="text-lg font-semibold text-white mb-2">True Peer-to-Peer</h3>
+            <h3 className="text-lg font-semibold text-white mb-2">Direct P2P</h3>
             <p className="text-white/60 text-sm">
-              Direct browser-to-browser transfer. No server relay.
+              Direct browser-to-browser transfer with relay fallback when needed.
             </p>
           </div>
           
@@ -1420,16 +1503,24 @@ function App() {
             </button>
             <div
               className={`space-y-4 overflow-hidden text-sm text-white/70 text-left transition-[max-height] duration-300 ease-out ${
-                isFaqExpanded ? 'max-h-[520px]' : 'max-h-0'
+                isFaqExpanded ? 'max-h-[760px]' : 'max-h-0'
               }`}
             >
               <div>
-                <h3 className="text-white font-semibold">Is this truly peer-to-peer?</h3>
-                <p>Yes. File data stays between browsers via WebRTC DataChannels; servers only help peers find each other.</p>
+                <h3 className="text-white font-semibold">Is this peer-to-peer?</h3>
+                <p>Yes. File data moves between browsers via WebRTC DataChannels. When direct connections fail, a TURN relay may carry encrypted data.</p>
               </div>
               <div>
                 <h3 className="text-white font-semibold">How do you protect my privacy?</h3>
-                <p>Files are encrypted in your browser with AES-GCM and sent directly peer-to-peer. The signaling and metadata services only coordinate the connection and never see file contents, and links expire after 24 hours (with optional PIN protection).</p>
+                <p>Files are encrypted in your browser with AES-GCM. Signaling/metadata services coordinate connections and never see file contents, and links expire after 24 hours (with optional PIN protection).</p>
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">How do you prevent corruption during transfer?</h3>
+                <p>WebRTC uses reliable, ordered DataChannels and AES-GCM authenticated encryption. If integrity checks fail, the transfer stops so you can retry.</p>
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">Do session IDs persist?</h3>
+                <p>No. Each page load generates a randomized PeerJS ID that only exists for the current session.</p>
               </div>
               <div>
                 <h3 className="text-white font-semibold">Do I need an account?</h3>
@@ -1441,7 +1532,7 @@ function App() {
               </div>
               <div>
                 <h3 className="text-white font-semibold">Will it work on restricted networks?</h3>
-                <p>Some corporate or school networks can block WebRTC; a different network may be needed.</p>
+                <p>Some corporate or school networks can block WebRTC or force relays; a different network may be needed.</p>
               </div>
             </div>
           </div>

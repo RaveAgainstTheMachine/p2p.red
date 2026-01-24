@@ -33,9 +33,10 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
                 Service Overview
               </h2>
               <p className="leading-relaxed">
-                This service provides peer-to-peer (P2P) file sharing using WebRTC technology. Files are transferred 
-                directly between users' browsers without being stored on our servers. We provide only the signaling 
-                infrastructure to establish connections between peers.
+                This service provides peer-to-peer (P2P) file sharing using WebRTC technology. Files are transferred
+                between users' browsers without being stored on our servers. We provide the signaling infrastructure
+                to establish connections between peers, and a TURN relay may be used when a direct connection cannot
+                be established.
               </p>
             </section>
 
@@ -75,16 +76,24 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
                 We are committed to privacy and comply with GDPR (EU), PIPEDA (Canada), and Law 25 (Quebec):
               </p>
               <ul className="list-disc list-inside space-y-2 ml-4">
-                <li><strong>No Cookies:</strong> We use only localStorage for essential functionality (consent preferences, link expiry)</li>
+                <li><strong>Cookies:</strong> No third-party tracking cookies. We use localStorage for essential preferences (theme, consent state, link expiry display)</li>
                 <li><strong>Privacy-first Analytics:</strong> Self-hosted, cookie-free Plausible for anonymous pageview counts (no cross-site tracking)</li>
-                <li><strong>True P2P:</strong> Files transferred directly between browsers, never stored on servers</li>
-                <li><strong>Minimal Data:</strong> Only metadata (filename, size, peer IDs) temporarily stored for 24 hours</li>
-                <li><strong>Automatic Deletion:</strong> All metadata automatically deleted after 24 hours</li>
-                <li><strong>No User Accounts:</strong> No registration, no personal information collected</li>
-                <li><strong>No Logs:</strong> We do not log IP addresses, file contents, or user-identifiable information</li>
-                <li><strong>Encryption Keys:</strong> Generated in your browser, never transmitted to or accessible by servers</li>
+                <li><strong>End-to-End Encryption:</strong> Files are encrypted in your browser; keys are derived via ECDH and never sent to servers</li>
+                <li><strong>Relay Transparency:</strong> A TURN relay may carry encrypted data when direct connections fail; we cannot read file contents</li>
+                <li><strong>Minimal Data:</strong> Only metadata (filename, size, type, peer IDs, optional PIN hash) is stored for up to 24 hours</li>
+                <li><strong>Automatic Deletion:</strong> Metadata is automatically deleted after expiration</li>
+                <li><strong>No User Accounts:</strong> No registration or personal profile data collected</li>
+                <li><strong>Limited Operational Logs:</strong> We avoid logging file contents and sensitive metadata; operational logs may exist for reliability/security</li>
                 <li><strong>Right to Erasure:</strong> Data automatically erased after 24 hours (no manual request needed)</li>
               </ul>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold text-white mb-3">Anti-Abuse Controls</h2>
+              <p className="leading-relaxed">
+                We use an open-source proof-of-work challenge (Anubis) on metadata endpoints to limit automated abuse.
+                This does not track users or require third-party captcha providers.
+              </p>
             </section>
 
             <section>
@@ -93,7 +102,9 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
                 Important security considerations:
               </p>
               <ul className="list-disc list-inside space-y-2 ml-4">
-                <li>Executable files (.exe, .bat, .sh, etc.) can harm your computer</li>
+                <li>Executable files (.exe, .msi, .bat, .cmd, .ps1, .sh) can harm your computer</li>
+                <li>Macro-enabled documents (.docm, .xlsm) can execute code when opened</li>
+                <li>Archives (.zip, .rar) can hide multiple files or nested executables</li>
                 <li>Only download files from trusted sources</li>
                 <li>PIN protection is optional and provides basic security</li>
                 <li>WebRTC connections are encrypted, but verify sender identity</li>

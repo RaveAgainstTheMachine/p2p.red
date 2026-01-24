@@ -129,6 +129,21 @@ services:
     extra_hosts:
       - "bao.p2p.red:10.88.0.1"
 
+  # Anubis PoW filter for metadata API
+  anubis:
+    image: ghcr.io/techarohq/anubis:latest
+    container_name: p2p-anubis
+    restart: unless-stopped
+    depends_on:
+      - metadata-api
+    environment:
+      BIND: ":8923"
+      TARGET: "http://p2p-metadata-api:3001"
+      DIFFICULTY: "4"
+      SERVE_ROBOTS_TXT: "true"
+    networks:
+      - p2p-network
+
   # Frontend app (React)
   app:
     image: ${APP_IMAGE:-p2p-app:latest}

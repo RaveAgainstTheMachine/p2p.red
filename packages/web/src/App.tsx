@@ -19,6 +19,7 @@ import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from '@p2p-file-share/shared';
 import { Info } from './pages/Info';
 import { Legal } from './pages/Legal';
+import { Landing } from './pages/Landing';
 
 // Meta tag management for rich link previews
 const updateMetaTags = (metadata: any) => {
@@ -73,7 +74,7 @@ const updateMetaTags = (metadata: any) => {
   updateMetaName('twitter:image', `${window.location.origin}/favicon.svg`);
   
   // Update basic meta description
-  updateMetaName('description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with end-to-end encryption. True peer-to-peer transfer, no server storage.`);
+  updateMetaName('description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage.`);
   
   console.log('✅ Meta tags updated successfully');
 };
@@ -100,17 +101,17 @@ const resetMetaTags = () => {
   updateMetaTag('og:type', 'website');
   updateMetaTag('og:url', 'https://p2p.red/');
   updateMetaTag('og:title', 'P2P File Share - Secure File Sharing');
-  updateMetaTag('og:description', 'Share files securely with end-to-end encryption. True peer-to-peer transfer, no server storage.');
+  updateMetaTag('og:description', 'Share files securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage.');
   updateMetaTag('og:site_name', 'p2p.red');
   
   // Reset Twitter Card tags
   updateMetaName('twitter:card', 'summary');
   updateMetaName('twitter:url', 'https://p2p.red/');
   updateMetaName('twitter:title', 'P2P File Share - Secure File Sharing');
-  updateMetaName('twitter:description', 'Share files securely with end-to-end encryption. True peer-to-peer transfer, no server storage.');
+  updateMetaName('twitter:description', 'Share files securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage.');
   
   // Reset basic meta description
-  updateMetaName('description', 'Share files securely with end-to-end encryption. True peer-to-peer transfer, no server storage, no tracking.');
+  updateMetaName('description', 'Share files securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage, no tracking.');
 };
 
 const formatFileSize = (bytes: number): string => {
@@ -150,7 +151,9 @@ function App() {
   const [pinError, setPinError] = useState<string>('');
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
-  const [currentPage, setCurrentPage] = useState<'home' | 'legal' | 'info'>('home');
+  const [currentPage, setCurrentPage] = useState<'landing' | 'home' | 'legal' | 'info'>(
+    window.location.hash ? 'home' : 'landing'
+  );
   const [themePreference, setThemePreference] = useState<'system' | 'light' | 'dark'>(() => {
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') {
@@ -158,6 +161,7 @@ function App() {
     }
     return 'system';
   });
+  const [currentHash, setCurrentHash] = useState<string>(window.location.hash);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const themeToggleRef = useRef<HTMLDivElement | null>(null);
   const [enableZip, setEnableZip] = useState<boolean>(true);
@@ -192,6 +196,20 @@ function App() {
     document.documentElement.setAttribute('data-theme', themePreference);
     localStorage.setItem('theme', themePreference);
   }, [themePreference]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentHash(window.location.hash);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    if (currentHash) {
+      setCurrentPage('home');
+    }
+  }, [currentHash]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -289,19 +307,19 @@ function App() {
 
   useEffect(() => {
     console.log('🔍 Mode detection useEffect running:', {
-      hasHash: !!window.location.hash,
-      hash: window.location.hash,
+      hasHash: !!currentHash,
+      hash: currentHash,
       hasPeer: !!peer,
       isConnected,
       connectionState,
     });
     
     // Auto-detect mode: receive if hash present, otherwise share
-    if (window.location.hash && peer && isConnected) {
+    if (currentHash && peer && isConnected) {
       console.log('📥 Hash detected and peer ready, fetching metadata...');
       setMode('receive');
       
-      const shortKey = window.location.hash.substring(1);
+      const shortKey = currentHash.substring(1);
       console.log('Short key:', shortKey);
       
       // Fetch metadata from API
@@ -330,7 +348,7 @@ function App() {
             setStatus('error');
           }
         });
-    } else if (!window.location.hash) {
+    } else if (!currentHash) {
       console.log('No hash present, setting share mode');
       setMode('share');
       // Reset meta tags to default
@@ -338,7 +356,7 @@ function App() {
     } else {
       console.log('Hash present but peer not ready, waiting...');
     }
-  }, [window.location.hash, peer, isConnected]);
+  }, [currentHash, peer, isConnected]);
 
   const handleFileSelect = (files: File[]) => {
     setSelectedFiles(files);
@@ -348,7 +366,7 @@ function App() {
     setIsVerifyingPin(true);
     setPinError('');
     
-    const shortKey = window.location.hash.substring(1);
+    const shortKey = (currentHash || window.location.hash).substring(1);
     
     try {
       const metadata = await getMetadata(shortKey, enteredPin);
@@ -925,6 +943,16 @@ function App() {
 
 
   // Page routing
+  if (currentPage === 'landing') {
+    return (
+      <Landing
+        onStart={() => setCurrentPage('home')}
+        onInfo={() => setCurrentPage('info')}
+        onLegal={() => setCurrentPage('legal')}
+      />
+    );
+  }
+
   if (currentPage === 'legal') {
     return <Legal onBack={() => setCurrentPage('home')} />;
   }
@@ -1006,7 +1034,7 @@ function App() {
             <Logo size="medium" />
           </div>
           <p className="text-white/80 text-base">
-            Privacy-first file sharing with true peer-to-peer transfer
+            Privacy-first file sharing with direct P2P and relay fallback
           </p>
           
           {/* Connection Status Alerts */}
@@ -1160,7 +1188,7 @@ function App() {
                           <div className="mt-2 space-y-1 text-sm text-white/70">
                             <div>Disable VPN/proxy and retry</div>
                             <div>Try a different network (home Wi-Fi vs mobile hotspot)</div>
-                            <div>On home routers, enabling UPnP can help direct connections</div>
+                            <div>On home routers, UPnP can help direct connections (only enable if you understand the risks)</div>
                             <div>Ensure UDP/WebRTC is allowed by firewall/router</div>
                           </div>
                         </details>
@@ -1212,7 +1240,7 @@ function App() {
                         <div className="mt-2 space-y-1 text-sm text-white/70">
                           <div>Disable VPN/proxy and retry</div>
                           <div>Try a different network (home Wi-Fi vs mobile hotspot)</div>
-                          <div>On home routers, enabling UPnP can help direct connections</div>
+                          <div>On home routers, UPnP can help direct connections (only enable if you understand the risks)</div>
                           <div>Ensure UDP/WebRTC is allowed by firewall/router</div>
                         </div>
                       </details>
@@ -1340,9 +1368,9 @@ function App() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
           <div className="glass-card p-6 text-center">
             <Shield className="text-blue-400 mx-auto mb-4" size={32} />
-            <h3 className="text-lg font-semibold text-white mb-2">True Peer-to-Peer</h3>
+            <h3 className="text-lg font-semibold text-white mb-2">Direct P2P</h3>
             <p className="text-white/60 text-sm">
-              Direct browser-to-browser transfer. No server relay.
+              Direct browser-to-browser transfer with relay fallback when needed.
             </p>
           </div>
           
@@ -1380,16 +1408,24 @@ function App() {
             </button>
             <div
               className={`space-y-4 overflow-hidden text-sm text-white/70 text-left transition-[max-height] duration-300 ease-out ${
-                isFaqExpanded ? 'max-h-[520px]' : 'max-h-0'
+                isFaqExpanded ? 'max-h-[760px]' : 'max-h-0'
               }`}
             >
               <div>
-                <h3 className="text-white font-semibold">Is this truly peer-to-peer?</h3>
-                <p>Yes. File data stays between browsers via WebRTC DataChannels; servers only help peers find each other.</p>
+                <h3 className="text-white font-semibold">Is this peer-to-peer?</h3>
+                <p>Yes. File data moves between browsers via WebRTC DataChannels. When direct connections fail, a TURN relay may carry encrypted data.</p>
               </div>
               <div>
                 <h3 className="text-white font-semibold">How do you protect my privacy?</h3>
-                <p>Files are encrypted in your browser with AES-GCM and sent directly peer-to-peer. Signaling and metadata services only coordinate connections and never see file contents, and links expire after 24 hours (with optional PIN protection).</p>
+                <p>Files are encrypted in your browser with AES-GCM. Signaling/metadata services coordinate connections and never see file contents, and links expire after 24 hours (with optional PIN protection).</p>
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">How do you prevent corruption during transfer?</h3>
+                <p>WebRTC uses reliable, ordered DataChannels and AES-GCM authenticated encryption. If integrity checks fail, the transfer stops so you can retry.</p>
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">Do session IDs persist?</h3>
+                <p>No. Each page load generates a randomized PeerJS ID that only exists for the current session.</p>
               </div>
               <div>
                 <h3 className="text-white font-semibold">Do I need an account?</h3>
@@ -1401,7 +1437,7 @@ function App() {
               </div>
               <div>
                 <h3 className="text-white font-semibold">Will it work on restricted networks?</h3>
-                <p>Some corporate or school networks can block WebRTC; a different network may be needed.</p>
+                <p>Some corporate or school networks can block WebRTC or force relays; a different network may be needed.</p>
               </div>
             </div>
           </div>

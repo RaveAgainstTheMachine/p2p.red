@@ -16,7 +16,7 @@ export const TrustBadges: React.FC = () => {
       
       <div className="flex items-center gap-2 px-3 py-2 bg-purple-500/20 border border-purple-500/40 rounded-lg">
         <Server size={16} className="text-purple-400" />
-        <span className="text-purple-300 text-xs font-medium">No Server Relay</span>
+        <span className="text-purple-300 text-xs font-medium">Relay Fallback Only</span>
       </div>
     </div>
   );

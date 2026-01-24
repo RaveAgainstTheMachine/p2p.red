@@ -9,6 +9,23 @@ export function formatExpirationTime(expiresAt: string): string {
   try {
     const now = new Date();
     const expires = new Date(expiresAt);
+    const formatTimezoneOffset = (date: Date) => {
+      const offsetMinutes = -date.getTimezoneOffset();
+      const sign = offsetMinutes >= 0 ? '+' : '-';
+      const absMinutes = Math.abs(offsetMinutes);
+      const hours = Math.floor(absMinutes / 60);
+      const minutes = absMinutes % 60;
+      const minutePart = minutes ? `:${String(minutes).padStart(2, '0')}` : '';
+      return `UTC${sign}${hours}${minutePart}`;
+    };
+    const formattedDate = expires.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+    const tzLabel = formatTimezoneOffset(expires);
     
     // Calculate time difference
     const diffMs = expires.getTime() - now.getTime();
@@ -17,41 +34,31 @@ export function formatExpirationTime(expiresAt: string): string {
     
     // If expired
     if (diffMs <= 0) {
-      return 'Expired';
+      return `Expired (${formattedDate} ${tzLabel})`;
     }
     
     // If less than 1 hour
     if (diffHours < 1) {
       if (diffMinutes <= 1) {
-        return 'Expires in 1 minute';
+        return `Expires in 1 minute (${formattedDate} ${tzLabel})`;
       }
-      return `Expires in ${diffMinutes} minutes`;
+      return `Expires in ${diffMinutes} minutes (${formattedDate} ${tzLabel})`;
     }
     
     // If less than 24 hours
     if (diffHours < 24) {
       if (diffHours === 1) {
-        return `Expires in 1 hour`;
+        return `Expires in 1 hour (${formattedDate} ${tzLabel})`;
       }
-      return `Expires in ${diffHours} hours`;
+      return `Expires in ${diffHours} hours (${formattedDate} ${tzLabel})`;
     }
-    
-    // If more than 24 hours, show exact date/time
-    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const formattedDate = expires.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: userTimezone
-    });
     
     const days = Math.floor(diffHours / 24);
     if (days === 1) {
-      return `Expires tomorrow at ${formattedDate}`;
+      return `Expires tomorrow at ${formattedDate} (${tzLabel})`;
     }
     
-    return `Expires in ${days} days (${formattedDate})`;
+    return `Expires in ${days} days (${formattedDate} ${tzLabel})`;
   } catch (error) {
     console.error('Error formatting expiration time:', error);
     return 'Expires soon';

@@ -1,19 +1,20 @@
 # 🚀 P2P File Share
 
-A privacy-first, browser-to-browser file sharing service using WebRTC DataChannels. True peer-to-peer transfers with short, shareable links. Deployed on OVH VPS with full infrastructure control.
+A privacy-first, browser-to-browser file sharing service using WebRTC DataChannels. Peer-to-peer transfers with relay fallback and short, shareable links. Deployed on OVH VPS with full infrastructure control.
 
 **Current Status:** Single VPS deployment (testing phase). Designed for thousands of concurrent users with multi-VPS scaling path.
 
 ## ✨ **Features**
 
 - 🔒 **End-to-end encrypted** - Files encrypted in your browser before transfer
-- 🌐 **True P2P** - Direct browser-to-browser transfers, no server relay
+- 🌐 **Direct P2P** - Peer-to-peer transfers with TURN relay fallback when direct fails
 - 🔗 **Short links** - 16-character shareable links (e.g., `p2p.red#aB3xK9mP12345678`)
 - 💾 **Streaming to disk** - Files written directly to disk via File System Access API (no RAM limits)
 - 🎨 **Beautiful UI** - Glassmorphism design with 11 themes
 - 📱 **Mobile friendly** - Works on all modern browsers and devices
 - 🖥️ **Self-hosted** - Complete control over infrastructure
 - ⚡ **High performance** - Redis caching, PostgreSQL persistence, sub-10ms metadata retrieval
+- 🛡️ **Bot mitigation** - Anubis proof-of-work challenges on metadata endpoints
 
 ## 🛠️ **Technology Stack**
 
@@ -94,9 +95,10 @@ VITE_PEERJS_SECURE=false
 
 ## 🔐 **Privacy & Security**
 
-- **Zero-knowledge**: Files never touch our servers
-- **End-to-end encryption**: AES-GCM 256-bit
-- **Ephemeral**: No data stored after transfer
+- **End-to-end encryption**: AES-GCM 256-bit, keys generated in-browser
+- **Relay transparency**: TURN relays may carry encrypted data when direct P2P is blocked
+- **Metadata-only**: Short-link metadata stored up to 24 hours (filename, size, type, peer IDs)
+- **No server storage**: File contents are never stored on servers
 - **Open source**: Code available for audit
 - **Self-hosted**: Complete control over data
 
@@ -125,9 +127,9 @@ Sender Browser                               Receiver Browser
       |                                             |-------------------->
       |                                             | GET /api/metadata/:key
       |                                             |
-      | 4. Direct P2P WebRTC Connection (file data) |
+      | 4. WebRTC DataChannel (file data)           |
       |<------------------------------------------->|
-      |        (No server relay - true P2P)         |
+      |    (Direct P2P or TURN relay fallback)      |
       v                                             v
       
       Metadata API (PostgreSQL + Redis)

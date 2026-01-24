@@ -16,7 +16,7 @@ describe('timeFormat utilities', () => {
     const now = new Date('2024-01-01T00:10:00Z');
     vi.setSystemTime(now);
     const expiresAt = new Date('2024-01-01T00:00:00Z').toISOString();
-    expect(formatExpirationTime(expiresAt)).toBe('Expired');
+    expect(formatExpirationTime(expiresAt)).toContain('Expired');
     vi.useRealTimers();
   });
 

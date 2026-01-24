@@ -75,12 +75,17 @@ const buildAad = (shardId: number, attemptId: number) => {
 };
 
 const postSuccess = (response: SuccessResponse, transfer?: Transferable[]) => {
-  self.postMessage(response, transfer ?? []);
+  (self as { postMessage: (message: any, transfer?: Transferable[]) => void }).postMessage(
+    response,
+    transfer ?? []
+  );
 };
 
 const postError = (id: number, error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? 'Unknown error');
-  self.postMessage({ id, ok: false, error: message } satisfies ErrorResponse);
+  (self as { postMessage: (message: any, transfer?: Transferable[]) => void }).postMessage(
+    { id, ok: false, error: message } satisfies ErrorResponse
+  );
 };
 
 self.onmessage = async (event: MessageEvent<IncomingMessage>) => {
@@ -105,10 +110,11 @@ self.onmessage = async (event: MessageEvent<IncomingMessage>) => {
 
     if (payload.type === 'encrypt') {
       const iv = crypto.getRandomValues(new Uint8Array(ivBytes));
+      const data = payload.data.slice().buffer;
       const encrypted = await crypto.subtle.encrypt(
         { name: 'AES-GCM', iv, additionalData: buildAad(payload.shardId, payload.attemptId) },
         aesKey,
-        payload.data
+        data
       );
       const encryptedBytes = new Uint8Array(encrypted);
       postSuccess(
@@ -123,10 +129,12 @@ self.onmessage = async (event: MessageEvent<IncomingMessage>) => {
     }
 
     if (payload.type === 'decrypt') {
+      const data = payload.data.slice().buffer;
+      const iv = payload.iv.slice().buffer;
       const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: payload.iv, additionalData: buildAad(payload.shardId, payload.attemptId) },
+        { name: 'AES-GCM', iv, additionalData: buildAad(payload.shardId, payload.attemptId) },
         aesKey,
-        payload.data
+        data
       );
       const decryptedBytes = new Uint8Array(decrypted);
       postSuccess(

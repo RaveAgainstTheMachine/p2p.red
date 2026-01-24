@@ -18,9 +18,10 @@ interface MonitoringProps {
 }
 
 export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) => {
+  const devBaseUrl = import.meta.env.VITE_API_URL || window.location.origin;
   const statusUrl = import.meta.env.PROD
     ? `${window.location.origin}/api/status`
-    : 'http://localhost:3001/api/status';
+    : `${devBaseUrl.replace(/\/$/, '')}/api/status`;
   const [overallStatus, setOverallStatus] = useState<DisplayStatus>('degraded');
   const [serviceStatuses, setServiceStatuses] = useState<Record<string, ServiceStatus>>({});
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);

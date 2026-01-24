@@ -40,7 +40,7 @@ A privacy-first, browser-to-browser file sharing service using WebRTC DataChanne
 
 **Note:** Both sender and receiver must keep their browsers open during transfer.
 
-### For Developers
+### For Developers (Local)
 
 ```bash
 # Clone and install
@@ -48,11 +48,20 @@ git clone https://github.com/yourusername/p2p-file-share
 cd p2p-file-share
 pnpm install
 
-# Run development server
-pnpm dev -- --host 0.0.0.0 --port 5173
+# Start dev services (metadata API + Redis + Postgres + PeerJS)
+docker compose -f docker-compose.e2e.yml up -d --build
 
-# Deploy to VPS
-make deploy-all
+# Run Vite on 127.0.0.1:3000
+npm run dev -- --host 127.0.0.1 --port 3000
+```
+
+Local env defaults live in `.env.local` (expected for dev):
+
+```bash
+VITE_API_URL=http://127.0.0.1:3001
+VITE_PEERJS_HOST=127.0.0.1
+VITE_PEERJS_PORT=3000
+VITE_PEERJS_SECURE=false
 ```
 
 ### Automation
@@ -70,7 +79,7 @@ make deploy-all
 
 | Environment | URL                        | Purpose            | Cost        |
 |-------------|----------------------------|--------------------|-------------|
-| Development | localhost:5173             | Local development  | Free        |
+| Development | 127.0.0.1:3000             | Local development  | Free        |
 | Production  | [p2p.red](https://p2p.red) | Live service       | $5-15/month |
 
 ## 📊 **Browser Support**

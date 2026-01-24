@@ -254,7 +254,7 @@ const createCryptoWorkerClient = (): CryptoWorkerClient | null => {
     }
   };
 
-  const request = (type: string, data: Record<string, unknown>) =>
+  const request = (type: string, data: Record<string, unknown>, transfer?: Transferable[]) =>
     new Promise<any>((resolve, reject) => {
       if (!worker) {
         reject(new Error('Crypto worker terminated'));
@@ -262,17 +262,19 @@ const createCryptoWorkerClient = (): CryptoWorkerClient | null => {
       }
       const id = requestId++;
       pending.set(id, { resolve, reject });
-      worker.postMessage({ id, type, ...data });
+      worker.postMessage({ id, type, ...data }, transfer ?? []);
     });
 
   return {
     init: async (key, ivBytes) => {
       await request('init', { key, ivBytes });
     },
-    encrypt: async (shardId, attemptId, data) =>
-      request('encrypt', { shardId, attemptId, data }),
+    encrypt: async (shardId, attemptId, data) => {
+      const payload = data.slice();
+      return request('encrypt', { shardId, attemptId, data: payload }, [payload.buffer]);
+    },
     decrypt: async (shardId, attemptId, iv, data) =>
-      request('decrypt', { shardId, attemptId, iv, data }),
+      request('decrypt', { shardId, attemptId, iv, data }, [iv.buffer, data.buffer]),
     crc32: async (crc, data) => {
       const result = await request('crc32', { crc, data });
       return result.crc as number;
@@ -755,7 +757,18 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
         let totalBytesTransferred = 0;
         let totalCrc32 = 0xFFFFFFFF;
-        const CHUNK_SIZE = 252 * 1024; // 252KB chunks (4 bytes reserved for shard ID header)
+        const BASE_CHUNK_SIZE = 512 * 1024; // 512KB target
+        const pc = (conn as any).peerConnection as RTCPeerConnection | undefined;
+        const sctpMax = pc?.sctp?.maxMessageSize;
+        const encryptionOverhead = chunkHeaderBytes + (encryptionState?.enabled ? encryptionState.tagBytes : 0);
+        const sctpLimit =
+          typeof sctpMax === 'number' && sctpMax > 0
+            ? Math.max(16 * 1024, sctpMax - encryptionOverhead)
+            : BASE_CHUNK_SIZE;
+        const CHUNK_SIZE = Math.min(BASE_CHUNK_SIZE, sctpLimit);
+        if (typeof sctpMax === 'number' && sctpMax > 0) {
+          console.log(`📦 Chunk size: ${(CHUNK_SIZE / 1024).toFixed(0)}KB (SCTP max ${(sctpMax / 1024).toFixed(0)}KB, overhead ${encryptionOverhead} bytes)`);
+        }
         let lastLoggedPercentage = 0;
         let lastUiProgressUpdateTs = 0;
         const UI_PROGRESS_UPDATE_INTERVAL_MS = 250;
@@ -1395,6 +1408,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let nextShardToWrite = 0;
       const storedShardIds = new Set<number>();
       let streamSaverBytesWritten = 0;
+      let streamWriterFlushPromise: Promise<void> | null = null;
 
       const MAX_WRITE_BUFFER_BYTES = 512 * 1024 * 1024;
       const HIGH_WATERMARK_BYTES = 384 * 1024 * 1024;
@@ -1481,48 +1495,59 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
       const flushStreamWriter = async () => {
         if (!useStreamSaver || !streamWriter) return;
-        while (true) {
-          const state = shardStates.get(nextShardToWrite);
-          if (!state || !state.complete) break;
-          let data: ArrayBuffer | null = null;
+        if (streamWriterFlushPromise) {
+          await streamWriterFlushPromise;
+          return;
+        }
+        streamWriterFlushPromise = (async () => {
+          while (true) {
+            const state = shardStates.get(nextShardToWrite);
+            if (!state || !state.complete) break;
+            let data: ArrayBuffer | null = null;
 
-          const buffer = shardBuffers.get(nextShardToWrite);
-          if (buffer) {
-            data = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + state.total) as ArrayBuffer;
-            shardBuffers.delete(nextShardToWrite);
-            cachedShardBytes = Math.max(0, cachedShardBytes - state.total);
-          }
-
-          if (!data) {
-            data = await getShard(transferId, nextShardToWrite);
-          }
-
-          if (!data) {
-            console.error('❌ StreamSaver missing shard data', { shardId: nextShardToWrite });
-            break;
-          }
-          try {
-            if (streamWriter.ready) {
-              await streamWriter.ready;
+            const buffer = shardBuffers.get(nextShardToWrite);
+            if (buffer) {
+              data = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + state.total) as ArrayBuffer;
+              shardBuffers.delete(nextShardToWrite);
+              cachedShardBytes = Math.max(0, cachedShardBytes - state.total);
             }
-            const chunk = new Uint8Array(data);
-            await streamWriter.write(chunk);
-            streamSaverBytesWritten += chunk.byteLength;
-            if (streamSaverBytesWritten === chunk.byteLength) {
-              console.log('✅ StreamSaver first write', { bytes: chunk.byteLength, shardId: nextShardToWrite });
-              if (typeof window !== 'undefined') {
-                window.postMessage({ type: 'streamsaver_download', detail: 'first_write' }, window.location.origin);
+
+            if (!data) {
+              data = await getShard(transferId, nextShardToWrite);
+            }
+
+            if (!data) {
+              console.error('❌ StreamSaver missing shard data', { shardId: nextShardToWrite });
+              break;
+            }
+            try {
+              if (streamWriter.ready) {
+                await streamWriter.ready;
               }
+              const chunk = new Uint8Array(data);
+              await streamWriter.write(chunk);
+              streamSaverBytesWritten += chunk.byteLength;
+              if (streamSaverBytesWritten === chunk.byteLength) {
+                console.log('✅ StreamSaver first write', { bytes: chunk.byteLength, shardId: nextShardToWrite });
+                if (typeof window !== 'undefined') {
+                  window.postMessage({ type: 'streamsaver_download', detail: 'first_write' }, window.location.origin);
+                }
+              }
+            } catch (error) {
+              console.error('❌ StreamSaver write failed', error);
+              setIsTransferring(false);
+              reject(error instanceof Error ? error : new Error('StreamSaver write failed'));
+              return;
             }
-          } catch (error) {
-            console.error('❌ StreamSaver write failed', error);
-            setIsTransferring(false);
-            reject(error instanceof Error ? error : new Error('StreamSaver write failed'));
-            return;
+            await deleteShard(transferId, nextShardToWrite);
+            storedShardIds.delete(nextShardToWrite);
+            nextShardToWrite += 1;
           }
-          await deleteShard(transferId, nextShardToWrite);
-          storedShardIds.delete(nextShardToWrite);
-          nextShardToWrite += 1;
+        })();
+        try {
+          await streamWriterFlushPromise;
+        } finally {
+          streamWriterFlushPromise = null;
         }
       };
 
@@ -1655,6 +1680,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
         offset: number // Shard offset in file
       }>();
       const shardBuffers = new Map<number, Uint8Array>();
+      const shardProcessQueue = new Map<number, Promise<void>>();
       
       let fileHandle: any = null;
       let writableStream: any = null;
@@ -1690,165 +1716,182 @@ export const useAdaptiveMultiStreamTransfer = () => {
             }
             
             const message = new Uint8Array(payload);
-            if (!encryptionState && chunkHeaderBytes > 8) {
-              return;
-            }
-            if (shardStates.size === 0) {
-              return;
-            }
             if (message.byteLength < chunkHeaderBytes) return;
             const view = new DataView(message.buffer);
             const shardId = view.getUint32(0, true);
             const attemptId = chunkHeaderBytes >= 8 ? view.getUint32(4, true) : 0;
-            let chunkData = message.subarray(chunkHeaderBytes);
-
-            if (encryptionEnabled) {
-              if (!encryptionState) {
-                console.error('❌ Encrypted chunk received before ECDH handshake');
-                return;
-              }
-              const ivStart = 8;
-              const ivEnd = ivStart + encryptionIvBytes;
-              if (message.byteLength <= ivEnd) return;
-              const iv = message.subarray(ivStart, ivEnd);
-              const encryptedPayload = message.subarray(ivEnd);
-              try {
-                const start = perfNow();
-                if (cryptoWorker) {
-                  const { decrypted } = await cryptoWorker.decrypt(shardId, attemptId, iv, encryptedPayload);
-                  chunkData = new Uint8Array(decrypted);
-                } else {
-                  const decrypted = await decryptChunk(
-                    encryptionState.key,
-                    shardId,
-                    attemptId,
-                    iv,
-                    encryptedPayload
-                  );
-                  chunkData = new Uint8Array(decrypted);
+            const queued = shardProcessQueue.get(shardId) ?? Promise.resolve();
+            const next = queued
+              .catch(() => undefined)
+              .then(async () => {
+                if (!encryptionState && chunkHeaderBytes > 8) {
+                  return;
                 }
-                perfStats.decryptMs += perfNow() - start;
-                perfStats.decryptBytes += chunkData.byteLength;
-              } catch (error) {
-                console.error('❌ Failed to decrypt chunk', error);
-                return;
-              }
-            }
-
-            // Update shard state
-            if (!shardStates.has(shardId)) {
-              console.error(`❌ Received data for unknown shard ${shardId}`);
-              return;
-            }
-
-            const shardState = shardStates.get(shardId)!;
-
-            if (shardState.complete) {
-              return;
-            }
-
-            if (attemptId > shardState.attemptId) {
-              await resetShardForRetry(shardId, shardState);
-              shardState.attemptId = attemptId;
-            }
-
-            if (attemptId !== shardState.attemptId) {
-              return;
-            }
-
-            const remaining = shardState.total - shardState.received;
-            if (remaining <= 0) {
-              return;
-            }
-
-            const accepted = chunkData.byteLength > remaining ? chunkData.subarray(0, remaining) : chunkData;
-            const prevReceived = shardState.received;
-            shardState.received += accepted.length;
-            bytesReceived += accepted.length;
-
-            // Update incremental CRC32 for this shard
-            shardState.currentCRC = await updateCrc(shardState.currentCRC, accepted);
-
-            // Write chunk to disk immediately (non-blocking)
-            if (useFileSystemAPI && writableStream) {
-              const chunkOffset = shardState.offset + prevReceived;
-              await enqueueWrite(chunkOffset, accepted);
-            } else {
-              let shardBuffer = shardBuffers.get(shardId);
-              if (!shardBuffer || shardBuffer.byteLength !== shardState.total) {
-                if (shardBuffer) {
-                  cachedShardBytes = Math.max(0, cachedShardBytes - shardBuffer.byteLength);
+                if (shardStates.size === 0) {
+                  return;
                 }
-                shardBuffer = new Uint8Array(shardState.total);
-                shardBuffers.set(shardId, shardBuffer);
-                cachedShardBytes += shardState.total;
-                maybeSendBackpressure();
-              }
-              shardBuffer.set(accepted, prevReceived);
-            }
 
-            // Shard complete? Verify CRC32
-            if (shardState.received >= shardState.total) {
-              if (!shardState.expectedCRC) {
-                return;
-              }
-              console.log(`🔍 Shard ${shardId} complete: ${shardState.received}/${shardState.total} bytes, expectedCRC: ${shardState.expectedCRC}`);
-              const shardVerified = await verifyAndConfirmShard(shardId, shardState);
+                let chunkData = message.subarray(chunkHeaderBytes);
 
-              if (shardVerified) {
-                const shardBuffer = shardBuffers.get(shardId);
-                if (shardBuffer) {
-                  totalCrc32 = await updateCrc(totalCrc32, shardBuffer);
-                }
-              }
-
-              if (shardVerified && useStreamSaver && streamWriter) {
-                const shardBuffer = shardBuffers.get(shardId);
-                if (!shardBuffer) {
-                  console.warn('⚠️ StreamSaver shard buffer missing on completion', { shardId });
-                } else if (!storedShardIds.has(shardId)) {
-                  if (cachedShardBytes > MAX_INDEXEDDB_CACHE_BYTES) {
-                    const data = shardBuffer.buffer.slice(shardBuffer.byteOffset, shardBuffer.byteOffset + shardState.total) as ArrayBuffer;
-                    await putShard(transferId, shardId, data);
-                    storedShardIds.add(shardId);
-                    shardBuffers.delete(shardId);
-                    cachedShardBytes = Math.max(0, cachedShardBytes - shardState.total);
+                if (encryptionEnabled) {
+                  if (!encryptionState) {
+                    console.error('❌ Encrypted chunk received before ECDH handshake');
+                    return;
+                  }
+                  const ivStart = 8;
+                  const ivEnd = ivStart + encryptionIvBytes;
+                  if (message.byteLength <= ivEnd) return;
+                  const iv = message.subarray(ivStart, ivEnd);
+                  const encryptedPayload = message.subarray(ivEnd);
+                  try {
+                    const start = perfNow();
+                    if (cryptoWorker) {
+                      const ivCopy = iv.slice();
+                      const encryptedCopy = encryptedPayload.slice();
+                      const { decrypted } = await cryptoWorker.decrypt(shardId, attemptId, ivCopy, encryptedCopy);
+                      chunkData = new Uint8Array(decrypted);
+                    } else {
+                      const decrypted = await decryptChunk(
+                        encryptionState.key,
+                        shardId,
+                        attemptId,
+                        iv,
+                        encryptedPayload
+                      );
+                      chunkData = new Uint8Array(decrypted);
+                    }
+                    perfStats.decryptMs += perfNow() - start;
+                    perfStats.decryptBytes += chunkData.byteLength;
+                  } catch (error) {
+                    console.error('❌ Failed to decrypt chunk', error);
+                    return;
                   }
                 }
 
-                await flushStreamWriter();
+                // Update shard state
+                if (!shardStates.has(shardId)) {
+                  console.error(`❌ Received data for unknown shard ${shardId}`);
+                  return;
+                }
+
+                const shardState = shardStates.get(shardId)!;
+
+                if (shardState.complete) {
+                  return;
+                }
+
+                if (attemptId > shardState.attemptId) {
+                  await resetShardForRetry(shardId, shardState);
+                  shardState.attemptId = attemptId;
+                }
+
+                if (attemptId !== shardState.attemptId) {
+                  return;
+                }
+
+                const remaining = shardState.total - shardState.received;
+                if (remaining <= 0) {
+                  return;
+                }
+
+                const accepted = chunkData.byteLength > remaining ? chunkData.subarray(0, remaining) : chunkData;
+                const prevReceived = shardState.received;
+                shardState.received += accepted.length;
+                bytesReceived += accepted.length;
+
+                // Update incremental CRC32 for this shard
+                shardState.currentCRC = await updateCrc(shardState.currentCRC, accepted);
+
+                // Write chunk to disk immediately (non-blocking)
+                if (useFileSystemAPI && writableStream) {
+                  const chunkOffset = shardState.offset + prevReceived;
+                  await enqueueWrite(chunkOffset, accepted);
+                } else {
+                  let shardBuffer = shardBuffers.get(shardId);
+                  if (!shardBuffer || shardBuffer.byteLength !== shardState.total) {
+                    if (shardBuffer) {
+                      cachedShardBytes = Math.max(0, cachedShardBytes - shardBuffer.byteLength);
+                    }
+                    shardBuffer = new Uint8Array(shardState.total);
+                    shardBuffers.set(shardId, shardBuffer);
+                    cachedShardBytes += shardState.total;
+                    maybeSendBackpressure();
+                  }
+                  shardBuffer.set(accepted, prevReceived);
+                }
+
+                // Shard complete? Verify CRC32
+                if (shardState.received >= shardState.total) {
+                  if (!shardState.expectedCRC) {
+                    return;
+                  }
+                  console.log(`🔍 Shard ${shardId} complete: ${shardState.received}/${shardState.total} bytes, expectedCRC: ${shardState.expectedCRC}`);
+                  const shardVerified = await verifyAndConfirmShard(shardId, shardState);
+
+                  if (shardVerified) {
+                    const shardBuffer = shardBuffers.get(shardId);
+                    if (shardBuffer) {
+                      totalCrc32 = await updateCrc(totalCrc32, shardBuffer);
+                    }
+                  }
+
+                  if (shardVerified && useStreamSaver && streamWriter) {
+                    const shardBuffer = shardBuffers.get(shardId);
+                    if (!shardBuffer) {
+                      console.warn('⚠️ StreamSaver shard buffer missing on completion', { shardId });
+                    } else if (!storedShardIds.has(shardId)) {
+                      if (cachedShardBytes > MAX_INDEXEDDB_CACHE_BYTES) {
+                        const data = shardBuffer.buffer.slice(shardBuffer.byteOffset, shardBuffer.byteOffset + shardState.total) as ArrayBuffer;
+                        await putShard(transferId, shardId, data);
+                        storedShardIds.add(shardId);
+                        shardBuffers.delete(shardId);
+                        cachedShardBytes = Math.max(0, cachedShardBytes - shardState.total);
+                      }
+                    }
+
+                    await flushStreamWriter();
+                  }
+                }
+
+                // Update progress
+                const now = Date.now();
+                const elapsed = (now - startTime.current) / 1000;
+                const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
+                const currentPercentage = Math.floor(Math.min(1, bytesReceived / fileSize) * 100);
+
+                // Log every 10% milestone
+                if (currentPercentage >= lastLoggedPercentage + 10) {
+                  console.log(`📥 ${currentPercentage}% received (${(bytesReceived/1024/1024/1024).toFixed(2)}GB / ${(fileSize/1024/1024/1024).toFixed(2)}GB) @ ${(speed/1024/1024).toFixed(1)}MB/s`);
+                  lastLoggedPercentage = currentPercentage;
+                }
+
+                setTransferProgress({
+                  bytesTransferred: bytesReceived,
+                  totalBytes: fileSize,
+                  percentage: Math.min(1, bytesReceived / fileSize) * 100,
+                  speed,
+                  timeRemaining: speed > 0 ? (fileSize - bytesReceived) / speed : 0,
+                  activeStreams: expectedStreams,
+                  networkQuality,
+                  adaptiveChunkSize: 256 * 1024,
+                  rttMs,
+                  candidateType,
+                  receiverBackpressureLevel,
+                  cachedShardBytes: useFileSystemAPI ? undefined : cachedShardBytes,
+                  maxCachedShardBytes: useFileSystemAPI ? undefined : MAX_INDEXEDDB_CACHE_BYTES
+                });
+
+                await finalizeIfReady();
+              });
+
+            shardProcessQueue.set(shardId, next);
+            try {
+              await next;
+            } finally {
+              if (shardProcessQueue.get(shardId) === next) {
+                shardProcessQueue.delete(shardId);
               }
             }
-
-            // Update progress
-            const now = Date.now();
-            const elapsed = (now - startTime.current) / 1000;
-            const speed = elapsed > 0 ? bytesReceived / elapsed : 0;
-            const currentPercentage = Math.floor(Math.min(1, bytesReceived / fileSize) * 100);
-
-            // Log every 10% milestone
-            if (currentPercentage >= lastLoggedPercentage + 10) {
-              console.log(`📥 ${currentPercentage}% received (${(bytesReceived/1024/1024/1024).toFixed(2)}GB / ${(fileSize/1024/1024/1024).toFixed(2)}GB) @ ${(speed/1024/1024).toFixed(1)}MB/s`);
-              lastLoggedPercentage = currentPercentage;
-            }
-
-            setTransferProgress({
-              bytesTransferred: bytesReceived,
-              totalBytes: fileSize,
-              percentage: Math.min(1, bytesReceived / fileSize) * 100,
-              speed,
-              timeRemaining: speed > 0 ? (fileSize - bytesReceived) / speed : 0,
-              activeStreams: expectedStreams,
-              networkQuality,
-              adaptiveChunkSize: 256 * 1024,
-              rttMs,
-              candidateType,
-              receiverBackpressureLevel,
-              cachedShardBytes: useFileSystemAPI ? undefined : cachedShardBytes,
-              maxCachedShardBytes: useFileSystemAPI ? undefined : MAX_INDEXEDDB_CACHE_BYTES
-            });
-
-            await finalizeIfReady();
           };
         };
       };

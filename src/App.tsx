@@ -14,7 +14,7 @@ import { Logo } from './components/Logo';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, Share2, Shield, CheckCircle, File, Check, Sun, Moon, Monitor } from 'lucide-react';
+import { Download, Share2, Shield, CheckCircle, File, Check, Sun, Moon, Monitor, ChevronDown } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
@@ -164,6 +164,7 @@ function App() {
   const themeToggleRef = useRef<HTMLDivElement | null>(null);
   const [enableZip, setEnableZip] = useState<boolean>(true);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
+  const [isFaqExpanded, setIsFaqExpanded] = useState<boolean>(false);
   const buildVariantRaw = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
   const buildVariant = buildVariantRaw || 'dev';
   const buildVersion = (import.meta as any)?.env?.VITE_BUILD_VERSION;
@@ -1405,8 +1406,23 @@ function App() {
         {/* FAQ */}
         <div className="mt-12">
           <div className="glass-card p-6">
-            <h2 className="text-xl font-semibold text-white mb-3 text-center">FAQ</h2>
-            <div className="space-y-4 text-sm text-white/70 text-center">
+            <button
+              type="button"
+              onClick={() => setIsFaqExpanded((prev) => !prev)}
+              className="group mx-auto mb-3 flex items-center gap-2 text-center text-xl font-semibold text-white"
+              aria-expanded={isFaqExpanded}
+            >
+              <span>FAQ</span>
+              <ChevronDown
+                size={16}
+                className={`text-white/60 transition-transform ${isFaqExpanded ? 'rotate-180' : ''}`}
+              />
+            </button>
+            <div
+              className={`space-y-4 overflow-hidden text-sm text-white/70 text-left transition-[max-height] duration-300 ease-out ${
+                isFaqExpanded ? 'max-h-[520px]' : 'max-h-0'
+              }`}
+            >
               <div>
                 <h3 className="text-white font-semibold">Is this truly peer-to-peer?</h3>
                 <p>Yes. File data stays between browsers via WebRTC DataChannels; servers only help peers find each other.</p>

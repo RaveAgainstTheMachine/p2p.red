@@ -143,8 +143,9 @@ Prod runtime host does **not** have full source. Build locally and ship tars.
 # Local build (authoritative)
 # This script builds BOTH colors with explicit VITE_BUILD_VARIANT
 # and validates the p2p.build_variant label on each image.
-# It also injects VITE_BUILD_VERSION (SemVer + git SHA + UTC timestamp)
-# and validates the p2p.build_version label.
+# It injects prod VITE_* values (API + PeerJS) so prod bundles never
+# inherit dev .env.local settings, and also injects VITE_BUILD_VERSION
+# (SemVer + git SHA + UTC timestamp) with p2p.build_version validation.
 ./automation/build-prod-images.sh
 
 # Copy to prod via WG

@@ -24,6 +24,10 @@ build_app_image() {
         -f "$REPO_ROOT/Dockerfile" \
         --build-arg "VITE_BUILD_VARIANT=$color" \
         --build-arg "VITE_BUILD_VERSION=$BUILD_VERSION" \
+        --build-arg "VITE_API_URL=https://p2p.red" \
+        --build-arg "VITE_PEERJS_HOST=p2p.red" \
+        --build-arg "VITE_PEERJS_PORT=443" \
+        --build-arg "VITE_PEERJS_SECURE=true" \
         -t "p2p-app-$color:latest" \
         "$REPO_ROOT"
 

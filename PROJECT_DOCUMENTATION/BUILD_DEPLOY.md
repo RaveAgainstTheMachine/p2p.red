@@ -1,13 +1,16 @@
 # Build & Deploy Guide (Dev + Prod)
 
-This guide covers dev and prod build/deploy flows. Dev uses external Nginx Proxy Manager (NginxPM); prod uses VPS Nginx. Keep environments isolated.
+This guide covers dev and prod build/deploy flows. Dev uses external Nginx Proxy Manager (NginxPM); prod uses Envoy on the VPS. Keep environments isolated.
 
 ## Prerequisites
 - Docker + Compose plugin installed.
 - OpenBao Agent running and rendering `/run/secrets/metadata.env` for metadata services.
-- Dev reverse proxy is external NginxPM; do **not** edit prod nginx for dev.
+- Dev reverse proxy is external NginxPM; do **not** edit prod Envoy for dev.
+- Dev deploy scripts use `envoy.dev.yaml` (HTTP-only) when `DEPLOY_ENV=dev`.
 
 ## Dev Workflow (LAN + NginxPM)
+
+Note: `deploy.sh`/`deploy-and-test.sh` in dev mount `envoy.dev.yaml` via `ENVOY_CONFIG` (HTTP-only) for local testing; NginxPM still owns dev domains.
 
 ### 1) Secrets + OpenBao Agent (dev)
 Ensure permissions match the OpenBao image user:
@@ -113,17 +116,17 @@ This is the **authoritative** blue/green procedure. Always check which color is 
 - If confirmation is pending, stop after local verification and wait.
 
 ### A) Determine Which Color Is Live (Required)
-Use the nginx upstream because it is the source of truth for live traffic.
+Use the Envoy runtime weights because they are the source of truth for live traffic.
 ```
 # On prod host
 cd /opt/p2p-file-share
 
-# Check live upstream in nginx.conf
-grep -n "p2p-app-" /opt/p2p-file-share/nginx.conf
+# Check live weights via Envoy admin API
+ENVOY_ADMIN_URL=${ENVOY_ADMIN_URL:-http://127.0.0.1:9901}
+curl -fsS "$ENVOY_ADMIN_URL/runtime?format=json" | \
+  sed -n 's/.*"traffic_split.app_\(blue\|green\)"[[:space:]]*:[[:space:]]*"\([0-9]*\)".*/\1=\2/p'
 
-# Expected one of:
-#   server p2p-app-blue:3000;
-#   server p2p-app-green:3000;
+# Expect higher weight to be active (blue=100/green=0 or vice-versa)
 ```
 Optional cross-checks:
 ```
@@ -166,11 +169,11 @@ sudo docker load -i /opt/p2p-file-share/images/app-blue.tar
 sudo docker load -i /opt/p2p-file-share/images/app-green.tar
 sudo docker load -i /opt/p2p-file-share/images/metadata-api.tar
 sudo docker load -i /opt/p2p-file-share/images/peerjs.tar
-sudo docker load -i /opt/p2p-file-share/images/nginx.tar
+sudo docker load -i /opt/p2p-file-share/images/envoy.tar
 
 cd /opt/p2p-file-share
 
-# Runtime services (metadata + peerjs + nginx)
+# Runtime services (metadata + peerjs + envoy)
 sudo METADATA_API_ENV_FILE=/run/secrets/metadata.env docker compose -f docker-compose.yml up -d
 
 # Zero-downtime app switch (prod requires prebuilt images)
@@ -215,40 +218,35 @@ Confirm the UI shows the expected **blue/green badge** and the build **version**
 
 ### Notes (Operational Guardrails)
 - **Never** deploy both colors at once.
-- Always deploy the **inactive** color and switch via nginx.
-- `automation/deploy-zero-downtime.sh` checks **nginx.conf** to decide the active color.
+- Always deploy the **inactive** color and switch via Envoy.
+- `automation/deploy-zero-downtime.sh` checks **Envoy runtime weights** to decide the active color.
 - Prod deploys require **prebuilt images** (`USE_PREBUILT_IMAGES=1`) to prevent local builds on prod.
 - UI/UX changes require explicit project-owner confirmation **before** prod release.
 - Build images only via `automation/build-prod-images.sh` (labels `p2p.build_variant` are enforced).
 - If the build indicator is missing or wrong, rebuild locally (do not proceed).
-- Deploy script now **copies nginx.conf into the nginx container** before reload to avoid stale upstreams.
+- Envoy admin API must be reachable at `127.0.0.1:9901` for weight shifts.
 - Image retention policy:
   - **prod** keeps current + 1 previous image per variant.
   - **dev** keeps up to 10 previous images per variant.
   - `automation/cleanup-images.sh` enforces this (runs after deploy). Override with `KEEP_IMAGE_COUNT`.
-- The switch may still cause a brief blip during nginx reload. Use env vars to reduce impact:
+- The switch may still cause brief blips during traffic shifts if the target app is unhealthy. Use env vars to reduce impact:
   - `SWITCH_GRACE_SECONDS` (default: 5)
   - `POST_SWITCH_VERIFY_DELAY` (default: 5)
   - `OLD_ENV_STOP_DELAY` (default: 15)
 ### Signal Domain TLS (prod)
-`signal.p2p.red` has its own TLS cert and nginx server block (PeerJS only).
-Because the nginx container owns :80/:443, issue certs with a short nginx stop:
+`signal.p2p.red` has its own TLS cert and Envoy filter chain (PeerJS only).
+Because the Envoy container owns :80/:443, issue certs with a short Envoy stop:
 ```
-docker stop p2p-nginx
+docker stop p2p-envoy
 sudo certbot certonly --standalone -d signal.p2p.red
-docker start p2p-nginx
-```
-Then reload nginx with the updated config (nginx.conf / nginx.blue-green.conf):
-```
-docker cp /opt/p2p-file-share/nginx.conf p2p-nginx:/etc/nginx/nginx.conf
-docker exec -i p2p-nginx nginx -t && docker exec -i p2p-nginx nginx -s reload
+docker start p2p-envoy
 ```
 
 ### Plausible Analytics (prod)
 Plausible is self-hosted on the prod VPS and exposed via `plausible.p2p.red`.
 
 **First-party proxy (recommended):**
-- Nginx on `p2p.red` proxies:
+- Envoy on `p2p.red` proxies:
   - `/js/script.js` -> `http://plausible/js/script.js`
   - `/api/event` -> `http://plausible/api/event`
 - Script tag should use first-party path:
@@ -260,15 +258,9 @@ Required env vars (docker-compose.yml):
 
 Issue TLS certs:
 ```
-docker stop p2p-nginx
+docker stop p2p-envoy
 sudo certbot certonly --standalone -d plausible.p2p.red
-docker start p2p-nginx
-```
-
-Reload nginx after certs/config updates:
-```
-docker cp /opt/p2p-file-share/nginx.conf p2p-nginx:/etc/nginx/nginx.conf
-docker exec -i p2p-nginx nginx -t && docker exec -i p2p-nginx nginx -s reload
+docker start p2p-envoy
 ```
 
 Initial Plausible DB bootstrap (first-time only):
@@ -293,7 +285,7 @@ docker run --rm --env-file /run/secrets/plausible.env \
 - OpenBao Agent renders `/run/secrets/metadata.env` and file readable by service user.
 - Metadata API health check returns `healthy` locally (`http://localhost:3001/health`).
 - TURN credentials endpoint returns `200` locally (`http://localhost:3001/api/turn-credentials`).
-- Nginx routes (`p2p.red`, `signal.p2p.red`) point to the correct upstreams.
+- Envoy routes (`p2p.red`, `signal.p2p.red`) point to the correct upstreams.
 - Blue/green services are built and start cleanly (`docker compose -f docker-compose.blue-green.yml up -d`).
 - Smoke test: open web app, create a share link, connect a second client, verify WebRTC connection.
 - Rollback plan verified (`automation/switch-upstream.sh`).
@@ -349,16 +341,16 @@ docker tag p2p-app-blue:latest p2p-app-green:latest
 # Build metadata API
 docker build -f metadata-api/Dockerfile -t p2p-metadata-api:latest /opt/p2p-file-share/metadata-api
 
-# Build PeerJS + Nginx
+# Build PeerJS + Envoy
 docker build -f Dockerfile.peerjs -t p2p-peerjs:latest /opt/p2p-file-share
-docker build -f Dockerfile.nginx -t p2p-nginx:latest /opt/p2p-file-share
+docker build -f Dockerfile.envoy -t p2p-envoy:latest /opt/p2p-file-share
 
 # Save image tars
 docker save -o /opt/p2p-file-share/images/app-blue.tar p2p-app-blue:latest
 docker save -o /opt/p2p-file-share/images/app-green.tar p2p-app-green:latest
 docker save -o /opt/p2p-file-share/images/metadata-api.tar p2p-metadata-api:latest
 docker save -o /opt/p2p-file-share/images/peerjs.tar p2p-peerjs:latest
-docker save -o /opt/p2p-file-share/images/nginx.tar p2p-nginx:latest
+docker save -o /opt/p2p-file-share/images/envoy.tar p2p-envoy:latest
 ```
 
 ### 1) Deploy Metadata API (prod)
@@ -381,21 +373,21 @@ curl http://localhost:3001/health
 ./automation/deploy-zero-downtime.sh
 ```
 
-### Manual nginx restart (prod)
-When updating nginx only, still export the metadata env file or compose will error parsing the metadata-api service:
+### Manual Envoy restart (prod)
+When updating Envoy only, still export the metadata env file or compose will error parsing the metadata-api service:
 ```
-METADATA_API_ENV_FILE=/run/secrets/metadata.env docker compose -f docker-compose.yml up -d --no-deps nginx
+METADATA_API_ENV_FILE=/run/secrets/metadata.env docker compose -f docker-compose.yml up -d --no-deps envoy
 ```
 
 ## Verification Checklist (dev)
 - Metadata API health returns `healthy`.
 - Web loads and PeerJS connects.
-- Dev routes are served via NginxPM (not prod nginx).
+- Dev routes are served via NginxPM (not prod Envoy).
 
 ## Verification Checklist (prod)
 - Metadata API health returns `healthy`.
 - Web loads and PeerJS connects.
-- Prod routes are served via VPS nginx.
+- Prod routes are served via VPS Envoy.
 
 ## Rollback (Prod)
 - If using blue/green: switch upstream back using `automation/switch-upstream.sh`.

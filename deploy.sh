@@ -10,6 +10,10 @@ DEPLOY_ENV=${DEPLOY_ENV:-prod}
 SITE_URL=${SITE_URL:-""}
 BUILD_VARIANT=${BUILD_VARIANT:-""}
 
+if [ "$DEPLOY_ENV" = "dev" ]; then
+    export ENVOY_CONFIG=${ENVOY_CONFIG:-"./envoy.dev.yaml"}
+fi
+
 if [ -z "$SITE_URL" ]; then
     if [ "$DEPLOY_ENV" = "dev" ]; then
         SITE_URL="http://localhost:5173"
@@ -70,7 +74,7 @@ docker compose rm -f || true
 
 # Rebuild only changed services
 echo "🔨 Building Docker images..."
-docker compose build --no-cache nginx app
+docker compose build --no-cache envoy app
 
 # Start all services in correct order
 echo "🚀 Starting services..."
@@ -87,15 +91,15 @@ docker compose ps
 # Verify critical services
 echo "✅ Verifying critical services..."
 
-# Check nginx
-if ! docker compose ps | grep -q "nginx.*Up"; then
-    echo "❌ Nginx failed to start"
-    docker compose logs --tail=20 nginx
+# Check envoy
+if ! docker compose ps | grep -q "envoy.*Up"; then
+    echo "❌ Envoy failed to start"
+    docker compose logs --tail=20 envoy
     exit 1
 fi
 
 # Check app
-if ! docker compose ps | grep -q "app.*Up"; then
+if ! docker ps --filter "name=^/p2p-app$" --filter "status=running" | grep -q "p2p-app"; then
     echo "❌ App failed to start"
     docker compose logs --tail=20 app
     exit 1
@@ -134,7 +138,7 @@ fi
 # Force browser cache clear instructions
 echo ""
 echo "🔄 CACHE CLEARING:"
-echo "   - Nginx configured with no-cache headers"
+echo "   - Envoy configured with no-cache headers"
 echo "   - Users should hard refresh: Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+R (Mac)"
 echo "   - Or clear browser cache for p2p.red"
 echo ""

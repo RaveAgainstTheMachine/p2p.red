@@ -5,14 +5,15 @@ This document describes the current infrastructure layout for p2p.red. It is aut
 ## Core Principles
 - Dev and prod are isolated (no shared Docker networks, volumes, secrets, or proxies).
 - Dev reverse proxy is **external Nginx Proxy Manager (NginxPM)** on the LAN.
-- Prod reverse proxy is **Nginx on the OVH VPS**.
+- Prod reverse proxy is **Envoy on the OVH VPS**.
 - WebRTC file data is always browser-to-browser (no server relay).
 
 ## Environments
 
 ### Dev (LAN + external NginxPM)
 - Dev VM runs app services only.
-- Reverse proxy is **external NginxPM** (same LAN, different container). Do not modify prod nginx for dev.
+- Reverse proxy is **external NginxPM** (same LAN, different container). Do not modify prod Envoy for dev.
+- Local deploy scripts may start Envoy with `envoy.dev.yaml` (HTTP-only) for container health checks; NginxPM still owns dev domains.
 - NginxPM forwards dev domains to these dev VM ports:
   - Dev Web (Vite): `5173`
   - Dev PeerJS: `5174`
@@ -72,7 +73,7 @@ add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: htt
   - Certificate: `dev-turn.p2p.red`
 
 ### Prod (OVH VPS)
-- Nginx handles `p2p.red` and `www.p2p.red` on the VPS.
+- Envoy handles `p2p.red` and `www.p2p.red` on the VPS.
 - Containers run on the VPS: web, PeerJS, metadata API, Redis, Postgres.
 - TLS via Let's Encrypt on the VPS.
 
@@ -92,7 +93,7 @@ add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: htt
   - Public IP: `149.56.131.26`
   - WG IP: `10.88.0.10`
   - OS: Debian 12
-  - Notes: Nginx, web, PeerJS, metadata
+  - Notes: Envoy, web, PeerJS, metadata
 
 - **TURN-1**
   - Hostname: `turn1.p2p.red`
@@ -156,9 +157,9 @@ sudo chmod 770 /run/secrets
 - `3001/tcp` (metadata API for NginxPM)
 
 ## Service Ports (Prod VPS)
-- Web: `443` (Nginx)
-- PeerJS: `443` (Nginx -> 9000)
-- Metadata API: `443` (Nginx -> 3001)
+- Web: `443` (Envoy)
+- PeerJS: `443` (Envoy -> 9000)
+- Metadata API: `443` (Envoy -> 3001)
 - Postgres: `5432` (internal)
 - Redis: `6379` (internal)
 - TURN: `3478/udp` (TURN hosts)
@@ -210,5 +211,5 @@ WG healthcheck on bao:
 ## Separation Rules (Do Not Violate)
 - Never point dev domains at prod.
 - Never reuse prod secrets in dev.
-- Never edit prod nginx config to fix dev issues.
+- Never edit prod Envoy config to fix dev issues.
 - Always validate NginxPM routing for dev.

@@ -26,7 +26,10 @@ chmod +x automation/deploy-and-test.sh
 Runs `deploy-all` and verifies:
 - Site URL responds
 - Metadata API health endpoint responds
-- Nginx + PeerJS containers are up
+- Envoy + PeerJS containers are up
+
+Dev note:
+- When `DEPLOY_ENV=dev`, scripts mount `envoy.dev.yaml` (HTTP-only) via `ENVOY_CONFIG` for local testing.
 
 ### Public Repo Sync + Redaction
 ```bash

@@ -115,6 +115,8 @@ services:
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX_REQUESTS: 100
       CORS_ORIGIN: https://p2p.red
+    ports:
+      - "${METADATA_API_PUBLISH:-127.0.0.1:3001}:3001"
     networks:
       - p2p-network
       - p2p-bluegreen-network
@@ -173,20 +175,24 @@ services:
     networks:
       - p2p-network
 
-  # Nginx reverse proxy
-  nginx:
-    image: ${NGINX_IMAGE:-p2p-nginx:latest}
-    container_name: p2p-nginx
+  # Envoy edge proxy
+  envoy:
+    image: ${ENVOY_IMAGE:-p2p-envoy:latest}
+    container_name: p2p-envoy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
+      - "127.0.0.1:9901:9901"
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ${ENVOY_CONFIG:-./envoy.yaml}:/etc/envoy/envoy.yaml:ro
     depends_on:
       - app
       - peerjs-server
       - metadata-api
+      - anubis
+      - plausible
     networks:
       - p2p-network
       - p2p-bluegreen-network

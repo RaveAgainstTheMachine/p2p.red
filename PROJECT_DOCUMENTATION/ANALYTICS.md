@@ -14,7 +14,7 @@ This document describes the analytics setup for p2p.red. We use self-hosted Plau
 ## Infrastructure
 - Host: `p2pred01` (prod VPS)
 - Services: `plausible`, `plausible-db`, `plausible-events-db` (ClickHouse)
-- Reverse proxy: Nginx on the VPS
+- Reverse proxy: Envoy on the VPS
 
 ## Secrets (OpenBao)
 KV paths (v2):
@@ -46,20 +46,15 @@ template {
 ```
 
 ## TLS
-Issue a cert for `plausible.p2p.red` (nginx owns :80/:443):
+Issue a cert for `plausible.p2p.red` (Envoy owns :80/:443):
 ```bash
-docker stop p2p-nginx
+docker stop p2p-envoy
 sudo certbot certonly --standalone -d plausible.p2p.red
-docker start p2p-nginx
-```
-Then reload nginx:
-```bash
-docker cp /opt/p2p-file-share/nginx.conf p2p-nginx:/etc/nginx/nginx.conf
-docker exec -i p2p-nginx nginx -t && docker exec -i p2p-nginx nginx -s reload
+docker start p2p-envoy
 ```
 
-## Nginx + CSP
-Nginx routes `plausible.p2p.red` to the Plausible service and allows:
+## Envoy + CSP
+Envoy routes `plausible.p2p.red` to the Plausible service and allows:
 - `script-src` `https://plausible.p2p.red`
 - `connect-src` `https://plausible.p2p.red`
 

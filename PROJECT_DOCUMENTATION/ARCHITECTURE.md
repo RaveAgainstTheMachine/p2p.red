@@ -22,7 +22,7 @@
       -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
                  ┌──────────────────────────────┐
                  │        p2p.red (prod)        │
-                 │        Nginx (OVH VPS)       │
+                 │        Envoy (OVH VPS)       │
                  └─────────────┬────────────────┘
                                │
                                ▼
@@ -60,13 +60,13 @@
 ```
                      ┌──────────────────────────────┐
                      │        DNS + TLS             │
-                     │   (OVH VPS + Nginx)          │
+                     │   (OVH VPS + Envoy)          │
                      └─────────────┬────────────────┘
                                    │
                                    ▼
                     ┌──────────────────────────────┐
                     │     Load Balancer VPS        │
-                    │  - Nginx reverse proxy       │
+                    │  - Envoy reverse proxy       │
                     │  - Health checks             │
                     └─────────────┬────────────────┘
           ┌───────────────────────┼───────────────────────┐
@@ -109,7 +109,7 @@
 - **Specs:** 1 vCPU, 2GB RAM, 20GB SSD
 - **Cost:** $5-10/month
 - **Purpose:** Single entry point, SSL termination, traffic distribution
-- **Software:** Nginx, Certbot, UFW
+- **Software:** Envoy, Certbot, UFW
 
 #### 2. Web VPS x3 (Horizontal Scaling)
 - **Provider:** OVH
@@ -117,7 +117,7 @@
 - **Cost:** $10-15/month each ($30-45 total)
 - **Capacity:** ~500-1,000 concurrent connections each
 - **Purpose:** Serve frontend, handle PeerJS signaling
-- **Software:** Docker, Nginx, PeerJS server, Node.js
+- **Software:** Docker, Envoy, PeerJS server, Node.js
 
 #### 3. Database VPS
 - **Provider:** OVH
@@ -238,7 +238,7 @@
 ### 4. Frontend Serving (Least Concern)
 **Problem:** Static asset delivery
 **Solution:**
-- Nginx caching
+- Cache-Control headers on Envoy and upstream assets
 - Gzip/Brotli compression
 
 ## Monitoring & Alerting
@@ -356,7 +356,7 @@
 ### What's Running Now
 ```
 prod (p2pred01, OVH)
-├── Nginx (reverse proxy, SSL)
+├── Envoy (reverse proxy, SSL)
 ├── Frontend (React app)
 ├── PeerJS Server (WebRTC signaling)
 ├── Metadata API (Node.js)

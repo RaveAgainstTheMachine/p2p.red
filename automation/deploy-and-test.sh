@@ -44,8 +44,8 @@ if ! docker compose ps | grep -q "peerjs"; then
   exit 1
 fi
 
-if ! docker compose ps | grep -q "nginx"; then
-  echo "❌ Nginx container not running"
+if ! docker compose ps | grep -q "envoy"; then
+  echo "❌ Envoy container not running"
   docker compose ps
   exit 1
 fi

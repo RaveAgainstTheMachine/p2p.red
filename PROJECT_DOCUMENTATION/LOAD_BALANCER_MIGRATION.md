@@ -1,11 +1,11 @@
 # Load Balancer Migration Plans (Envoy + HAProxy)
 
-This document outlines OSS migration paths from the current Nginx OSS edge to **Envoy** or **HAProxy** for near‑zero downtime blue/green switching. HTTP/2 is supported; **HTTP/3 is intentionally excluded** (project rule: no QUIC).
+This document outlines OSS migration paths to **Envoy** or **HAProxy** for near‑zero downtime blue/green switching. HTTP/2 is supported; **HTTP/3 is intentionally excluded** (project rule: no QUIC).
 
 ## Context (Current State)
-- Edge proxy: Nginx OSS in `p2p-nginx` container.
+- Edge proxy: Envoy in `p2p-envoy` container (migration in progress).
 - Upstream app: blue/green containers `p2p-app-blue` / `p2p-app-green`.
-- Cutover: static upstream swap + reload (can cause brief blips).
+- Cutover: weight shifts via Envoy admin API (no reload blips).
 - Runtime host: **no full source**, images shipped as tars.
 
 ## Goals

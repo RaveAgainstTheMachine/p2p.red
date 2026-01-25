@@ -13,7 +13,7 @@ This guide covers deploying the P2P File Share application on an OVH VPS with di
 │                 │
 │ • Ubuntu Server │
 │ • Docker        │
-│ • Nginx         │
+│ • Envoy         │
 │ • Node.js       │
 │ • PeerJS Server │
 │ • TURN Server   │
@@ -37,7 +37,7 @@ This guide covers deploying the P2P File Share application on an OVH VPS with di
 ### **Software Stack**
 - **Runtime**: Node.js 20+
 - **Container**: Docker & Docker Compose
-- **Web Server**: Nginx (reverse proxy)
+- **Web Server**: Envoy (reverse proxy)
 - **SSL**: Let's Encrypt certificates
 - **Signaling**: PeerJS server
 - **NAT Traversal**: coturn TURN server
@@ -48,7 +48,7 @@ This guide covers deploying the P2P File Share application on an OVH VPS with di
 p2p-file-share/
 ├── docker-compose.yml      # Multi-service orchestration
 ├── Dockerfile             # Application container
-├── nginx.conf              # Nginx configuration
+├── envoy.yaml              # Envoy configuration
 ├── peerjs-server.js       # PeerJS signaling server
 ├── turnserver.conf        # TURN server config
 ├── deploy.sh              # Deployment script
@@ -84,8 +84,8 @@ sudo chmod +x /usr/local/bin/docker-compose
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# Install Nginx and Certbot
-sudo apt install -y nginx certbot python3-certbot-nginx
+# Install Certbot (standalone)
+sudo apt install -y certbot
 
 # Install coturn (TURN server)
 sudo apt install -y coturn
@@ -109,7 +109,7 @@ sudo ufw enable
 
 ```bash
 # Obtain SSL certificate
-sudo certbot --nginx -d <domain> -d www.<domain>
+sudo certbot certonly --standalone -d <domain> -d www.<domain>
 
 # Setup auto-renewal
 sudo crontab -e
@@ -157,13 +157,13 @@ services:
       - ./turnserver.conf:/etc/coturn/turnserver.conf
     restart: unless-stopped
 
-  nginx:
-    image: nginx:alpine
+  envoy:
+    image: envoyproxy/envoy:v1.30.1
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./envoy.yaml:/etc/envoy/envoy.yaml
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - app
@@ -240,75 +240,117 @@ sudo systemctl enable p2p-prod
 
 **Dev services** should be started only when testing (no systemd unit enabled).
 
-### **nginx.conf**
-```nginx
-events {
-    worker_connections 1024;
-}
+### **envoy.yaml**
+```yaml
+admin:
+  access_log_path: /tmp/admin_access.log
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901
 
-http {
-    include       /etc/nginx/mime.types;
-    default_type  application/octet-stream;
+static_resources:
+  listeners:
+    - name: listener_http
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 80
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: http_redirect
+                  virtual_hosts:
+                    - name: redirect
+                      domains:
+                        - <domain>
+                        - www.<domain>
+                      routes:
+                        - match:
+                            prefix: "/"
+                          redirect:
+                            https_redirect: true
+                http_filters:
+                  - name: envoy.filters.http.router
 
-    # SSL configuration
-    ssl_certificate /etc/letsencrypt/live/<domain>/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/<domain>/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512;
+    - name: listener_https
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 443
+      filter_chains:
+        - filter_chain_match:
+            server_names:
+              - <domain>
+              - www.<domain>
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: /etc/letsencrypt/live/<domain>/fullchain.pem
+                    private_key:
+                      filename: /etc/letsencrypt/live/<domain>/privkey.pem
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_https
+                upgrade_configs:
+                  - upgrade_type: websocket
+                route_config:
+                  name: app_routes
+                  virtual_hosts:
+                    - name: app
+                      domains:
+                        - <domain>
+                        - www.<domain>
+                      routes:
+                        - match:
+                            prefix: "/peerjs/"
+                          route:
+                            cluster: peerjs
+                            timeout: 0s
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: app
+                http_filters:
+                  - name: envoy.filters.http.router
 
-    upstream app {
-        server app:3000;
-    }
-
-    upstream peerjs {
-        server peerjs-server:9000;
-    }
-
-    server {
-        listen 80;
-        server_name <domain> www.<domain>;
-        return 301 https://$server_name$request_uri;
-    }
-
-    server {
-        listen 443 ssl http2;
-        server_name <domain> www.<domain>;
-
-        # Security headers
-        add_header X-Frame-Options "DENY" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss://<domain>; font-src 'self'; object-src 'none';" always;
-
-        # Main application
-        location / {
-            proxy_pass http://app;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-
-        # PeerJS signaling
-        location /peerjs {
-            proxy_pass http://peerjs;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-
-        # Static files
-        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-            proxy_pass http://app;
-            expires 1y;
-            add_header Cache-Control "public, immutable";
-        }
-    }
-}
+  clusters:
+    - name: app
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: app
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: app
+                      port_value: 3000
+    - name: peerjs
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: peerjs
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: peerjs-server
+                      port_value: 9000
 ```
 
 ### **peerjs-server.js**
@@ -387,7 +429,7 @@ tar -czf deploy.tar.gz \
     package.json \
     docker-compose.yml \
     Dockerfile \
-    nginx.conf \
+    envoy.yaml \
     peerjs-server.js \
     turnserver.conf
 
@@ -436,7 +478,7 @@ ssh <user>@<host>
 
 ### **Application Security**
 - **Environment variables**: Store secrets in .env file
-- **Rate limiting**: Nginx configuration
+- **Rate limiting**: Envoy configuration
 - **Firewall**: UFW with minimal open ports
 - **SSL**: Let's Encrypt with auto-renewal
 - **User separation**: Non-root containers

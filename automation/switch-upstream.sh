@@ -2,24 +2,19 @@
 
 set -euo pipefail
 
-# Switch traffic between blue/green environments
+# Switch traffic between blue/green environments via Envoy
 UPSTREAM_TARGET=${1:-blue}
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "🔄 Switching Nginx upstream to: $UPSTREAM_TARGET"
+echo "🔄 Switching Envoy traffic to: $UPSTREAM_TARGET"
 
-# Update nginx configuration
-sed -i "s/server p2p-app-.*:3000;/server p2p-app-$UPSTREAM_TARGET:3000;/g" nginx.blue-green.conf
-
-# Copy to production location
-cp nginx.blue-green.conf nginx.conf
-
-echo "✅ Upstream switched to $UPSTREAM_TARGET"
-echo "🔄 Reloading Nginx..."
-
-# Reload nginx (if running in container)
-if docker ps | grep -q "p2p-nginx"; then
-    docker exec p2p-nginx nginx -s reload
-    echo "✅ Nginx reloaded"
+if [ "$UPSTREAM_TARGET" = "blue" ]; then
+    "$REPO_ROOT/automation/envoy-shift-traffic.sh" 100 0
+elif [ "$UPSTREAM_TARGET" = "green" ]; then
+    "$REPO_ROOT/automation/envoy-shift-traffic.sh" 0 100
 else
-    echo "⚠️  Nginx container not running - manual reload required"
+    echo "❌ Invalid target '$UPSTREAM_TARGET' (expected blue or green)."
+    exit 1
 fi
+
+echo "✅ Envoy traffic shifted to $UPSTREAM_TARGET"

@@ -10,6 +10,7 @@ SWITCH_GRACE_SECONDS=${SWITCH_GRACE_SECONDS:-5}
 POST_SWITCH_VERIFY_DELAY=${POST_SWITCH_VERIFY_DELAY:-5}
 OLD_ENV_STOP_DELAY=${OLD_ENV_STOP_DELAY:-15}
 BLUEGREEN_PROJECT_NAME=${BLUEGREEN_PROJECT_NAME:-p2p-bluegreen}
+ENVOY_ADMIN_URL=${ENVOY_ADMIN_URL:-http://127.0.0.1:9901}
 
 cd "$REPO_ROOT"
 
@@ -49,32 +50,20 @@ if [ "$DEPLOY_ENV" = "prod" ] && [ "$USE_PREBUILT_IMAGES" != "1" ]; then
     exit 1
 fi
 
-ensure_nginx_running() {
-    if ! docker compose ps --services --filter "status=running" | grep -q "^nginx$"; then
-        echo "🧩 Nginx not running, starting..."
-        docker compose -f docker-compose.yml up -d --no-deps nginx
-    fi
-}
+if ! curl -fsS "$ENVOY_ADMIN_URL/server_info" >/dev/null; then
+    echo "❌ Envoy admin API not reachable at $ENVOY_ADMIN_URL"
+    exit 1
+fi
 
-sync_nginx_config() {
-    ensure_nginx_running
-    docker cp "$REPO_ROOT/nginx.conf" p2p-nginx:/etc/nginx/nginx.conf
-}
-
-sync_streamsaver_assets() {
-    ensure_nginx_running
-    docker cp "$REPO_ROOT/public/streamsaver" p2p-nginx:/usr/share/nginx/html
-}
-
-# Determine current active environment (prefer nginx.conf upstream)
-sync_nginx_config
-sync_streamsaver_assets
 CURRENT_ENV=""
-if [[ -f nginx.conf ]]; then
-    if grep -q "p2p-app-green:3000" nginx.conf; then
-        CURRENT_ENV="green"
-    elif grep -q "p2p-app-blue:3000" nginx.conf; then
+ENV_BLUE_WEIGHT=$(curl -fsS "$ENVOY_ADMIN_URL/runtime?format=json" | sed -n 's/.*"traffic_split.app_blue"[[:space:]]*:[[:space:]]*"\([0-9]*\)".*/\1/p' | head -1)
+ENV_GREEN_WEIGHT=$(curl -fsS "$ENVOY_ADMIN_URL/runtime?format=json" | sed -n 's/.*"traffic_split.app_green"[[:space:]]*:[[:space:]]*"\([0-9]*\)".*/\1/p' | head -1)
+
+if [ -n "$ENV_BLUE_WEIGHT" ] && [ -n "$ENV_GREEN_WEIGHT" ]; then
+    if [ "$ENV_BLUE_WEIGHT" -ge "$ENV_GREEN_WEIGHT" ]; then
         CURRENT_ENV="blue"
+    else
+        CURRENT_ENV="green"
     fi
 fi
 
@@ -147,8 +136,8 @@ if [ "$BUILD_VARIANT_LABEL" != "$NEXT_ENV" ]; then
     exit 1
 fi
 
-# Switch traffic (update Nginx upstream)
-echo "🔄 Switching traffic to $NEXT_ENV..."
+# Switch traffic (Envoy weight shift)
+echo "🔄 Switching traffic to $NEXT_ENV via Envoy..."
 if ! docker ps --format '{{.Names}}' | grep -q "^p2p-app-$NEXT_ENV$"; then
     echo "❌ Target container p2p-app-$NEXT_ENV is not running. Aborting switch."
     COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
@@ -161,19 +150,10 @@ if ! COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compo
     exit 1
 fi
 
-sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$NEXT_ENV:3000;/g" nginx.conf
-
-# Reload Nginx
-sync_nginx_config
-docker compose -f docker-compose.yml exec nginx nginx -s reload
-
-if ! grep -q "server p2p-app-$NEXT_ENV:3000;" nginx.conf; then
-    echo "❌ Upstream swap failed. nginx.conf does not point to $NEXT_ENV."
-    sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$CURRENT_ENV:3000;/g" nginx.conf
-    sync_nginx_config
-    docker compose -f docker-compose.yml exec nginx nginx -s reload
-    COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
-    exit 1
+if [ "$NEXT_ENV" = "blue" ]; then
+    "$REPO_ROOT/automation/envoy-shift-traffic.sh" 100 0
+else
+    "$REPO_ROOT/automation/envoy-shift-traffic.sh" 0 100
 fi
 
 echo "⏳ Grace period after switch (${SWITCH_GRACE_SECONDS}s)..."
@@ -191,9 +171,11 @@ sleep "$POST_SWITCH_VERIFY_DELAY"
 
 if ! curl -fs "$SITE_URL" > /dev/null; then
     echo "❌ Site verification failed - rolling back"
-    sed -i -E "s/server p2p-app-(blue|green):3000;/server p2p-app-$CURRENT_ENV:3000;/g" nginx.conf
-    sync_nginx_config
-    docker compose -f docker-compose.yml exec nginx nginx -s reload
+    if [ "$CURRENT_ENV" = "blue" ]; then
+        "$REPO_ROOT/automation/envoy-shift-traffic.sh" 100 0
+    else
+        "$REPO_ROOT/automation/envoy-shift-traffic.sh" 0 100
+    fi
     COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$NEXT_ENV
     exit 1
 fi
@@ -202,11 +184,7 @@ echo "⏳ Allowing old environment to drain (${OLD_ENV_STOP_DELAY}s)..."
 sleep "$OLD_ENV_STOP_DELAY"
 
 echo "✅ Deployment successful - stopping old environment"
-if grep -q "server p2p-app-$NEXT_ENV:3000;" nginx.conf; then
-    COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$CURRENT_ENV
-else
-    echo "⚠️  Skipping stop of $CURRENT_ENV: nginx.conf no longer points to $NEXT_ENV."
-fi
+COMPOSE_PROJECT_NAME=$BLUEGREEN_PROJECT_NAME docker compose -f docker-compose.blue-green.yml stop app-$CURRENT_ENV
 
 if [ -f "$REPO_ROOT/automation/cleanup-images.sh" ]; then
     KEEP_COUNT=${KEEP_IMAGE_COUNT:-}

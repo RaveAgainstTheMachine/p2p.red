@@ -23,7 +23,7 @@ A privacy-first, browser-to-browser file sharing service using WebRTC DataChanne
 - **Encryption**: Browser-native AES-GCM
 - **Metadata Storage**: PostgreSQL + Redis caching
 - **Short Links**: Node.js/Express API with Base62 encoding
-- **Deployment**: OVH VPS + Docker + Nginx
+- **Deployment**: OVH VPS + Docker + Envoy
 - **Signaling**: Self-hosted PeerJS server
 - **NAT Traversal**: coturn TURN server
 - **SSL**: Let's Encrypt certificates
@@ -186,11 +186,11 @@ curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 sudo usermod -aG docker ubuntu
 
-# Install Nginx and Certbot
-sudo apt install -y nginx certbot python3-certbot-nginx
+# Install Certbot (standalone)
+sudo apt install -y certbot
 
 # Obtain SSL certificate
-sudo certbot --nginx -d p2p.red -d www.p2p.red
+sudo certbot certonly --standalone -d p2p.red -d www.p2p.red
 
 # Open firewall ports
 sudo ufw allow 22/tcp      # SSH
@@ -277,7 +277,7 @@ docker exec -it p2p-redis redis-cli INFO stats
 
 ### Log Management
 - **Docker logs**: Container stdout/stderr
-- **Nginx logs**: Web server access/error logs
+- **Envoy logs**: Edge proxy access/error logs
 - **TURN logs**: Connection and relay logs
 - **Application logs**: WebRTC connection events
 - **Metadata API logs**: Short link creation/retrieval
@@ -313,7 +313,8 @@ See [ARCHITECTURE.md](PROJECT_DOCUMENTATION/ARCHITECTURE.md) for detailed scalin
 - `docker-compose.yml` - Main services (frontend, PeerJS, TURN)
 - `docker-compose.metadata.yml` - Metadata stack (PostgreSQL, Redis, API)
 - `Dockerfile` - Application container
-- `nginx.conf` - Reverse proxy configuration
+- `envoy.yaml` - Envoy reverse proxy configuration
+- `Dockerfile.envoy` - Envoy container
 - `turnserver.conf` - TURN server settings
 - `metadata-api/.env` - API configuration
 - `deploy-metadata-api.sh` - Metadata stack deployment

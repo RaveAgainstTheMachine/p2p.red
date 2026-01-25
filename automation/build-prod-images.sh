@@ -59,8 +59,8 @@ echo "🐳 Building peerjs image..."
 docker build -f "$REPO_ROOT/Dockerfile.peerjs" -t p2p-peerjs:latest "$REPO_ROOT"
 docker save -o "$IMAGES_DIR/peerjs.tar" p2p-peerjs:latest
 
-echo "🐳 Building nginx image..."
-docker build -f "$REPO_ROOT/Dockerfile.nginx" -t p2p-nginx:latest "$REPO_ROOT"
-docker save -o "$IMAGES_DIR/nginx.tar" p2p-nginx:latest
+echo "🐳 Building envoy image..."
+docker build -f "$REPO_ROOT/Dockerfile.envoy" -t p2p-envoy:latest "$REPO_ROOT"
+docker save -o "$IMAGES_DIR/envoy.tar" p2p-envoy:latest
 
 echo "✅ Images saved to $IMAGES_DIR"

@@ -20,15 +20,8 @@ echo "🚀 Zero-Downtime Deployment"
 echo "==========================="
 echo "🌐 Site URL: $SITE_URL"
 
-if [ "$DEPLOY_ENV" = "prod" ] && [ "$ALLOW_PROD_ON_DEV" != "1" ]; then
-    if command -v ip >/dev/null 2>&1; then
-        if ip -br -4 a 2>/dev/null | grep -qE '(^|[[:space:]])10\.10\.10\.77/'; then
-            echo "❌ Refusing to run prod deploy on dev host (10.10.10.77)."
-            echo "   Set ALLOW_PROD_ON_DEV=1 to override (not recommended)."
-            exit 1
-        fi
-    fi
-fi
+export DEPLOY_ENV ENVOY_ADMIN_URL ENVOY_CERTS_DIR ALLOW_PROD_ON_DEV
+"$REPO_ROOT/automation/preflight.sh" "$DEPLOY_ENV"
 
 require_port_free() {
     local port=$1
@@ -62,34 +55,7 @@ if [ "$DEPLOY_ENV" = "prod" ] && [ "$USE_PREBUILT_IMAGES" != "1" ]; then
     exit 1
 fi
 
-require_envoy_certs() {
-    local missing=0
-    local required=(
-        "$ENVOY_CERTS_DIR/p2p.red.p12"
-        "$ENVOY_CERTS_DIR/signal.p2p.red.p12"
-        "$ENVOY_CERTS_DIR/plausible.p2p.red.p12"
-    )
-
-    for f in "${required[@]}"; do
-        if [ ! -s "$f" ]; then
-            echo "❌ Missing Envoy TLS bundle: $f"
-            missing=1
-        fi
-    done
-
-    if [ "$missing" -ne 0 ]; then
-        echo "❌ Refusing to deploy: Envoy TLS cert bundles are missing/empty."
-        echo "   Restore/regenerate the PKCS#12 files in $ENVOY_CERTS_DIR before deploying."
-        exit 1
-    fi
-}
-
-require_envoy_certs
-
-if ! curl -fsS "$ENVOY_ADMIN_URL/server_info" >/dev/null; then
-    echo "❌ Envoy admin API not reachable at $ENVOY_ADMIN_URL"
-    exit 1
-fi
+# preflight.sh handles Envoy admin + cert checks for prod
 
 CURRENT_ENV=""
 ENV_BLUE_WEIGHT=$(curl -fsS "$ENVOY_ADMIN_URL/runtime?format=json" | sed -n 's/.*"traffic_split.app_blue"[[:space:]]*:[[:space:]]*"\([0-9]*\)".*/\1/p' | head -1)

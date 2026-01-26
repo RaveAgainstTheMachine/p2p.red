@@ -107,6 +107,34 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 ## Prod Workflow (OVH VPS)
 
+## One-Command Safety Workflow (Authoritative)
+
+Use these scripts to eliminate environment confusion and missing-preflight failures.
+
+### 0) Identify Environment (Required)
+```
+./automation/where-am-i.sh
+```
+
+### 1) Preflight Checks (Required)
+
+Dev:
+```
+DEPLOY_ENV=dev ./automation/preflight.sh dev
+```
+
+Prod:
+```
+DEPLOY_ENV=prod ./automation/preflight.sh prod
+```
+
+### 2) Prod Release (Single Entry Point)
+
+On the prod host, once images are loaded:
+```
+DEPLOY_ENV=prod USE_PREBUILT_IMAGES=1 ./automation/release-prod.sh
+```
+
 ## Blue/Green Zero-Downtime Deployment (Prod)
 
 This is the **authoritative** blue/green procedure. Always check which color is live **before** deploying and only deploy the inactive color.

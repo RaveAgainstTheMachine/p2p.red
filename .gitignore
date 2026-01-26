@@ -44,6 +44,9 @@ cloudbuild.yaml
 .dockerignore
 images/
 
+# Envoy runtime (mutable state)
+envoy-runtime/traffic_split/
+
 # Google Cloud
 .gcloudignore
 

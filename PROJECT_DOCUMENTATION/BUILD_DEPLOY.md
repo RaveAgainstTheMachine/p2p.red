@@ -116,6 +116,11 @@ Use these scripts to eliminate environment confusion and missing-preflight failu
 ./automation/where-am-i.sh
 ```
 
+Prod hosts must have the explicit marker file:
+```
+echo prod | sudo tee /etc/p2pred-env
+```
+
 ### 1) Preflight Checks (Required)
 
 Dev:

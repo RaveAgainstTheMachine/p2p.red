@@ -30,6 +30,8 @@ if [ -n "$IPV4_LINES" ]; then
 fi
 if [ -n "$ENV_MARKER" ]; then
   echo "env_marker=$ENV_MARKER"
+else
+  echo "env_marker=missing"
 fi
 echo "env_guess=$ENV_GUESS"
 

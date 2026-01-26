@@ -7,9 +7,27 @@ cd "$REPO_ROOT"
 
 PHASE=${1:-}
 
+require_env_marker_for_prod() {
+  if [ "${DEPLOY_ENV:-}" != "prod" ]; then
+    return 0
+  fi
+  if [ "${ALLOW_MISSING_ENV_MARKER:-0}" = "1" ]; then
+    return 0
+  fi
+  if [ ! -f /etc/p2pred-env ]; then
+    fail "Missing /etc/p2pred-env marker. Set to 'prod' on prod hosts or override with ALLOW_MISSING_ENV_MARKER=1."
+  fi
+  local marker
+  marker=$(tr -d '\r\n' </etc/p2pred-env | tr '[:upper:]' '[:lower:]')
+  if [ "$marker" != "prod" ]; then
+    fail "/etc/p2pred-env is '$marker' (expected 'prod')."
+  fi
+}
+
 DEPLOY_ENV=${DEPLOY_ENV:-}
 ALLOW_PROD_ON_DEV=${ALLOW_PROD_ON_DEV:-0}
 ALLOW_DIRTY_GIT=${ALLOW_DIRTY_GIT:-0}
+ALLOW_MISSING_ENV_MARKER=${ALLOW_MISSING_ENV_MARKER:-0}
 
 ENVOY_ADMIN_URL=${ENVOY_ADMIN_URL:-http://127.0.0.1:9901}
 ENVOY_CERTS_DIR=${ENVOY_CERTS_DIR:-/var/snap/docker/common/p2p-envoy-certs}
@@ -94,6 +112,7 @@ case "$PHASE" in
     require_metadata_health
     ;;
   prod)
+    require_env_marker_for_prod
     require_prod_not_on_dev
     require_metadata_secrets
     require_metadata_health

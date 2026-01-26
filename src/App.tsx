@@ -170,8 +170,29 @@ function App() {
   const themeToggleRef = useRef<HTMLDivElement | null>(null);
   const [enableZip, setEnableZip] = useState<boolean>(true);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
+  const [anubisStatusMessage, setAnubisStatusMessage] = useState<string | null>(null);
+  const [humanToastMessage, setHumanToastMessage] = useState<string | null>(null);
   const [transferErrorMessage, setTransferErrorMessage] = useState<string>('');
   const [isFaqExpanded, setIsFaqExpanded] = useState<boolean>(false);
+  const [anubisChallenge, setAnubisChallenge] = useState<{ active: boolean; url?: string }>({
+    active: false
+  });
+  const anubisStatusTimeout = useRef<number | null>(null);
+  const humanToastTimeout = useRef<number | null>(null);
+  const antiBotMessages = [
+    'Quick bot check — please hold, carbon-based lifeform.',
+    'Verifying you’re human. Sorry, robots ruined it for everyone.',
+    'Anti-bot scan running. If you’re a toaster, now’s the time to confess.',
+    'Confirming you’re not a swarm of polite Canadian geese.',
+    'Bot-detector warming up. Please sip maple syrup and wait.'
+  ];
+  const humanMessages = [
+    'Well done being a human! Share link ready.',
+    'Certified organic human ✅ Your link is ready.',
+    'Humans 1, bots 0. Share link created.',
+    'Thanks for proving you’re not a Roomba. Link generated.',
+    'You passed the Turing, eh? Share link ready.'
+  ];
   const buildVariantRaw = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
   const buildVariant = buildVariantRaw || 'dev';
   const buildVersion = (import.meta as any)?.env?.VITE_BUILD_VERSION;
@@ -186,11 +207,24 @@ function App() {
     try {
       await navigator.clipboard.writeText(link);
       setShowClipboardNotification(true);
-      setTimeout(() => setShowClipboardNotification(false), 3000);
+      setTimeout(() => setShowClipboardNotification(false), 6000);
       console.log('✅ Share link copied to clipboard automatically');
     } catch (err) {
       console.error('Failed to copy share link:', err);
     }
+  };
+
+  const pickMessage = (messages: string[]) => messages[Math.floor(Math.random() * messages.length)];
+
+  const showHumanToast = () => {
+    if (humanToastTimeout.current !== null) {
+      window.clearTimeout(humanToastTimeout.current);
+    }
+    setHumanToastMessage(pickMessage(humanMessages));
+    humanToastTimeout.current = window.setTimeout(() => {
+      setHumanToastMessage(null);
+      humanToastTimeout.current = null;
+    }, 9000);
   };
 
   const getCandidateType = async (conn: DataConnection): Promise<string | undefined> => {
@@ -374,6 +408,37 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const handleAnubisChallenge = (event: Event) => {
+      const customEvent = event as CustomEvent<{ active: boolean; url?: string }>;
+      setAnubisChallenge((prev) => ({
+        active: customEvent.detail?.active ?? false,
+        url: customEvent.detail?.url ?? prev.url
+      }));
+    };
+
+    window.addEventListener('anubis-challenge', handleAnubisChallenge as EventListener);
+    return () => window.removeEventListener('anubis-challenge', handleAnubisChallenge as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (anubisChallenge.active) {
+      if (anubisStatusTimeout.current !== null) {
+        window.clearTimeout(anubisStatusTimeout.current);
+        anubisStatusTimeout.current = null;
+      }
+      setAnubisStatusMessage(pickMessage(antiBotMessages));
+      return;
+    }
+
+    if (anubisStatusMessage) {
+      anubisStatusTimeout.current = window.setTimeout(() => {
+        setAnubisStatusMessage(null);
+        anubisStatusTimeout.current = null;
+      }, 3000);
+    }
+  }, [anubisChallenge.active, anubisStatusMessage]);
+
+  useEffect(() => {
     console.log('🔍 Mode detection useEffect running:', {
       hasHash: !!currentHash,
       hash: currentHash,
@@ -542,10 +607,10 @@ function App() {
             setShareLink(shareLink);
             await copyShareLinkToClipboard(shareLink);
             setStatus('waiting');
+            showHumanToast();
           } catch (error) {
             console.error('Failed to create short link:', error);
-            setStatus('error');
-            return;
+            setTransferErrorMessage('Failed to create short link. Please try again.');
           }
           
           // Wait for receiver connection
@@ -620,10 +685,10 @@ function App() {
           setShareLink(shareLink);
           await copyShareLinkToClipboard(shareLink);
           setStatus('waiting');
+          showHumanToast();
         } catch (error) {
           console.error('Failed to create short link:', error);
-          setStatus('error');
-          return;
+          setTransferErrorMessage('Failed to create short link. Please try again.');
         }
         
         // Wait for receiver connection
@@ -706,10 +771,10 @@ function App() {
           setShareLink(shareLink);
           await copyShareLinkToClipboard(shareLink);
           setStatus('waiting');
+          showHumanToast();
         } catch (error) {
           console.error('Failed to create short link:', error);
-          setStatus('error');
-          return;
+          setTransferErrorMessage('Failed to create short link. Please try again.');
         }
         
         // Wait for receiver connection
@@ -774,10 +839,10 @@ function App() {
         setShareLink(link);
         await copyShareLinkToClipboard(link);
         setStatus('waiting');
+        showHumanToast();
       } catch (error) {
         console.error('Failed to create short link:', error);
-        setStatus('error');
-        return;
+        setTransferErrorMessage('Failed to create short link. Please try again.');
       }
       
       // Listen for incoming connection
@@ -1067,6 +1132,13 @@ function App() {
 
   return (
     <div className="min-h-screen app-shell flex flex-col">
+      {anubisChallenge.active && anubisChallenge.url && (
+        <iframe
+          title="Anubis Challenge"
+          src={anubisChallenge.url}
+          className="fixed left-0 top-0 h-px w-px opacity-0 pointer-events-none"
+        />
+      )}
       {/* Animated background */}
       <div className="fixed inset-0 app-overlay-base" />
       <div className="fixed inset-0 app-overlay-accent animate-gradient-shift" />
@@ -1138,17 +1210,20 @@ function App() {
             <Logo size="medium" />
           </div>
           <p className="text-white/80 text-base">
-            Privacy-first file sharing with direct P2P and relay fallback
+            Privacy-first file sharing with direct P2P and a polite relay backup.
+          </p>
+          <p className="text-white/60 text-sm mt-1">
+            We don’t take ourselves too seriously — it’s a file sharing service, not rocket surgery.
           </p>
           
           {/* Connection Status Alerts */}
           {!isOnline && (
             <div className="mt-4 bg-red-500/20 border-2 border-red-500 rounded-lg p-4 max-w-md mx-auto">
               <p className="text-red-400 font-semibold text-center">
-                🌐 No Internet Connection
+                🌐 Internet’s gone for a skate
               </p>
               <p className="text-red-300 text-sm text-center mt-1">
-                Check your network connection
+                Give your Wi‑Fi a polite nudge and try again.
               </p>
             </div>
           )}
@@ -1156,10 +1231,10 @@ function App() {
           {connectionState === 'reconnecting' && isOnline && (
             <div className="mt-4 bg-yellow-500/20 border-2 border-yellow-500 rounded-lg p-4 max-w-md mx-auto">
               <p className="text-yellow-400 font-semibold text-center">
-                🔄 Reconnecting...
+                🔄 Reconnecting... one sec, bud
               </p>
               <p className="text-yellow-300 text-sm text-center mt-1">
-                Attempting to restore connection
+                Tapping the wire politely.
               </p>
             </div>
           )}
@@ -1167,10 +1242,10 @@ function App() {
           {connectionState === 'failed' && (
             <div className="mt-4 bg-red-500/20 border-2 border-red-500 rounded-lg p-4 max-w-md mx-auto">
               <p className="text-red-400 font-semibold text-center">
-                ❌ Connection Failed
+                ❌ Connection didn’t stick
               </p>
               <p className="text-red-300 text-sm text-center mt-1">
-                Unable to establish connection. Refresh the page to try again.
+                Refresh and we’ll give it another go.
               </p>
             </div>
           )}
@@ -1231,7 +1306,7 @@ function App() {
                             enableZip ? 'translate-x-5' : 'translate-x-1'
                           }`} />
                         </div>
-                        <span>Compress as ZIP</span>
+                        <span>Squish into a ZIP</span>
                       </button>
                     </div>
 
@@ -1253,9 +1328,9 @@ function App() {
                       >
                         {status === 'encrypting' ? (
                           <div className="flex items-center gap-2">
-                            <span>Processing...</span>
+                            <span>Warming up the moose...</span>
                           </div>
-                        ) : 'Create Share Link'}
+                        ) : 'Make me a share link, eh?'}
                       </button>
                     </div>
                   </div>
@@ -1270,7 +1345,7 @@ function App() {
                     <div className="flex flex-col items-center gap-4">
                       <div className="inline-flex items-center gap-2 text-white/60">
                         <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                        <span>Waiting for recipient to connect...</span>
+                        <span>Waiting for the other human to show up...</span>
                       </div>
                     </div>
                   </div>
@@ -1280,20 +1355,20 @@ function App() {
                   <div className="w-full">
                     {isAssistedConnection && (
                       <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4 text-white/80">
-                        <div className="text-white/90 font-medium">Connection assistance enabled</div>
+                        <div className="text-white/90 font-medium">Connection assist: engaged</div>
                         <div className="mt-1 text-sm text-white/70">
-                          Your transfer is still end-to-end encrypted. We cannot read your files and we never store them.
-                          This mode can be slower on some networks.
+                          Still end‑to‑end encrypted. We can’t read your files and we never store them.
+                          This mode can be a bit slower on some networks.
                         </div>
                         <details className="mt-3">
                           <summary className="cursor-pointer text-sm text-white/70 hover:text-white/90 transition-colors">
-                            Tips to improve speed
+                            Speed tips (polite but effective)
                           </summary>
                           <div className="mt-2 space-y-1 text-sm text-white/70">
-                            <div>Disable VPN/proxy and retry</div>
-                            <div>Try a different network (home Wi-Fi vs mobile hotspot)</div>
-                            <div>On home routers, UPnP can help direct connections (only enable if you understand the risks)</div>
-                            <div>Ensure UDP/WebRTC is allowed by firewall/router</div>
+                            <div>Turn off VPN/proxy and retry</div>
+                            <div>Try a different network (home Wi‑Fi vs hotspot)</div>
+                            <div>UPnP can help direct connections (enable only if you’re comfy with it)</div>
+                            <div>Make sure UDP/WebRTC isn’t blocked by your firewall/router</div>
                           </div>
                         </details>
                       </div>
@@ -1311,7 +1386,7 @@ function App() {
                   <div className="text-center">
                     <CheckCircle size={64} className="text-green-400 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-white">
-                      File transferred successfully!
+                      Transfer complete. No rocket science harmed.
                     </h3>
                   </div>
                 )}
@@ -1324,7 +1399,7 @@ function App() {
               {status === 'connecting' && (
                 <div className="text-center py-12">
                   <div className="w-12 h-12 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                  <p className="text-white/80">Connecting to peer...</p>
+                  <p className="text-white/80">Calling the other human...</p>
                 </div>
               )}
               
@@ -1361,7 +1436,7 @@ function App() {
               
               {!isTransferring && transferProgress.percentage > 0 && transferProgress.percentage < 100 && (
                 <div className="text-center mt-4">
-                  <p className="text-yellow-400 mb-2">Transfer interrupted</p>
+                  <p className="text-yellow-400 mb-2">Transfer took a coffee break</p>
                   {/* <ResumeButton
                     onClick={() => {
                       const resumeFromChunk = Math.floor(transferProgress.bytesTransferred / (64 * 1024));
@@ -1415,10 +1490,10 @@ function App() {
                     onClick={handleChooseSaveLocation}
                     className="px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors shadow-lg"
                   >
-                    Start Download
+                    Start the download, eh?
                   </button>
                   <p className="text-white/60 mt-4 text-sm">
-                    You'll be prompted to choose save location
+                    Pick a save spot when your browser asks nicely.
                   </p>
                 </div>
               )}
@@ -1427,10 +1502,10 @@ function App() {
                 <div>
                   <Download size={64} className="text-white/40 mx-auto mb-4" />
                   <h3 className="text-xl font-semibold text-white mb-2">
-                    Waiting for share link...
+                    Waiting for a share link...
                   </h3>
                   <p className="text-white/60">
-                    Open a share link to receive files
+                    Open one and we’ll get you the goods.
                   </p>
                 </div>
               )}
@@ -1438,10 +1513,10 @@ function App() {
                 <div>
                   <div className="text-6xl mb-4">❌</div>
                   <h3 className="text-xl font-semibold text-white mb-2">
-                    Transfer Failed
+                    Transfer bailed
                   </h3>
                   <p className="text-white/80">
-                    {transferErrorMessage || 'There was an error during the transfer. Please try again.'}
+                    {transferErrorMessage || 'We hit a snag. Give it another go.'}
                   </p>
                   {transferProgress.percentage > 0 && transferProgress.percentage < 100 && (
                     <div className="flex justify-center mt-4">
@@ -1449,7 +1524,7 @@ function App() {
                         onClick={() => handleResume(0)}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
                       >
-                        Resume Transfer
+                        Resume the transfer
                       </button>
                     </div>
                   )}
@@ -1463,25 +1538,25 @@ function App() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
           <div className="glass-card p-6 text-center">
             <Shield className="text-blue-400 mx-auto mb-4" size={32} />
-            <h3 className="text-lg font-semibold text-white mb-2">Direct P2P</h3>
+            <h3 className="text-lg font-semibold text-white mb-2">Direct P2P, no detours</h3>
             <p className="text-white/60 text-sm">
-              Direct browser-to-browser transfer with relay fallback when needed.
+              Browser-to-browser transfer, with a relay only when needed.
             </p>
           </div>
           
           <div className="glass-card p-6 text-center">
             <Shield className="text-purple-400 mx-auto mb-4" size={32} />
-            <h3 className="text-lg font-semibold text-white mb-2">End-to-End Encrypted</h3>
+            <h3 className="text-lg font-semibold text-white mb-2">End-to-end encrypted</h3>
             <p className="text-white/60 text-sm">
-              Files encrypted in your browser before transfer
+              Your files get encrypted in your browser before they go anywhere.
             </p>
           </div>
           
           <div className="glass-card p-6 text-center">
             <Share2 className="text-pink-400 mx-auto mb-4" size={32} />
-            <h3 className="text-lg font-semibold text-white mb-2">Simple Sharing</h3>
+            <h3 className="text-lg font-semibold text-white mb-2">Simple sharing</h3>
             <p className="text-white/60 text-sm">
-              Just share a link. No signup required.
+              Share a link. No signup, no drama.
             </p>
           </div>
         </div>
@@ -1507,32 +1582,32 @@ function App() {
               }`}
             >
               <div>
-                <h3 className="text-white font-semibold">Is this peer-to-peer?</h3>
-                <p>Yes. File data moves between browsers via WebRTC DataChannels. When direct connections fail, a TURN relay may carry encrypted data.</p>
+                <h3 className="text-white font-semibold">Is this actually peer-to-peer?</h3>
+                <p>Yep. Files go browser-to-browser via WebRTC DataChannels. If a direct path fails, a TURN relay may carry encrypted data.</p>
               </div>
               <div>
                 <h3 className="text-white font-semibold">How do you protect my privacy?</h3>
-                <p>Files are encrypted in your browser with AES-GCM. Signaling/metadata services coordinate connections and never see file contents, and links expire after 24 hours (with optional PIN protection).</p>
+                <p>Files are encrypted in your browser with AES-GCM. Signaling/metadata services coordinate connections and never see file contents. Links expire after 24 hours (optional PIN).</p>
               </div>
               <div>
-                <h3 className="text-white font-semibold">How do you prevent corruption during transfer?</h3>
-                <p>WebRTC uses reliable, ordered DataChannels and AES-GCM authenticated encryption. If integrity checks fail, the transfer stops so you can retry.</p>
+                <h3 className="text-white font-semibold">How do you avoid corrupted transfers?</h3>
+                <p>WebRTC uses reliable, ordered DataChannels plus AES-GCM authentication. If integrity checks fail, the transfer stops so you can retry.</p>
               </div>
               <div>
-                <h3 className="text-white font-semibold">Do session IDs persist?</h3>
-                <p>No. Each page load generates a randomized PeerJS ID that only exists for the current session.</p>
+                <h3 className="text-white font-semibold">Do session IDs stick around?</h3>
+                <p>Nope. Each page load gets a fresh PeerJS ID that only exists for this session.</p>
               </div>
               <div>
                 <h3 className="text-white font-semibold">Do I need an account?</h3>
-                <p>No account required. Create a link and share it.</p>
+                <p>No account required. Make a link and send it.</p>
               </div>
               <div>
                 <h3 className="text-white font-semibold">How long do links last?</h3>
-                <p>Links expire after 24 hours to reduce exposure.</p>
+                <p>Links expire after 24 hours to keep things tidy.</p>
               </div>
               <div>
                 <h3 className="text-white font-semibold">Will it work on restricted networks?</h3>
-                <p>Some corporate or school networks can block WebRTC or force relays; a different network may be needed.</p>
+                <p>Some work/school networks block WebRTC or force relays. If it’s grumpy, try another network.</p>
               </div>
             </div>
           </div>
@@ -1574,6 +1649,12 @@ function App() {
                 <span className="whitespace-nowrap">Logo by</span>
                 <span className="text-blue-400 transition-colors group-hover:text-blue-300">Talal Al-Saymaree</span>
               </a>
+              <span className="group relative inline-flex items-center whitespace-nowrap leading-none text-white/60">
+                <span className="text-base" role="img" aria-label="Canada">🇨🇦</span>
+                <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  Proudly made in Canada from Canadian grown ingredients
+                </span>
+              </span>
             </div>
             <div className="flex items-end justify-between gap-3">
               <div className="flex items-end">
@@ -1609,8 +1690,18 @@ function App() {
         <div className="fixed bottom-8 right-8 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out z-50">
           <div className="flex items-center gap-3">
             <Check size={20} />
-            <span className="font-medium">Share link copied to clipboard!</span>
+            <span className="font-medium">Link copied. You’re basically a wizard.</span>
           </div>
+        </div>
+      )}
+      {humanToastMessage && (
+        <div className="fixed bottom-24 right-8 bg-white/10 text-white/90 px-5 py-3 rounded-lg shadow-lg backdrop-blur border border-white/10 transform transition-all duration-300 ease-in-out z-50 max-w-xs">
+          <div className="text-sm font-medium">{humanToastMessage}</div>
+        </div>
+      )}
+      {anubisStatusMessage && (
+        <div className="fixed bottom-24 left-8 bg-white/5 text-white/70 px-4 py-2 rounded-full shadow-lg backdrop-blur border border-white/10 transform transition-all duration-300 ease-in-out z-50">
+          <div className="text-xs font-medium">{anubisStatusMessage}</div>
         </div>
       )}
       

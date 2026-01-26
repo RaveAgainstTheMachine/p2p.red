@@ -34,7 +34,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) =>
               onClick={onInfo}
               className="rounded-full border border-white/20 px-4 py-2 text-sm text-white/70 transition hover:border-white/40 hover:text-white"
             >
-              How it works
+              How it works (short version)
             </button>
             <button
               type="button"
@@ -48,7 +48,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) =>
               onClick={onStart}
               className="btn-primary inline-flex items-center gap-2 rounded-full px-5"
             >
-              Start sharing
+              Start sharing, eh?
               <ArrowRight size={16} />
             </button>
           </div>
@@ -62,11 +62,11 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) =>
                 Private by design
               </div>
               <h1 className="text-4xl font-semibold leading-tight text-white md:text-5xl animate-fade-up" style={{ animationDelay: '0.1s' }}>
-                Share files at native WebRTC speed — direct, encrypted, and uncompromised.
+                Share files at native WebRTC speed — direct, encrypted, and no rocket surgery required.
               </h1>
               <p className="text-lg text-white/70 animate-fade-up" style={{ animationDelay: '0.2s' }}>
                 p2p.red connects browsers directly with WebRTC DataChannels. When direct paths fail, we fall back to
-                TURN relays without ever touching your file contents. Short links, no accounts, no tracking.
+                TURN relays without ever touching your file contents. Short links, no accounts, no drama.
               </p>
               <div className="flex flex-wrap gap-4 animate-fade-up" style={{ animationDelay: '0.3s' }}>
                 <button type="button" onClick={onStart} className="btn-primary inline-flex items-center gap-2">
@@ -78,17 +78,17 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) =>
                   onClick={onInfo}
                   className="btn-secondary inline-flex items-center gap-2"
                 >
-                  Explore the tech
+                  Explore the tech (with snacks)
                 </button>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="glass-card p-4 text-sm text-white/70 animate-fade-up" style={{ animationDelay: '0.4s' }}>
                   <div className="text-white font-semibold">Direct P2P, relay fallback</div>
-                  <p className="mt-1">Fast paths whenever possible, resilient when networks are strict.</p>
+                  <p className="mt-1">Fast when it can be, resilient when networks are cranky.</p>
                 </div>
                 <div className="glass-card p-4 text-sm text-white/70 animate-fade-up" style={{ animationDelay: '0.5s' }}>
                   <div className="text-white font-semibold">End-to-end encrypted</div>
-                  <p className="mt-1">ECDH + AES-GCM with keys generated in your browser.</p>
+                  <p className="mt-1">ECDH + AES-GCM with keys born and raised in your browser.</p>
                 </div>
               </div>
             </div>
@@ -99,7 +99,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) =>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm uppercase tracking-[0.2em] text-white/50">Transfer status</div>
-                    <div className="text-2xl font-semibold">Relay-free whenever possible</div>
+                    <div className="text-2xl font-semibold">Relay‑free whenever possible</div>
                   </div>
                   <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-white/70">Live</div>
                 </div>
@@ -110,7 +110,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) =>
                     </div>
                     <div>
                       <div className="text-white font-semibold">Encrypted shards</div>
-                      <div className="text-sm text-white/60">CRC32 verified, retransmit on mismatch</div>
+                      <div className="text-sm text-white/60">CRC32 verified, retransmit if things look funny</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -119,7 +119,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) =>
                     </div>
                     <div>
                       <div className="text-white font-semibold">Zero file storage</div>
-                      <div className="text-sm text-white/60">Servers never store file contents.</div>
+                      <div className="text-sm text-white/60">Servers never store file contents. Pinky promise.</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -128,7 +128,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) =>
                     </div>
                     <div>
                       <div className="text-white font-semibold">Adaptive multi-stream</div>
-                      <div className="text-sm text-white/60">Parallel DataChannels that balance pacing on the fly.</div>
+                      <div className="text-sm text-white/60">Parallel DataChannels that keep the pace steady.</div>
                     </div>
                   </div>
                 </div>
@@ -170,7 +170,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) =>
 
           <section className="glass-card flex flex-col items-center gap-4 p-6 text-center animate-fade-up" style={{ animationDelay: '0.4s' }}>
             <div className="text-sm uppercase tracking-[0.3em] text-white/50">Ready to move fast?</div>
-            <h2 className="text-2xl font-semibold text-white">Create a link. Share it. Transfer directly.</h2>
+            <h2 className="text-2xl font-semibold text-white">Create a link. Share it. Keep the tab open.</h2>
             <p className="max-w-2xl text-sm text-white/60">
               Keep both browsers open during the transfer. Direct connections are fastest; relay fallback keeps things
               moving when networks are strict.

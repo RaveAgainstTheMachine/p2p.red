@@ -17,20 +17,20 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
           className="flex items-center gap-2 text-white/80 hover:text-white transition-colors mb-6"
         >
           <ArrowLeft size={20} />
-          Back to Home
+          Back to home base
         </button>
 
         <div className="glass-card p-8">
           <h1 className="text-3xl font-bold text-white mb-6 flex items-center gap-3">
             <FileText size={32} className="text-blue-400" />
-            Legal Disclaimer
+            Legal stuff (yes, we read it)
           </h1>
 
           <div className="space-y-6 text-white/80">
             <section>
               <h2 className="text-xl font-semibold text-white mb-3 flex items-center gap-2">
                 <Shield size={20} className="text-green-400" />
-                Service Overview
+                Service overview
               </h2>
               <p className="leading-relaxed">
                 This service provides peer-to-peer (P2P) file sharing using WebRTC technology. Files are transferred
@@ -43,7 +43,7 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
             <section>
               <h2 className="text-xl font-semibold text-white mb-3 flex items-center gap-2">
                 <AlertTriangle size={20} className="text-yellow-400" />
-                No Warranty
+                No warranty (sorry, bud)
               </h2>
               <p className="leading-relaxed mb-3">
                 This service is provided "AS IS" without any warranties, express or implied. We make no guarantees about:
@@ -57,7 +57,7 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-3">User Responsibilities</h2>
+              <h2 className="text-xl font-semibold text-white mb-3">User responsibilities</h2>
               <p className="leading-relaxed mb-3">
                 By using this service, you agree to:
               </p>
@@ -71,7 +71,7 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-3">Privacy & Data (GDPR & Canada/Quebec Compliant)</h2>
+              <h2 className="text-xl font-semibold text-white mb-3">Privacy & data (GDPR + Canada/Quebec compliant)</h2>
               <p className="leading-relaxed mb-3">
                 We are committed to privacy and comply with GDPR (EU), PIPEDA (Canada), and Law 25 (Quebec):
               </p>
@@ -89,7 +89,7 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-3">Anti-Abuse Controls</h2>
+              <h2 className="text-xl font-semibold text-white mb-3">Anti-abuse controls</h2>
               <p className="leading-relaxed">
                 We use an open-source proof-of-work challenge (Anubis) on metadata endpoints to limit automated abuse.
                 This does not track users or require third-party captcha providers.
@@ -97,7 +97,7 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-3">Security Warnings</h2>
+              <h2 className="text-xl font-semibold text-white mb-3">Security warnings (still serious)</h2>
               <p className="leading-relaxed mb-3">
                 Important security considerations:
               </p>
@@ -113,7 +113,7 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-3">Limitation of Liability</h2>
+              <h2 className="text-xl font-semibold text-white mb-3">Limitation of liability</h2>
               <p className="leading-relaxed">
                 We shall not be liable for any damages arising from the use or inability to use this service, 
                 including but not limited to: data loss, security breaches, malware infections, network issues, 

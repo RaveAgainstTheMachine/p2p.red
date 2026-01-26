@@ -159,8 +159,19 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(compression());
+const corsOriginEnv = (process.env.CORS_ORIGIN || 'https://p2p.red').trim();
+const corsOrigin = (() => {
+  if (corsOriginEnv === 'dev' || corsOriginEnv === '*') {
+    return true;
+  }
+  if (corsOriginEnv.includes(',')) {
+    return corsOriginEnv.split(',').map((origin) => origin.trim()).filter(Boolean);
+  }
+  return corsOriginEnv;
+})();
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'https://p2p.red',
+  origin: corsOrigin,
   credentials: true,
 }));
 morgan.token('url', (req) => {

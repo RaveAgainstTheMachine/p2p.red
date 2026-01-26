@@ -27,6 +27,70 @@ export default defineConfig({
     port: 3000,
     allowedHosts: true,
     proxy: {
+      '/api/metadata': {
+        target: 'http://127.0.0.1:8923',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('X-Real-Ip', '127.0.0.1');
+            proxyReq.setHeader('X-Forwarded-For', '127.0.0.1');
+            proxyReq.setHeader('X-Forwarded-Proto', 'http');
+            proxyReq.setHeader('X-Forwarded-Host', '127.0.0.1:3000');
+          });
+          proxy.on('proxyRes', (proxyRes) => {
+            delete proxyRes.headers['content-security-policy'];
+            delete proxyRes.headers['content-security-policy-report-only'];
+            proxyRes.headers['content-security-policy'] =
+              "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:3000";
+          });
+        }
+      },
+      '/api/metadata/': {
+        target: 'http://127.0.0.1:8923',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('X-Real-Ip', '127.0.0.1');
+            proxyReq.setHeader('X-Forwarded-For', '127.0.0.1');
+            proxyReq.setHeader('X-Forwarded-Proto', 'http');
+            proxyReq.setHeader('X-Forwarded-Host', '127.0.0.1:3000');
+          });
+          proxy.on('proxyRes', (proxyRes) => {
+            delete proxyRes.headers['content-security-policy'];
+            delete proxyRes.headers['content-security-policy-report-only'];
+            proxyRes.headers['content-security-policy'] =
+              "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:3000";
+          });
+        }
+      },
+      '/.within.website': {
+        target: 'http://127.0.0.1:8923',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('X-Real-Ip', '127.0.0.1');
+            proxyReq.setHeader('X-Forwarded-For', '127.0.0.1');
+            proxyReq.setHeader('X-Forwarded-Proto', 'http');
+            proxyReq.setHeader('X-Forwarded-Host', '127.0.0.1:3000');
+          });
+          proxy.on('proxyRes', (proxyRes) => {
+            delete proxyRes.headers['content-security-policy'];
+            delete proxyRes.headers['content-security-policy-report-only'];
+            proxyRes.headers['content-security-policy'] =
+              "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:3000";
+            if (typeof proxyRes.headers.location === 'string') {
+              proxyRes.headers.location = proxyRes.headers.location.replace(
+                /\/api\/metadata(\b|\?)/,
+                '/'
+              );
+            }
+          });
+        }
+      },
+      '/api': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true
+      },
       '/peerjs': {
         target: 'http://127.0.0.1:9000',
         changeOrigin: true,

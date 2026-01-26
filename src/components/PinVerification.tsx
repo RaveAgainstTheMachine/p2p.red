@@ -85,11 +85,11 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
     <div className="flex flex-col items-center gap-6 p-8">
       <div className="flex items-center gap-3 text-white">
         <Lock size={24} className="text-blue-400" />
-        <h3 className="text-xl font-semibold">PIN Required</h3>
+        <h3 className="text-xl font-semibold">PIN required, eh?</h3>
       </div>
 
       <p className="text-white/60 text-center">
-        This file is protected. Enter the 4-digit PIN to continue.
+        This file’s locked up. Enter the 4‑digit PIN to continue.
       </p>
 
       <div className="flex gap-3">
@@ -120,7 +120,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
             <p className="text-red-400 text-sm font-medium">{error}</p>
             {remainingAttempts !== undefined && remainingAttempts > 0 && (
               <p className="text-red-300 text-xs mt-1">
-                {remainingAttempts} {remainingAttempts === 1 ? 'attempt' : 'attempts'} remaining
+                {remainingAttempts} {remainingAttempts === 1 ? 'try' : 'tries'} remaining
               </p>
             )}
           </div>
@@ -130,7 +130,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
       {isVerifying && (
         <div className="flex items-center gap-2 text-white/60">
           <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm">Verifying...</span>
+          <span className="text-sm">Checking the PIN...</span>
         </div>
       )}
     </div>

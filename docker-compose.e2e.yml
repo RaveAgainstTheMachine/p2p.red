@@ -66,11 +66,28 @@ services:
       CLEANUP_INTERVAL_MINUTES: 60
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX_REQUESTS: 200
-      CORS_ORIGIN: http://127.0.0.1:3000
+      CORS_ORIGIN: dev
       TURN_SECRET: e2e-turn-secret
       TURN_TTL_SECONDS: 3600
     ports:
       - "127.0.0.1:3001:3001"
+    networks:
+      - e2e-network
+
+  anubis:
+    image: ghcr.io/techarohq/anubis:latest
+    container_name: p2p-e2e-anubis
+    restart: unless-stopped
+    depends_on:
+      - metadata-api
+    environment:
+      BIND: ":8923"
+      TARGET: "http://p2p-e2e-metadata-api:3001"
+      DIFFICULTY: "4"
+      SERVE_ROBOTS_TXT: "true"
+      USE_REMOTE_ADDRESS: "true"
+    ports:
+      - "127.0.0.1:8923:8923"
     networks:
       - e2e-network
 

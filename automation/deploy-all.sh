@@ -20,6 +20,13 @@ cd "$REPO_ROOT"
 echo "🚀 P2P File Share - Full Deploy"
 echo "==============================="
 
+if [ "$DEPLOY_ENV" = "dev" ]; then
+  echo "🛠️  Dev mode: starting e2e backend stack (no prod build)"
+  docker compose -f docker-compose.e2e.yml up -d --build
+  echo "✅ Dev backend stack up"
+  exit 0
+fi
+
 echo "🔍 Checking required files..."
 if [ ! -f "metadata-api/.env" ]; then
   echo "❌ metadata-api/.env is missing. Create it from metadata-api/.env.example"

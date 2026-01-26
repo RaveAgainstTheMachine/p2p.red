@@ -31,12 +31,12 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
   };
 
   const handleEmailShare = async () => {
-    const subject = encodeURIComponent('File shared with you');
+    const subject = encodeURIComponent('I shared a file with you');
     const body = encodeURIComponent(
-      `I've shared a file with you using p2p.red\n\n` +
-      `Download Link:\n${shareLink}\n\n` +
+      `I shared a file with you using p2p.red\n\n` +
+      `Grab it here:\n${shareLink}\n\n` +
       `Or scan this QR code:\n${shareLink.replace('#', '%23')}\n\n` +
-      `Note: The sender must keep their page open until the transfer completes.\n\n` +
+      `Note: The sender needs to keep their page open until the transfer completes.\n\n` +
       `---\n` +
       `Secure P2P file sharing with end-to-end encryption\n` +
       `https://p2p.red`
@@ -49,8 +49,8 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
     
     try {
       await navigator.share({
-        title: 'File shared with you',
-        text: `Download this file using p2p.red`,
+        title: 'Here’s the file',
+        text: `Grab this file on p2p.red`,
         url: shareLink
       });
     } catch (err) {
@@ -62,7 +62,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
   };
 
   const handleSocialShare = async (platform: string) => {
-    const text = encodeURIComponent('Check out this file I shared with you');
+    const text = encodeURIComponent('Here’s the file I shared with you');
     // Extract short key from hash and create /share/ URL for better previews
     const shortKey = shareLink.split('#')[1];
     const previewUrl = `https://p2p.red/share/${shortKey}`;
@@ -89,7 +89,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
       <h2 className="text-xl font-bold text-white">
-        Share this link:
+        Here’s your share link, bud:
       </h2>
       
       <div 
@@ -142,27 +142,27 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
             className="btn-primary flex items-center gap-2"
           >
             <Share2 size={20} />
-            {copied ? 'Copied!' : 'Copy Link'}
+            {copied ? 'Copied!' : 'Copy link'}
           </button>
           
           <button
             onClick={() => setShowQR(!showQR)}
             className="btn-secondary flex items-center gap-2"
-            title="Show QR Code"
+            title="Show QR code"
           >
             <QrCode size={20} />
-            QR Code
+            QR code
           </button>
           
           {canShare && (
             <button
               onClick={handleNativeShare}
               className="btn-secondary flex items-center gap-2"
-              title="Share via AirDrop, Nearby Share, etc."
-            >
-              <Smartphone size={20} />
-              <span className="hidden sm:inline">Share</span>
-            </button>
+              title="Share with friends nearby"
+          >
+            <Smartphone size={20} />
+            <span className="hidden sm:inline">Share with friends</span>
+          </button>
           )}
         </div>
         
@@ -170,7 +170,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
           <button
             onClick={handleEmailShare}
             className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-            title="Share via Email"
+            title="Share via email"
           >
             <Mail size={18} className="text-white" />
           </button>
@@ -213,7 +213,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
           <button
             onClick={() => handleSocialShare('discord')}
             className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-            title="Open Discord & Copy Link"
+            title="Open Discord & copy link"
           >
             <svg className="w-[18px] h-[18px] text-white" fill="currentColor" viewBox="0 0 24 24">
               <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z"/>
@@ -231,7 +231,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
       
       {copied && (
         <p className="text-green-400 text-sm">
-          Link copied to clipboard!
+          Link copied. Go forth and share.
         </p>
       )}
     </div>

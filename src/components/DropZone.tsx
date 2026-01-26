@@ -348,10 +348,10 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
           <div className="bg-white/5 rounded-lg p-4 border border-white/10 max-w-md w-full">
             <div className="flex items-center gap-3 text-white/80 mb-2">
               <HardDrive size={20} className="text-blue-400" />
-              <span className="font-medium">Choose files to share</span>
+              <span className="font-medium">Pick some files to share</span>
             </div>
             <p className="text-white/60 text-sm">
-              Select one or more files to share. You can also drag and drop folders anytime.
+              Select a few files to share. Drag‑and‑drop folders anytime.
             </p>
           </div>
           
@@ -359,8 +359,8 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
             <div className="flex items-start gap-2">
               <div className="w-2 h-2 bg-blue-400 rounded-full mt-1.5 flex-shrink-0" />
               <div className="text-white/70 text-sm">
-                <p className="font-medium text-white mb-1">Privacy First</p>
-                <p>Your files never leave your device until someone connects directly to receive them.</p>
+                <p className="font-medium text-white mb-1">Privacy first, always</p>
+                <p>Your files stay on your device until a human connects to receive them.</p>
               </div>
             </div>
           </div>
@@ -370,13 +370,13 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
               onClick={handleFolderDialogCancel}
               className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
             >
-              Cancel
+              Never mind
             </button>
             <button
               onClick={handleFolderDialogSelect}
               className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
             >
-              Choose Files
+              Choose files
             </button>
           </div>
         </div>
@@ -401,7 +401,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
             <div className="flex items-center gap-2 text-white/80">
               <Folder size={18} />
               <span className="font-medium">
-                {currentPath.length > 0 ? currentPath.join(' / ') : 'Select Folder'}
+                {currentPath.length > 0 ? currentPath.join(' / ') : 'Pick a folder'}
               </span>
             </div>
           </div>
@@ -412,14 +412,14 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
               disabled={isProcessing || items.length === 0}
               className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white rounded-lg transition-colors disabled:cursor-not-allowed"
             >
-              Select This Folder
+              Use this folder
             </button>
             
             <button
               onClick={handleBrowseClick}
               className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
             >
-              Browse
+              Browse files
             </button>
           </div>
         </div>
@@ -517,9 +517,9 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
       
       {isProcessing ? (
         <div className="flex flex-col items-center gap-4">
-          <h3 className="text-xl font-semibold text-white mb-2">Processing...</h3>
+          <h3 className="text-xl font-semibold text-white mb-2">Processing…</h3>
           <p className="text-white/60 text-center mb-4">
-            Please wait while we process your files
+            Hang tight while we get your files ready.
           </p>
         </div>
       ) : (
@@ -534,7 +534,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
       )}
       
       <div className="mt-auto inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/60">
-        <span>Files are never uploaded to our servers.</span>
+        <span>No uploads to our servers. Scout’s honour.</span>
       </div>
     </div>
   );

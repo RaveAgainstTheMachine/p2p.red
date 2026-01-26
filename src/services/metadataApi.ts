@@ -25,6 +25,45 @@ export interface ShortLinkResponse {
   expiresAt: string;
 }
 
+const isJsonResponse = (response: Response) =>
+  response.headers.get('content-type')?.includes('application/json');
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchWithChallenge = async (url: string, options: RequestInit, challengeUrl: string) => {
+  let response = await fetch(url, options);
+
+  if (isJsonResponse(response)) {
+    return response;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent('anubis-challenge', {
+      detail: { active: true, url: challengeUrl }
+    })
+  );
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await delay(500);
+    response = await fetch(url, options);
+    if (isJsonResponse(response)) {
+      window.dispatchEvent(
+        new CustomEvent('anubis-challenge', {
+          detail: { active: false }
+        })
+      );
+      return response;
+    }
+  }
+
+  window.dispatchEvent(
+    new CustomEvent('anubis-challenge', {
+      detail: { active: false }
+    })
+  );
+  throw new Error('Anubis challenge required. Complete it, then retry.');
+};
+
 /**
  * Store transfer metadata and get short link key
  */
@@ -41,13 +80,14 @@ export async function createShortLink(metadata: TransferMetadata, pin?: string):
       hasPin: !!payload.pin 
     });
     
-    const response = await fetch(`${API_BASE_URL}/metadata`, {
+    const response = await fetchWithChallenge(`${API_BASE_URL}/metadata`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify(payload),
-    });
+    }, `${API_BASE_URL}/metadata`);
 
     if (!response.ok) {
       const error = await response.json();
@@ -73,9 +113,10 @@ export async function getMetadata(key: string, pin?: string): Promise<TransferMe
     }
 
     const url = `${API_BASE_URL}/metadata/${key}`;
-    const response = await fetch(url, {
+    const response = await fetchWithChallenge(url, {
       headers: pin ? { 'x-p2p-pin': pin } : undefined,
-    });
+      credentials: 'include',
+    }, url);
 
     if (!response.ok) {
       const error = await response.json();

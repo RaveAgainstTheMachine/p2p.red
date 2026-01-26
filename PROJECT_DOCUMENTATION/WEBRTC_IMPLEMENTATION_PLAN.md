@@ -85,7 +85,7 @@ Building a **privacy-first P2P file sharing service** using WebRTC DataChannels 
 - [ ] Battery efficiency improvements
 
 #### **Day 26-28: Deployment**
-- [ ] Set up OVH VPS deployment (Docker + Nginx)
+- [ ] Set up OVH VPS deployment (Docker + Envoy)
 - [ ] Configure domains + TLS
 - [ ] Test production deployment on VPS
 - [ ] User acceptance testing

@@ -220,6 +220,7 @@ Confirm the UI shows the expected **blue/green badge** and the build **version**
 - **Never** deploy both colors at once.
 - Always deploy the **inactive** color and switch via Envoy.
 - `automation/deploy-zero-downtime.sh` checks **Envoy runtime weights** to decide the active color.
+- Runtime weights are persisted under `envoy-runtime/traffic_split` and mounted into Envoy.
 - Prod deploys require **prebuilt images** (`USE_PREBUILT_IMAGES=1`) to prevent local builds on prod.
 - UI/UX changes require explicit project-owner confirmation **before** prod release.
 - Build images only via `automation/build-prod-images.sh` (labels `p2p.build_variant` are enforced).
@@ -241,6 +242,33 @@ docker stop p2p-envoy
 sudo certbot certonly --standalone -d signal.p2p.red
 docker start p2p-envoy
 ```
+
+### Envoy TLS Cert Handling (prod)
+Envoy reads PKCS#12 bundles from `/var/snap/docker/common/p2p-envoy-certs`.
+
+**Rules:**
+- Use **RSA** certs (Let’s Encrypt reissue with `--key-type rsa`).
+- Generate PKCS#12 bundles with password `p2pred`.
+- Ensure perms: cert dir `755`, `.p12` files `644` (readable by Envoy).
+
+**Reissue + Convert (example for p2p.red):**
+```
+docker stop p2p-envoy
+sudo certbot certonly --standalone --key-type rsa --rsa-key-size 2048 -d p2p.red -d www.p2p.red
+
+sudo mkdir -p /var/snap/docker/common/p2p-envoy-certs
+sudo openssl pkcs12 -export \
+  -out /var/snap/docker/common/p2p-envoy-certs/p2p.red.p12 \
+  -inkey /etc/letsencrypt/live/p2p.red/privkey.pem \
+  -in /etc/letsencrypt/live/p2p.red/fullchain.pem \
+  -passout pass:p2pred
+
+sudo chmod 755 /var/snap/docker/common/p2p-envoy-certs
+sudo chmod 644 /var/snap/docker/common/p2p-envoy-certs/p2p.red.p12
+docker start p2p-envoy
+```
+
+Repeat for `signal.p2p.red` and `plausible.p2p.red` (matching filenames in `envoy.yaml`).
 
 ### Plausible Analytics (prod)
 Plausible is self-hosted on the prod VPS and exposed via `plausible.p2p.red`.
@@ -377,6 +405,17 @@ curl http://localhost:3001/health
 When updating Envoy only, still export the metadata env file or compose will error parsing the metadata-api service:
 ```
 METADATA_API_ENV_FILE=/run/secrets/metadata.env docker compose -f docker-compose.yml up -d --no-deps envoy
+```
+
+### Envoy Runtime Weights (prod)
+Envoy bootstraps traffic weights from disk so a restart never defaults to an empty split:
+
+- Runtime defaults live in `envoy-runtime/traffic_split/app_blue` + `app_green`.
+- `automation/envoy-shift-traffic.sh` updates both the runtime files and the admin runtime layer.
+
+**Recovery if weights are missing:**
+```
+curl -sS -X POST "http://127.0.0.1:9901/runtime_modify?traffic_split.app_blue=100&traffic_split.app_green=0"
 ```
 
 ## Verification Checklist (dev)

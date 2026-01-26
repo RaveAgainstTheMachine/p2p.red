@@ -38,7 +38,7 @@
 **Status**: ✅ Complete
 - Single VPS deployment
 - All services containerized
-- Nginx reverse proxy
+- Envoy reverse proxy
 - Working metadata API, PeerJS, TURN
 
 ### Phase 2: Nomad Preparation (Before Scaling)
@@ -56,7 +56,7 @@
 - `nomad/peerjs.nomad` - PeerJS signaling job spec
 - `nomad/postgres.nomad` - PostgreSQL job spec
 - `nomad/redis.nomad` - Redis cache job spec
-- `nomad/nginx.nomad` - Nginx reverse proxy job spec
+- `nomad/envoy.nomad` - Envoy reverse proxy job spec
 - `nomad/turn.nomad` - TURN server job spec
 
 ### Phase 3: Multi-VPS Deployment (Scaling)
@@ -66,7 +66,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Load Balancer VPS                       │
-│                  (Nginx + Consul + Nomad)                   │
+│                  (Envoy + Consul + Nomad)                   │
 │                    Public IP: p2p.red                       │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -103,7 +103,7 @@
 1. **Load Balancer VPS** ($10/month)
    - Nomad server (1 of 3)
    - Consul server (1 of 3)
-   - Nginx (load balancing)
+   - Envoy (load balancing)
    - 1 vCPU, 2GB RAM
 
 2. **Web VPS x3** ($30-45/month total)
@@ -240,7 +240,7 @@ consul agent -config-dir=/etc/consul.d/
 # Build Docker images
 docker build -t p2p-file-share_metadata-api:latest ./metadata-api
 docker build -t p2p-file-share_frontend:latest .
-docker build -t p2p-file-share_nginx:latest -f Dockerfile.nginx .
+docker build -t p2p-file-share_envoy:latest -f Dockerfile.envoy .
 
 # Push to registry (or load on each node)
 docker save p2p-file-share_metadata-api:latest | ssh vps1 docker load
@@ -253,7 +253,7 @@ nomad job run nomad/frontend.nomad
 nomad job run nomad/peerjs.nomad
 nomad job run nomad/postgres.nomad
 nomad job run nomad/redis.nomad
-nomad job run nomad/nginx.nomad
+nomad job run nomad/envoy.nomad
 nomad job run nomad/turn.nomad
 
 # Check status

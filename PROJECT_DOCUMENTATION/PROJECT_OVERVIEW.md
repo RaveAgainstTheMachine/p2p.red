@@ -34,7 +34,7 @@
 - **CORS:** cors middleware
 
 ### Infrastructure
-- **Web Server:** Nginx (reverse proxy)
+- **Web Server:** Envoy (reverse proxy)
 - **Containerization:** Docker + Docker Compose
 - **Signaling:** PeerJS Server (self-hosted)
 - **TURN Server:** coturn (NAT traversal)
@@ -134,7 +134,7 @@ dotenv
 
 ### Infrastructure
 ```
-nginx:alpine
+envoyproxy/envoy:v1.30.1
 postgres:15-alpine
 redis:alpine
 node:18-alpine
@@ -223,7 +223,7 @@ NONE OF YOUR FUCKING BUSINESS
 │   └── index.css          # Tailwind styles
 ├── metadata-api/          # Backend API
 │   └── server.js          # Express server
-├── nginx/                 # Web server config
+├── envoy.yaml             # Edge proxy config
 ├── docker-compose.yml       # Service orchestration
 ├── Dockerfile               # Container definitions
 └── PROJECT_DOCUMENTATION/   # Documentation

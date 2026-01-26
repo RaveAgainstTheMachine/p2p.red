@@ -5,6 +5,10 @@
 
 set -e
 
+echo "❌ start-servers.sh is deprecated (Envoy is the edge proxy)."
+echo "Use: docker compose up -d (runtime) or ./automation/deploy-zero-downtime.sh (prod)."
+exit 1
+
 echo "🚀 P2P File Share - Start All Servers"
 echo "===================================="
 

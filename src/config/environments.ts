@@ -24,7 +24,7 @@ export const environments: Record<string, EnvironmentConfig> = {
     peerJsConfig: {
       host: import.meta.env.VITE_PEERJS_HOST ?? 'localhost',
       port: Number(import.meta.env.VITE_PEERJS_PORT ?? 9000),
-      path: '/peerjs',
+      path: '/',
       secure: String(import.meta.env.VITE_PEERJS_SECURE ?? 'false') === 'true',
       config: {
         iceServers: [
@@ -44,9 +44,9 @@ export const environments: Record<string, EnvironmentConfig> = {
   production: {
     apiUrl: 'https://p2p.red',
     peerJsConfig: {
-      host: 'p2p.red',
+      host: 'signal.p2p.red',
       port: 443,
-      path: '/peerjs',
+      path: '/',
       secure: true,
       config: {
         iceServers: [

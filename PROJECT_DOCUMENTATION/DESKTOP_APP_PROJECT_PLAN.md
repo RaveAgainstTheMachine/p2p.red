@@ -94,7 +94,7 @@ Migrate P2P File Share to a monorepo structure and add a Tauri desktop applicati
 ├── turbo.json                         # Turborepo config (optional)
 ├── deploy.sh                          # Web deployment script
 ├── docker-compose.yml                 # VPS services
-├── nginx.conf
+├── envoy.yaml
 └── README.md
 ```
 
@@ -108,7 +108,7 @@ Migrate P2P File Share to a monorepo structure and add a Tauri desktop applicati
 - **File System:** 
   - Chrome/Edge: File System Access API
   - Firefox: RAM buffer + traditional download
-- **Deployment:** Docker + Nginx on OVH VPS
+- **Deployment:** Docker + Envoy on OVH VPS
 
 ### Desktop App (New)
 - **Frontend:** React + TypeScript + Vite (shared with web)
@@ -462,7 +462,7 @@ packages:
 - React, TypeScript, Vite
 - PeerJS, WebRTC
 - TailwindCSS, Lucide icons
-- Docker, Nginx (for web deployment)
+- Docker, Envoy (for web deployment)
 
 ---
 

@@ -5,6 +5,15 @@ admin:
       address: 0.0.0.0
       port_value: 9901
 
+layered_runtime:
+  layers:
+    - name: disk
+      disk_layer:
+        symlink_root: /etc/envoy/runtime
+        subdirectory: ""
+    - name: admin
+      admin_layer: {}
+
 static_resources:
   listeners:
     - name: listener_http
@@ -56,6 +65,10 @@ static_resources:
         socket_address:
           address: 0.0.0.0
           port_value: 443
+      listener_filters:
+        - name: envoy.filters.listener.tls_inspector
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector
       filter_chains:
         - filter_chain_match:
             server_names:
@@ -67,18 +80,13 @@ static_resources:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
               common_tls_context:
                 tls_certificates:
-                  - certificate_chain:
-                      filename: /etc/letsencrypt/live/p2p.red/fullchain.pem
-                    private_key:
-                      filename: /etc/letsencrypt/live/p2p.red/privkey.pem
+                  - pkcs12:
+                      filename: /var/snap/docker/common/p2p-envoy-certs/p2p.red.p12
+                    password:
+                      inline_string: "p2pred"
                 tls_params:
                   tls_minimum_protocol_version: TLSv1_2
                   tls_maximum_protocol_version: TLSv1_3
-                  cipher_suites:
-                    - ECDHE-RSA-AES128-GCM-SHA256
-                    - ECDHE-RSA-AES256-GCM-SHA384
-                    - ECDHE-RSA-AES128-SHA256
-                    - ECDHE-RSA-AES256-SHA384
           filters:
             - name: envoy.filters.network.http_connection_manager
               typed_config:
@@ -106,11 +114,11 @@ static_resources:
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - header:
                             key: Content-Security-Policy
-                            value: "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' wss://p2p.red; font-src 'self'; object-src 'none';"
+                            value: "default-src 'self'; script-src 'self' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; style-src 'self'; connect-src 'self' wss://p2p.red https://signal.p2p.red wss://signal.p2p.red; font-src 'self'; object-src 'none';"
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - header:
                             key: X-Frame-Options
-                            value: "DENY"
+                            value: "SAMEORIGIN"
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                       routes:
                         - match:
@@ -123,43 +131,57 @@ static_resources:
                                 regex: "^/share/(.*)"
                               substitution: "/api/metadata/\\1?html=true"
                         - match:
+                            prefix: "/.within.website/"
+                          route:
+                            cluster: anubis
+                          response_headers_to_remove:
+                            - content-security-policy
+                            - x-frame-options
+                          response_headers_to_add:
+                            - header:
+                                key: Content-Security-Policy
+                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; style-src-elem 'self' 'unsafe-inline'; style-src-attr 'unsafe-inline' 'unsafe-hashes'; img-src 'self' data:; connect-src 'self' https://signal.p2p.red wss://signal.p2p.red wss://p2p.red; font-src 'self'; object-src 'none';"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: X-Frame-Options
+                                value: "SAMEORIGIN"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
                             path: "/api/metadata"
                           route:
                             cluster: anubis
                           response_headers_to_remove:
                             - content-security-policy
+                            - x-frame-options
                           response_headers_to_add:
                             - header:
                                 key: Content-Security-Policy
                                 value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://p2p.red; font-src 'self'; object-src 'none';"
                               append_action: OVERWRITE_IF_EXISTS_OR_ADD
-                          typed_per_filter_config:
-                            envoy.filters.http.buffer:
-                              "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
-                              max_request_bytes: 102400
+                            - header:
+                                key: X-Frame-Options
+                                value: "SAMEORIGIN"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - match:
                             prefix: "/api/metadata/"
                           route:
                             cluster: anubis
                           response_headers_to_remove:
                             - content-security-policy
+                            - x-frame-options
                           response_headers_to_add:
                             - header:
                                 key: Content-Security-Policy
                                 value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://p2p.red; font-src 'self'; object-src 'none';"
                               append_action: OVERWRITE_IF_EXISTS_OR_ADD
-                          typed_per_filter_config:
-                            envoy.filters.http.buffer:
-                              "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
-                              max_request_bytes: 102400
+                            - header:
+                                key: X-Frame-Options
+                                value: "SAMEORIGIN"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - match:
                             prefix: "/api/"
                           route:
                             cluster: metadata_api
-                          typed_per_filter_config:
-                            envoy.filters.http.buffer:
-                              "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
-                              max_request_bytes: 102400
                         - match:
                             path: "/js/script.js"
                           route:
@@ -170,12 +192,8 @@ static_resources:
                           route:
                             cluster: plausible
                             host_rewrite_literal: plausible.p2p.red
-                          typed_per_filter_config:
-                            envoy.filters.http.buffer:
-                              "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
-                              max_request_bytes: 16384
                         - match:
-                            prefix: "/peerjs/"
+                            prefix: "/peerjs"
                           route:
                             cluster: peerjs
                             timeout: 0s
@@ -185,9 +203,9 @@ static_resources:
                             weighted_clusters:
                               clusters:
                                 - name: app_blue
-                                  weight: 0
-                                - name: app_green
                                   weight: 100
+                                - name: app_green
+                                  weight: 0
                               total_weight: 100
                               runtime_key_prefix: traffic_split
                           response_headers_to_remove:
@@ -215,9 +233,9 @@ static_resources:
                             weighted_clusters:
                               clusters:
                                 - name: app_blue
-                                  weight: 0
-                                - name: app_green
                                   weight: 100
+                                - name: app_green
+                                  weight: 0
                               total_weight: 100
                               runtime_key_prefix: traffic_split
                           response_headers_to_add:
@@ -239,9 +257,9 @@ static_resources:
                             weighted_clusters:
                               clusters:
                                 - name: app_blue
-                                  weight: 0
-                                - name: app_green
                                   weight: 100
+                                - name: app_green
+                                  weight: 0
                               total_weight: 100
                               runtime_key_prefix: traffic_split
                           response_headers_to_add:
@@ -275,18 +293,13 @@ static_resources:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
               common_tls_context:
                 tls_certificates:
-                  - certificate_chain:
-                      filename: /etc/letsencrypt/live/plausible.p2p.red/fullchain.pem
-                    private_key:
-                      filename: /etc/letsencrypt/live/plausible.p2p.red/privkey.pem
+                  - pkcs12:
+                      filename: /var/snap/docker/common/p2p-envoy-certs/plausible.p2p.red.p12
+                    password:
+                      inline_string: "p2pred"
                 tls_params:
                   tls_minimum_protocol_version: TLSv1_2
                   tls_maximum_protocol_version: TLSv1_3
-                  cipher_suites:
-                    - ECDHE-RSA-AES128-GCM-SHA256
-                    - ECDHE-RSA-AES256-GCM-SHA384
-                    - ECDHE-RSA-AES128-SHA256
-                    - ECDHE-RSA-AES256-SHA384
           filters:
             - name: envoy.filters.network.http_connection_manager
               typed_config:
@@ -319,18 +332,13 @@ static_resources:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
               common_tls_context:
                 tls_certificates:
-                  - certificate_chain:
-                      filename: /etc/letsencrypt/live/signal.p2p.red/fullchain.pem
-                    private_key:
-                      filename: /etc/letsencrypt/live/signal.p2p.red/privkey.pem
+                  - pkcs12:
+                      filename: /var/snap/docker/common/p2p-envoy-certs/signal.p2p.red.p12
+                    password:
+                      inline_string: "p2pred"
                 tls_params:
                   tls_minimum_protocol_version: TLSv1_2
                   tls_maximum_protocol_version: TLSv1_3
-                  cipher_suites:
-                    - ECDHE-RSA-AES128-GCM-SHA256
-                    - ECDHE-RSA-AES256-GCM-SHA384
-                    - ECDHE-RSA-AES128-SHA256
-                    - ECDHE-RSA-AES256-SHA384
           filters:
             - name: envoy.filters.network.http_connection_manager
               typed_config:
@@ -348,7 +356,7 @@ static_resources:
                         - signal.p2p.red
                       routes:
                         - match:
-                            prefix: "/peerjs/"
+                            prefix: "/peerjs"
                           route:
                             cluster: peerjs
                             timeout: 0s

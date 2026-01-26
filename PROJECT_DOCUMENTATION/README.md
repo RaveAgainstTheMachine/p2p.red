@@ -39,7 +39,7 @@ Current documentation for the WebRTC + PeerJS + VPS deployment stack.
 - WebRTC DataChannels only (true P2P).
 - PeerJS signaling (self-hosted).
 - TURN servers only for NAT traversal (no file relay).
-- VPS + Docker + Nginx deployment.
+- VPS + Docker + Envoy deployment.
 
 ## Private Notes
 Store sensitive documentation in `PROJECT_DOCUMENTATION/PRIVATE/` or files suffixed with `_PRIVATE.md` or `_SENSITIVE.md` (gitignored).

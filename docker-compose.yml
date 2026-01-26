@@ -180,13 +180,15 @@ services:
     image: ${ENVOY_IMAGE:-p2p-envoy:latest}
     container_name: p2p-envoy
     restart: unless-stopped
+    user: "0:0"
     ports:
       - "80:80"
       - "443:443"
       - "127.0.0.1:9901:9901"
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
-      - ${ENVOY_CONFIG:-./envoy.yaml}:/etc/envoy/envoy.yaml:ro
+      - /var/snap/docker/common/p2p-envoy-certs:/var/snap/docker/common/p2p-envoy-certs:ro
+      - ./envoy-runtime:/etc/envoy/runtime:ro
     depends_on:
       - app
       - peerjs-server

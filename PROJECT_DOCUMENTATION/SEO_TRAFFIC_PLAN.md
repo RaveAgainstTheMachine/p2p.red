@@ -19,7 +19,7 @@
 - Verify indexing status and fix crawl errors.
 
 ### 3) Performance Wins (Quick)
-- Ensure gzip/brotli enabled at proxy (already in Nginx).
+- Ensure gzip/brotli enabled at proxy (already in Envoy).
 - Keep main bundle size stable (avoid bloating).
 - Check Lighthouse once to ensure no blocking errors.
 

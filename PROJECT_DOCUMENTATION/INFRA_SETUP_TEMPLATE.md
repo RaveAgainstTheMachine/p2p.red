@@ -87,7 +87,7 @@ Fill in desired hostnames:
 
 ## 5) TLS / Certificates
 - Preferred email for Let’s Encrypt: admin@p2p.red
-- Where should certs live (Nginx reverse proxy)?
+- Where should certs live (Envoy reverse proxy)?
   - [ ] PROD-SIGNAL
   - [ ] TURN-1
   - [ ] TURN-2
@@ -131,6 +131,6 @@ We can expose a single admin domain (e.g. `ops.p2p.red`) and route to dashboards
 
 When you complete this, I’ll draft:
 - docker-compose stacks (PeerJS, coturn, monitoring)
-- Nginx reverse proxies + TLS
+- Envoy reverse proxies + TLS
 - Firewall rules
 - Operational runbook + upgrade steps

@@ -5,6 +5,10 @@
 
 set -e
 
+echo "❌ quick-update.sh is deprecated (Envoy is the edge proxy)."
+echo "Use: ./automation/deploy-zero-downtime.sh (prod) or docker compose + Envoy workflow."
+exit 1
+
 echo "⚡ P2P File Share - Quick Update"
 echo "=============================="
 

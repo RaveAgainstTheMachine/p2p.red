@@ -6,7 +6,7 @@ Reviewed security-sensitive areas across the codebase:
 - Metadata API (Express + Postgres + Redis)
 - WebRTC signaling + TURN credential issuance
 - Client-side encryption and transfer flow
-- Nginx reverse proxy configuration
+- Envoy reverse proxy configuration
 - Secrets handling in deployment and runtime
 
 ## Executive Summary
@@ -46,16 +46,16 @@ The core architecture is strong (true P2P transfer, client-side encryption, serv
 - **Recommendation:** Pin status targets to known hosts (env-configured allowlist), ignore user-provided host/proto.
 
 4) **CSP allows `unsafe-inline`**
-- **Where:** Nginx CSP for the main site.
+- **Where:** Envoy CSP for the main site.
 - **Risk:** Inline scripts are allowed; if any XSS exists, CSP won’t mitigate.
-- **Refs:** @/opt/p2p-file-share/nginx.conf#74-78.
+- **Refs:** @/opt/p2p-file-share/envoy.yaml (response headers).
 - **Recommendation:** Remove `unsafe-inline` and rely on nonce or external scripts only (adjust app if needed).
 
 5) **Missing explicit request body size limits**
 - **Where:** `express.json()` defaults to 100kb; but no explicit limit or `type` is set.
 - **Risk:** DoS via large JSON or non-JSON payloads; proxies may allow larger bodies.
 - **Refs:** @/opt/p2p-file-share/metadata-api/server.js#147-165.
-- **Recommendation:** Set explicit `express.json({ limit: '100kb' })` and `express.urlencoded({ limit: '100kb', extended: false })`, plus Nginx `client_max_body_size` for `/api/`.
+- **Recommendation:** Set explicit `express.json({ limit: '100kb' })` and `express.urlencoded({ limit: '100kb', extended: false })`, plus Envoy request size limits for `/api/` (buffer filter or per-route config).
 
 ### Low
 
@@ -70,7 +70,7 @@ The core architecture is strong (true P2P transfer, client-side encryption, serv
 - Rate limiting on `/api/` via `express-rate-limit`.
 - PINs are hashed with bcrypt.
 - TURN credentials are short-lived and generated server-side.
-- TLS 1.2/1.3 enforced at Nginx.
+- TLS 1.2/1.3 enforced at Envoy.
 - Docker isolation and separation of services.
 
 ## Recommendations Summary
@@ -78,7 +78,7 @@ The core architecture is strong (true P2P transfer, client-side encryption, serv
 2) **Remove PIN from query strings** and scrub logs — *High*.
 3) **Lock `/api/status` to allowlisted URLs only** — *Medium*.
 4) **Tighten CSP (remove `unsafe-inline`)** — *Medium*.
-5) **Explicit request size limits at API + Nginx** — *Medium*.
+5) **Explicit request size limits at API + Envoy** — *Medium*.
 6) **Update security/privacy docs to match reality** — *Low*.
 
 ## Suggested Next Steps

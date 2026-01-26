@@ -31,7 +31,7 @@ Before writing ANY code, read the current documentation in `/PROJECT_DOCUMENTATI
 - **Icons**: Lucide React
 
 ### **Deployment**
-- **Hosting**: OVH VPS + Docker + Nginx
+- **Hosting**: OVH VPS + Docker + Envoy
 - **Signaling**: Self-hosted PeerJS server
 - **TURN**: Self-hosted TURN servers (coturn) for NAT traversal
 
@@ -86,7 +86,7 @@ Browser A (WebRTC) ←── Direct P2P Connection ──→ Browser B (WebRTC)
 - Optimize for mobile devices
 - Add accessibility features
 - Performance testing and optimization
-- Deploy to VPS (Docker + Nginx)
+- Deploy to VPS (Docker + Envoy)
 
 ## ✅ **SUCCESS CRITERIA**
 
@@ -142,7 +142,7 @@ Browser A (WebRTC) ←── Direct P2P Connection ──→ Browser B (WebRTC)
 
 ## 🚀 **DEPLOYMENT STRATEGY**
 
-- **Hosting**: OVH VPS with Docker + Nginx reverse proxy
+- **Hosting**: OVH VPS with Docker + Envoy reverse proxy
 - **Signaling**: Self-hosted PeerJS container
 - **STUN**: Public STUN servers (e.g., Google/Mozilla) or self-hosted
 - **TURN**: Self-hosted coturn (two VPS instances for redundancy)

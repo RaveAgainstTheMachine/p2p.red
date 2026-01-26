@@ -68,7 +68,13 @@ if [ -n "$ENV_BLUE_WEIGHT" ] && [ -n "$ENV_GREEN_WEIGHT" ]; then
 fi
 
 if [[ -z "$CURRENT_ENV" ]]; then
-    CURRENT_ENV=$(docker ps --filter "label=version" --format "table {{.Labels}}" | grep -E "(blue|green)" | head -1 | cut -d'=' -f2 || echo "blue")
+    if docker ps --format '{{.Names}}' | grep -q '^p2p-app-blue$' && ! docker ps --format '{{.Names}}' | grep -q '^p2p-app-green$'; then
+        CURRENT_ENV="blue"
+    elif docker ps --format '{{.Names}}' | grep -q '^p2p-app-green$' && ! docker ps --format '{{.Names}}' | grep -q '^p2p-app-blue$'; then
+        CURRENT_ENV="green"
+    else
+        CURRENT_ENV="blue"
+    fi
 fi
 NEXT_ENV="green"
 if [ "$CURRENT_ENV" = "green" ]; then

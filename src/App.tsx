@@ -132,7 +132,7 @@ function App() {
   const { transferProgress: adaptiveProgress, transferFileAdaptive, prepareStreamSaverDownload } = useAdaptiveMultiStreamTransfer();
  
   const isAssistedConnection = (() => {
-    const ct = (adaptiveProgress as any)?.current?.candidateType;
+    const ct = (adaptiveProgress as any)?.candidateType;
     return typeof ct === 'string' && ct.toLowerCase().includes('relay');
   })();
   const [mode, setMode] = useState<'share' | 'receive'>('share');

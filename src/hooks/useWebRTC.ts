@@ -210,7 +210,7 @@ export const useWebRTC = () => {
     console.log('My peer ref:', peerRef.current.id);
     
     const conn = peerRef.current.connect(remotePeerId, {
-      reliable: false,  // Unreliable for maximum speed (UDP-like)
+      reliable: true,
       serialization: 'binary',
       metadata: { timestamp: Date.now() }
     });

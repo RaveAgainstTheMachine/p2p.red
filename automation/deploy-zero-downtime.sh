@@ -11,12 +11,24 @@ POST_SWITCH_VERIFY_DELAY=${POST_SWITCH_VERIFY_DELAY:-5}
 OLD_ENV_STOP_DELAY=${OLD_ENV_STOP_DELAY:-15}
 BLUEGREEN_PROJECT_NAME=${BLUEGREEN_PROJECT_NAME:-p2p-bluegreen}
 ENVOY_ADMIN_URL=${ENVOY_ADMIN_URL:-http://127.0.0.1:9901}
+ENVOY_CERTS_DIR=${ENVOY_CERTS_DIR:-/var/snap/docker/common/p2p-envoy-certs}
+ALLOW_PROD_ON_DEV=${ALLOW_PROD_ON_DEV:-0}
 
 cd "$REPO_ROOT"
 
 echo "🚀 Zero-Downtime Deployment"
 echo "==========================="
 echo "🌐 Site URL: $SITE_URL"
+
+if [ "$DEPLOY_ENV" = "prod" ] && [ "$ALLOW_PROD_ON_DEV" != "1" ]; then
+    if command -v ip >/dev/null 2>&1; then
+        if ip -br -4 a 2>/dev/null | grep -qE '(^|[[:space:]])10\.10\.10\.77/'; then
+            echo "❌ Refusing to run prod deploy on dev host (10.10.10.77)."
+            echo "   Set ALLOW_PROD_ON_DEV=1 to override (not recommended)."
+            exit 1
+        fi
+    fi
+fi
 
 require_port_free() {
     local port=$1
@@ -49,6 +61,30 @@ if [ "$DEPLOY_ENV" = "prod" ] && [ "$USE_PREBUILT_IMAGES" != "1" ]; then
     echo "   Build locally with explicit VITE_BUILD_VARIANT and ship tars to prod."
     exit 1
 fi
+
+require_envoy_certs() {
+    local missing=0
+    local required=(
+        "$ENVOY_CERTS_DIR/p2p.red.p12"
+        "$ENVOY_CERTS_DIR/signal.p2p.red.p12"
+        "$ENVOY_CERTS_DIR/plausible.p2p.red.p12"
+    )
+
+    for f in "${required[@]}"; do
+        if [ ! -s "$f" ]; then
+            echo "❌ Missing Envoy TLS bundle: $f"
+            missing=1
+        fi
+    done
+
+    if [ "$missing" -ne 0 ]; then
+        echo "❌ Refusing to deploy: Envoy TLS cert bundles are missing/empty."
+        echo "   Restore/regenerate the PKCS#12 files in $ENVOY_CERTS_DIR before deploying."
+        exit 1
+    fi
+}
+
+require_envoy_certs
 
 if ! curl -fsS "$ENVOY_ADMIN_URL/server_info" >/dev/null; then
     echo "❌ Envoy admin API not reachable at $ENVOY_ADMIN_URL"

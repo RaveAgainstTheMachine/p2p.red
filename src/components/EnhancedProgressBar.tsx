@@ -25,6 +25,7 @@ export const EnhancedProgressBar: React.FC<EnhancedProgressBarProps> = ({
   compact = false
 }) => {
   const [speedUnit, setSpeedUnit] = useState<'Mb/s' | 'MB/s'>('Mb/s');
+  const [showDetails, setShowDetails] = useState(false);
 
   const [displayPercentage, setDisplayPercentage] = useState<number>(() => {
     const p = Number.isFinite(progress.percentage) ? progress.percentage : 0;
@@ -293,45 +294,62 @@ export const EnhancedProgressBar: React.FC<EnhancedProgressBarProps> = ({
       </div>
 
       {(progress.activeStreams !== undefined || progress.networkQuality || progress.rttMs !== undefined || progress.candidateType || progress.receiverBackpressureLevel || (progress.cachedShardBytes !== undefined && progress.maxCachedShardBytes !== undefined)) && (
-        <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-white/80 font-medium">
-              {progress.activeStreams !== undefined ? progress.activeStreams : '--'}
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setShowDetails((prev) => !prev)}
+            className="mx-auto flex items-center gap-2 text-sm text-white/70 hover:text-white/90 transition-colors"
+            aria-expanded={showDetails}
+          >
+            <span>Connection details</span>
+            <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/20 text-xs transition-transform ${showDetails ? 'rotate-180' : ''}`}>
+              ▾
+            </span>
+          </button>
+          <div
+            className={`mt-4 grid grid-cols-3 gap-4 text-center overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
+              showDetails ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0'
+            }`}
+          >
+            <div>
+              <div className="text-white/80 font-medium">
+                {progress.activeStreams !== undefined ? progress.activeStreams : '--'}
+              </div>
+              <div className="text-white/60 text-sm">Streams</div>
             </div>
-            <div className="text-white/60 text-sm">Streams</div>
-          </div>
-          <div>
-            <div className="text-white/80 font-medium">
-              {progress.networkQuality || '--'}
+            <div>
+              <div className="text-white/80 font-medium">
+                {progress.networkQuality || '--'}
+              </div>
+              <div className="text-white/60 text-sm">Link</div>
             </div>
-            <div className="text-white/60 text-sm">Link</div>
-          </div>
-          <div>
-            <div className="text-white/80 font-medium">
-              {formatRtt(progress.rttMs)}
+            <div>
+              <div className="text-white/80 font-medium">
+                {formatRtt(progress.rttMs)}
+              </div>
+              <div className="text-white/60 text-sm">RTT</div>
             </div>
-            <div className="text-white/60 text-sm">RTT</div>
-          </div>
 
-          <div>
-            <div className="text-white/80 font-medium">
-              {progress.candidateType || '--'}
+            <div>
+              <div className="text-white/80 font-medium">
+                {progress.candidateType || '--'}
+              </div>
+              <div className="text-white/60 text-sm">Path</div>
             </div>
-            <div className="text-white/60 text-sm">Path</div>
-          </div>
-          <div>
-            <div className="text-white/80 font-medium">
-              {progress.receiverBackpressureLevel || '--'}
+            <div>
+              <div className="text-white/80 font-medium">
+                {progress.receiverBackpressureLevel || '--'}
+              </div>
+              <div className="text-white/60 text-sm">Receiver</div>
             </div>
-            <div className="text-white/60 text-sm">Receiver</div>
-          </div>
-          <div>
-            <div className="text-white/80 font-medium">
-              {(progress.cachedShardBytes !== undefined && progress.maxCachedShardBytes !== undefined)
-                ? formatPercent((progress.cachedShardBytes / Math.max(1, progress.maxCachedShardBytes)) * 100)
-                : '--'}
+            <div>
+              <div className="text-white/80 font-medium">
+                {(progress.cachedShardBytes !== undefined && progress.maxCachedShardBytes !== undefined)
+                  ? formatPercent((progress.cachedShardBytes / Math.max(1, progress.maxCachedShardBytes)) * 100)
+                  : '--'}
+              </div>
+              <div className="text-white/60 text-sm">Sender Cache</div>
             </div>
-            <div className="text-white/60 text-sm">Sender Cache</div>
           </div>
         </div>
       )}

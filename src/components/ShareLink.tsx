@@ -30,17 +30,35 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
     }
   };
 
+  const buildQrDataUrl = () => {
+    const svg = qrRef.current?.querySelector('svg');
+    if (!svg) return null;
+    const serialized = new XMLSerializer().serializeToString(svg);
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(serialized)}`;
+  };
+
   const handleEmailShare = async () => {
+    const qrDataUrl = buildQrDataUrl();
     const subject = encodeURIComponent('I shared a file with you');
-    const body = encodeURIComponent(
-      `I shared a file with you using p2p.red\n\n` +
-      `Grab it here:\n${shareLink}\n\n` +
-      `Or scan this QR code:\n${shareLink.replace('#', '%23')}\n\n` +
-      `Note: The sender needs to keep their page open until the transfer completes.\n\n` +
-      `---\n` +
-      `Secure P2P file sharing with end-to-end encryption\n` +
-      `https://p2p.red`
-    );
+    const bodyContent = qrDataUrl
+      ? (
+        `<p>I shared a file with you using p2p.red.</p>` +
+        `<p><strong>Grab it here:</strong><br />${shareLink}</p>` +
+        `<p>Or scan this QR code:</p>` +
+        `<p><img src="${qrDataUrl}" alt="QR code" width="200" height="200" /></p>` +
+        `<p>Note: The sender needs to keep their page open until the transfer completes.</p>` +
+        `<p>---<br />Secure P2P file sharing with end-to-end encryption<br />https://p2p.red</p>`
+      )
+      : (
+        `I shared a file with you using p2p.red\n\n` +
+        `Grab it here:\n${shareLink}\n\n` +
+        `Or scan this QR code:\n${shareLink.replace('#', '%23')}\n\n` +
+        `Note: The sender needs to keep their page open until the transfer completes.\n\n` +
+        `---\n` +
+        `Secure P2P file sharing with end-to-end encryption\n` +
+        `https://p2p.red`
+      );
+    const body = encodeURIComponent(bodyContent);
     window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
   };
 
@@ -222,8 +240,12 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
         </div>
       </div>
       
+      <div ref={qrRef} className="absolute -left-[9999px] -top-[9999px] opacity-0" aria-hidden="true">
+        <QRCodeSVG value={shareLink} size={200} level="H" />
+      </div>
+
       {showQR && (
-        <div ref={qrRef} className="bg-white p-4 rounded-lg">
+        <div className="bg-white p-4 rounded-lg">
           <QRCodeSVG value={shareLink} size={200} level="H" />
           <p className="text-gray-600 text-xs text-center mt-2">Scan to download</p>
         </div>

@@ -21,6 +21,7 @@ import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
 import { Legal } from './pages/Legal';
 import { Landing } from './pages/Landing';
+import { clearTransfer } from './utils/shardStore';
 
 // Meta tag management for rich link previews
 const updateMetaTags = (metadata: any) => {
@@ -124,6 +125,51 @@ const formatFileSize = (bytes: number): string => {
 };
 
 const RELAY_SIZE_LIMIT_BYTES = 100 * 1024 * 1024 * 1024;
+const RESUME_SESSION_KEY = 'p2p_resume_sessions_v1';
+
+interface ResumeSession {
+  transferId: string;
+  role: 'sender' | 'receiver';
+  fileName: string;
+  fileSize: number;
+  lastModified?: number;
+  shardSize: number;
+  shardCount: number;
+  completedShardIds: number[];
+  updatedAt: number;
+  status: 'in_progress' | 'complete';
+}
+
+const loadResumeSessionMap = (): Record<string, ResumeSession> => {
+  try {
+    const raw = localStorage.getItem(RESUME_SESSION_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, ResumeSession>;
+  } catch {
+    return {};
+  }
+};
+
+const saveResumeSessionMap = (sessions: Record<string, ResumeSession>) => {
+  try {
+    localStorage.setItem(RESUME_SESSION_KEY, JSON.stringify(sessions));
+  } catch {
+    // ignore
+  }
+};
+
+const removeResumeSession = (transferId: string) => {
+  const sessions = loadResumeSessionMap();
+  if (!sessions[transferId]) return;
+  delete sessions[transferId];
+  saveResumeSessionMap(sessions);
+};
+
+const normalizeResumeSessions = (sessions: Record<string, ResumeSession>) => {
+  return Object.values(sessions)
+    .filter((session) => session.status === 'in_progress')
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+};
 
 function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
@@ -145,6 +191,9 @@ function App() {
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string; fileType?: string} | null>(null);
+  const [resumeSessions, setResumeSessions] = useState<ResumeSession[]>(() => normalizeResumeSessions(loadResumeSessionMap()));
+  const [resumeCandidate, setResumeCandidate] = useState<ResumeSession | null>(null);
+  const resumeFileInputRef = useRef<HTMLInputElement | null>(null);
   const streamSaverDownloadExpected = useRef(false);
   const streamSaverDownloadReceived = useRef(false);
   const streamSaverDownloadTimeout = useRef<number | null>(null);
@@ -226,6 +275,58 @@ function App() {
       humanToastTimeout.current = null;
     }, 9000);
   };
+
+  const matchesResumeSessionFile = (session: ResumeSession, file: File) => {
+    const lastModifiedMatches = session.lastModified === undefined || session.lastModified === file.lastModified;
+    return session.fileName === file.name && session.fileSize === file.size && lastModifiedMatches;
+  };
+
+  const matchesIncomingResume = (session: ResumeSession) => {
+    if (!incomingFileInfo) return false;
+    return session.fileName === incomingFileInfo.name && session.fileSize === incomingFileInfo.size;
+  };
+
+  const handleResumeSenderSession = (session: ResumeSession) => {
+    setResumeCandidate(session);
+    resumeFileInputRef.current?.click();
+  };
+
+  const handleResumeFilePicked = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !resumeCandidate) return;
+    if (!matchesResumeSessionFile(resumeCandidate, file)) {
+      setTransferErrorMessage(`Selected file does not match the resumable transfer (${resumeCandidate.fileName}).`);
+      event.target.value = '';
+      return;
+    }
+    setTransferErrorMessage('');
+    setSelectedFiles([file]);
+    setShareLink('');
+    setMode('share');
+    await handleProceedWithTransfer([file]);
+    event.target.value = '';
+  };
+
+  const handleClearResumeSession = async (session: ResumeSession) => {
+    await clearTransfer(session.transferId);
+    removeResumeSession(session.transferId);
+    refreshResumeSessions();
+  };
+
+  const refreshResumeSessions = () => {
+    setResumeSessions(normalizeResumeSessions(loadResumeSessionMap()));
+  };
+
+  useEffect(() => {
+    refreshResumeSessions();
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === RESUME_SESSION_KEY) {
+        refreshResumeSessions();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const getCandidateType = async (conn: DataConnection): Promise<string | undefined> => {
     const pc = (conn as any).peerConnection as RTCPeerConnection | undefined;
@@ -518,10 +619,10 @@ function App() {
     }
   };
 
-  const handleProceedWithTransfer = async () => {
-    if (!selectedFiles) return;
+  const handleProceedWithTransfer = async (overrideFiles?: File[]) => {
+    const files = overrideFiles ?? selectedFiles;
+    if (!files) return;
     setStatus('encrypting');
-    const files = selectedFiles;
     const effectivePin = (import.meta as any).env?.VITE_E2E && e2ePinOverride !== null
       ? e2ePinOverride
       : pin;
@@ -1204,6 +1305,12 @@ function App() {
       </div>
 
       <div className="relative z-10 mx-auto px-4 py-6 max-w-7xl flex-1">
+        <input
+          ref={resumeFileInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleResumeFilePicked}
+        />
         {/* Header */}
         <header className="text-center mb-8">
           <div className="flex justify-center mb-3">
@@ -1271,6 +1378,53 @@ function App() {
           <div className="glass-card p-8" style={{ minHeight: '200px' }}>
             {!shareLink ? (
               <>
+                {resumeSessions.some((session) => session.role === 'sender') && (
+                  <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <div className="text-white font-semibold">Resume a paused send</div>
+                        <div className="text-sm text-white/60">Pick up where you left off by selecting the original file.</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={refreshResumeSessions}
+                        className="text-sm text-white/60 hover:text-white"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                    <div className="mt-4 grid gap-3">
+                      {resumeSessions.filter((session) => session.role === 'sender').map((session) => (
+                        <div key={session.transferId} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="text-white/90 font-medium truncate" title={session.fileName}>
+                              {session.fileName}
+                            </div>
+                            <div className="text-xs text-white/60">
+                              {formatFileSize(session.fileSize)} • {Math.round((session.completedShardIds.length / Math.max(1, session.shardCount)) * 100)}% cached
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleResumeSenderSession(session)}
+                              className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm"
+                            >
+                              Resume
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearResumeSession(session)}
+                              className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <DropZone 
                   onFileSelect={handleFileSelect} 
                   isProcessing={isEncrypting || status === 'encrypting'}
@@ -1322,7 +1476,7 @@ function App() {
                         Cancel
                       </button>
                       <button
-                        onClick={handleProceedWithTransfer}
+                        onClick={() => handleProceedWithTransfer()}
                         className="btn-primary"
                         disabled={status === 'encrypting'}
                       >
@@ -1396,6 +1550,33 @@ function App() {
         ) : (
           <div className="glass-card p-8">
             <div>
+              {resumeSessions.some((session) => session.role === 'receiver') && !pendingReceive && (
+                <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+                  <div className="text-white font-semibold">Resume a paused download</div>
+                  <div className="text-sm text-white/60">Open the original share link, then choose Resume when it’s ready.</div>
+                  <div className="mt-3 grid gap-3">
+                    {resumeSessions.filter((session) => session.role === 'receiver').map((session) => (
+                      <div key={session.transferId} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="text-white/90 font-medium truncate" title={session.fileName}>
+                            {session.fileName}
+                          </div>
+                          <div className="text-xs text-white/60">
+                            {formatFileSize(session.fileSize)} • {Math.round((session.completedShardIds.length / Math.max(1, session.shardCount)) * 100)}% cached
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleClearResumeSession(session)}
+                          className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {status === 'connecting' && (
                 <div className="text-center py-12">
                   <div className="w-12 h-12 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -1485,6 +1666,36 @@ function App() {
                   <div className="max-w-md mx-auto mb-6">
                     <FileTypeWarning fileName={incomingFileInfo.name} />
                   </div>
+
+                  {resumeSessions.some((session) => session.role === 'receiver' && matchesIncomingResume(session)) && (
+                    <div className="max-w-md mx-auto mb-6 rounded-xl border border-white/10 bg-white/5 p-4 text-left">
+                      <div className="text-white/90 font-medium">Resume detected</div>
+                      <div className="text-sm text-white/60 mt-1">
+                        We found cached shards for this file. Resume to skip the verified parts.
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleChooseSaveLocation}
+                          className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm"
+                        >
+                          Resume download
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const match = resumeSessions.find((session) => session.role === 'receiver' && matchesIncomingResume(session));
+                            if (match) {
+                              void handleClearResumeSession(match);
+                            }
+                          }}
+                          className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm"
+                        >
+                          Start fresh
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   
                   <button
                     onClick={handleChooseSaveLocation}

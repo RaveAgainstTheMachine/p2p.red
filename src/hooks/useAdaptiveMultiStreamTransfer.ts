@@ -2,7 +2,7 @@ import { useRef, useCallback, useState } from 'react';
 import { DataConnection } from 'peerjs';
 import streamSaver from 'streamsaver';
 import { MultiStreamOrchestrator } from '../utils/multiStreamOrchestrator';
-import { deleteShard, getShard, putShard } from '../utils/shardStore';
+import { clearTransfer, deleteShard, getShard, putShard } from '../utils/shardStore';
 
 interface AdaptiveTransferProgress {
   bytesTransferred: number;
@@ -53,11 +53,73 @@ interface EncryptionState {
   tagBytes: number;
 }
 
+interface ResumeSession {
+  transferId: string;
+  role: 'sender' | 'receiver';
+  fileName: string;
+  fileSize: number;
+  lastModified?: number;
+  shardSize: number;
+  shardCount: number;
+  completedShardIds: number[];
+  updatedAt: number;
+  status: 'in_progress' | 'complete';
+}
+
 const MAX_INDEXEDDB_CACHE_BYTES = 512 * 1024 * 1024;
 const LOW_INDEXEDDB_CACHE_BYTES = 384 * 1024 * 1024;
 const ECDH_IV_BYTES = 12;
 const ECDH_TAG_BYTES = 16;
 const ECDH_INFO = new TextEncoder().encode('p2p.red/webrtc-ecdh-v1');
+
+const RESUME_SESSION_KEY = 'p2p_resume_sessions_v1';
+
+const loadResumeSessions = (): Record<string, ResumeSession> => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(RESUME_SESSION_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, ResumeSession>;
+  } catch {
+    return {};
+  }
+};
+
+const saveResumeSessions = (sessions: Record<string, ResumeSession>) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(RESUME_SESSION_KEY, JSON.stringify(sessions));
+  } catch {
+    // ignore
+  }
+};
+
+const upsertResumeSession = (session: ResumeSession) => {
+  const sessions = loadResumeSessions();
+  sessions[session.transferId] = session;
+  saveResumeSessions(sessions);
+};
+
+const removeResumeSession = (transferId: string) => {
+  const sessions = loadResumeSessions();
+  if (sessions[transferId]) {
+    delete sessions[transferId];
+    saveResumeSessions(sessions);
+  }
+};
+
+const fingerprintFile = (file: File) => `${file.name}::${file.size}::${file.lastModified}`;
+
+const findSenderResumeSession = (file: File): ResumeSession | null => {
+  const sessions = loadResumeSessions();
+  const fingerprint = fingerprintFile(file);
+  const candidates = Object.values(sessions).filter(
+    session => session.role === 'sender' && session.status === 'in_progress'
+  );
+  return candidates.find(session =>
+    `${session.fileName}::${session.fileSize}::${session.lastModified ?? 0}` === fingerprint
+  ) || null;
+};
 
 const supportsStreamSaver = () =>
   typeof window !== 'undefined' &&
@@ -499,7 +561,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
       const fileSize = isFile ? input.size : (totalSize || 0);
       const name = fileName || (isFile ? input.name : 'download');
 
-      const transferId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const senderResumeSession = isFile ? findSenderResumeSession(input as File) : null;
+      const transferId = senderResumeSession?.transferId || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const senderCompletedShardIds = new Set<number>(senderResumeSession?.completedShardIds ?? []);
       let encryptionState: EncryptionState | null = null;
       const cryptoWorker = createCryptoWorkerClient();
       const perfNow = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -623,10 +687,17 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let candidateType: string | undefined;
       const pc = (conn as any).peerConnection as RTCPeerConnection | undefined;
 
+      const resumeInitialBytes = senderResumeSession
+        ? senderResumeSession.completedShardIds.reduce((sum, id) => {
+            const shard = shards[id];
+            return shard ? sum + shard.size : sum;
+          }, 0)
+        : 0;
+
       setTransferProgress({
-        bytesTransferred: 0,
+        bytesTransferred: resumeInitialBytes,
         totalBytes: fileSize,
-        percentage: 0,
+        percentage: fileSize > 0 ? (resumeInitialBytes / fileSize) * 100 : 0,
         speed: 0,
         timeRemaining: 0,
         activeStreams: 0,
@@ -702,7 +773,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
       try {
         // Send metadata first
         console.log('📤 Sending shard metadata...');
-        conn.send({
+        const metadata = {
           type: 'multi_stream_start',
           fileName: name,
           fileSize,
@@ -712,12 +783,26 @@ export const useAdaptiveMultiStreamTransfer = () => {
           protocolVersion: 3,
           chunkHeaderBytes,
           transferId,
+          lastModified: isFile ? (input as File).lastModified : undefined,
           encryption: {
             enabled: true,
             ivBytes: encryptionState?.ivBytes ?? ECDH_IV_BYTES,
             tagBytes: encryptionState?.tagBytes ?? ECDH_TAG_BYTES
-          },
-          timestamp: Date.now()
+          }
+        };
+        conn.send(metadata);
+
+        upsertResumeSession({
+          transferId,
+          role: 'sender',
+          fileName: name,
+          fileSize,
+          lastModified: isFile ? (input as File).lastModified : undefined,
+          shardSize: SHARD_SIZE,
+          shardCount: shards.length,
+          completedShardIds: Array.from(senderCompletedShardIds),
+          updatedAt: Date.now(),
+          status: 'in_progress'
         });
 
         let receiverProfile: ReceiverDeviceProfile | undefined;
@@ -733,6 +818,26 @@ export const useAdaptiveMultiStreamTransfer = () => {
           };
           conn.on('data', readyHandler);
         });
+
+        const waitForResumeState = () => new Promise<void>((resolveResume) => {
+          const resumeHandler = (data: any) => {
+            if (data?.type === 'resume_state' && data.transferId === transferId) {
+              if (Array.isArray(data.completedShardIds)) {
+                senderCompletedShardIds.clear();
+                data.completedShardIds.forEach((id: number) => senderCompletedShardIds.add(id));
+              }
+              conn.off('data', resumeHandler);
+              resolveResume();
+            }
+          };
+          conn.on('data', resumeHandler);
+          setTimeout(() => {
+            conn.off('data', resumeHandler);
+            resolveResume();
+          }, 2000);
+        });
+
+        await waitForResumeState();
 
         await updateQualityFromStats();
 
@@ -820,7 +925,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           timestamp: Date.now()
         });
 
-        let totalBytesTransferred = 0;
+        let totalBytesTransferred = resumeInitialBytes;
         let totalCrc32 = 0xFFFFFFFF;
         const isFirefox = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent);
         const BASE_CHUNK_SIZE = isFirefox ? 16 * 1024 : 64 * 1024;
@@ -908,6 +1013,21 @@ export const useAdaptiveMultiStreamTransfer = () => {
               }
               notifyCacheWaiters();
               console.log(`✅ Shard ${shardId} confirmed, cleared from cache (${shardCache.size} shards cached)`);
+            }
+            if (!senderCompletedShardIds.has(shardId)) {
+              senderCompletedShardIds.add(shardId);
+              upsertResumeSession({
+                transferId,
+                role: 'sender',
+                fileName: name,
+                fileSize,
+                lastModified: isFile ? (input as File).lastModified : undefined,
+                shardSize: SHARD_SIZE,
+                shardCount: shards.length,
+                completedShardIds: Array.from(senderCompletedShardIds),
+                updatedAt: Date.now(),
+                status: 'in_progress'
+              });
             }
           } else if (data.type === 'request_shard_meta') {
             if (!Array.isArray(data.shardIds)) return;
@@ -1046,6 +1166,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
             const assignedShards = shards.filter(s => s.channelId === channelId);
 
             for (const shard of assignedShards) {
+              if (senderCompletedShardIds.has(shard.id)) {
+                continue;
+              }
               shard.status = 'sending';
               
               const shardBlob = (input as File).slice(shard.offset, shard.offset + shard.size);
@@ -1275,21 +1398,23 @@ export const useAdaptiveMultiStreamTransfer = () => {
             const shard = shards[currentShardIndex];
             if (!shard) {
               console.log('✅ All shards sent, stream complete');
+            } else if (senderCompletedShardIds.has(shard.id)) {
+              currentShardIndex += 1;
             } else {
               const shardData = currentShardBuffer.slice(0, currentShardFilled);
-              
+
               // Cache final shard until confirmed
               await waitForCacheRoom(shardData.length);
               shardCache.set(shard.id, shardData);
               cachedShardBytes += shardData.length;
-              
+
               // Calculate per-shard CRC32
               const shardCRC = await computeShardCrc(shardData);
 
               const attemptId = shardAttemptIds.get(shard.id) ?? 0;
-              
+
               const channel = channels[shard.channelId];
-              
+
               conn.send({
                 type: 'shard_start',
                 shardId: shard.id,
@@ -1299,7 +1424,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 attemptId,
                 crc32: shardCRC
               });
-              
+
               let sentBytes = 0;
               while (sentBytes < shardData.length) {
                 while (receiverBackpressureLevel === 'high') {
@@ -1309,12 +1434,12 @@ export const useAdaptiveMultiStreamTransfer = () => {
                 await waitForChannelBufferRoom(channel);
 
                 const chunkData = shardData.subarray(sentBytes, Math.min(sentBytes + CHUNK_SIZE, shardData.length));
-                
+
                 const message = await buildChunkMessage(chunkData, shard.id, attemptId);
                 channel.send(message.buffer);
                 sentBytes += chunkData.length;
               }
-              
+
               totalBytesTransferred += shardData.length;
               shard.status = 'complete';
 
@@ -1399,6 +1524,19 @@ export const useAdaptiveMultiStreamTransfer = () => {
         cryptoWorker?.terminate();
         setIsTransferring(false);
         clearInterval(qualityInterval);
+        upsertResumeSession({
+          transferId,
+          role: 'sender',
+          fileName: name,
+          fileSize,
+          lastModified: isFile ? (input as File).lastModified : undefined,
+          shardSize: SHARD_SIZE,
+          shardCount: shards.length,
+          completedShardIds: Array.from(senderCompletedShardIds),
+          updatedAt: Date.now(),
+          status: 'complete'
+        });
+        removeResumeSession(transferId);
         resolve();
       } catch (error) {
         console.error('❌ Shard transfer error:', error);
@@ -1510,6 +1648,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
       }, 1000);
 
       let transferId = '';
+      let receiverResumeSession: ResumeSession | null = null;
+      const receiverCompletedShardIds = new Set<number>();
 
       let encryptionState: EncryptionState | null = null;
       let encryptionEnabled = false;
@@ -1599,11 +1739,20 @@ export const useAdaptiveMultiStreamTransfer = () => {
         const actualCRC = finalizeCRC32(shardState.currentCRC);
         if (actualCRC === shardState.expectedCRC) {
           shardState.complete = true;
+          receiverCompletedShardIds.add(shardId);
           conn.send({
             type: 'shard_confirmed',
             shardId: shardId,
             timestamp: Date.now()
           });
+          if (transferId && receiverResumeSession) {
+            upsertResumeSession({
+              ...receiverResumeSession,
+              completedShardIds: Array.from(receiverCompletedShardIds),
+              updatedAt: Date.now(),
+              status: 'in_progress'
+            });
+          }
           return true;
         }
 
@@ -1780,6 +1929,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
           logPerf('receiver-final');
           cryptoWorker?.terminate();
           setIsTransferring(false);
+          await clearTransfer(transferId);
+          removeResumeSession(transferId);
           resolve();
           return;
         }
@@ -1815,6 +1966,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
           logPerf('receiver-final');
           cryptoWorker?.terminate();
           setIsTransferring(false);
+          await clearTransfer(transferId);
+          removeResumeSession(transferId);
           resolve();
           return;
         }
@@ -2161,21 +2314,20 @@ export const useAdaptiveMultiStreamTransfer = () => {
             incomingFileName = data.fileName;
           }
 
-          setTransferProgress({
-            bytesTransferred: 0,
-            totalBytes: fileSize,
-            percentage: 0,
-            speed: 0,
-            timeRemaining: 0,
-            activeStreams: expectedStreams,
-            networkQuality,
-            adaptiveChunkSize: 0,
-            rttMs,
-            candidateType,
-            receiverBackpressureLevel,
-            cachedShardBytes: 0,
-            maxCachedShardBytes: MAX_INDEXEDDB_CACHE_BYTES
-          });
+          receiverResumeSession = (() => {
+            const sessions = loadResumeSessions();
+            const existing = sessions[transferId];
+            if (!existing || existing.role !== 'receiver' || existing.status !== 'in_progress') {
+              return null;
+            }
+            if (existing.fileName !== incomingFileName || existing.fileSize !== fileSize) {
+              return null;
+            }
+            if (existing.shardSize !== shardSize || existing.shardCount !== shardCount) {
+              return null;
+            }
+            return existing;
+          })();
 
           console.log(`📊 Expecting ${shardCount} shards of ${(shardSize / 1024 / 1024).toFixed(0)}MB each`);
 
@@ -2194,6 +2346,45 @@ export const useAdaptiveMultiStreamTransfer = () => {
               offset
             });
           }
+
+          if (receiverResumeSession?.completedShardIds?.length) {
+            receiverResumeSession.completedShardIds.forEach((id) => {
+              const state = shardStates.get(id);
+              if (!state) return;
+              state.received = state.total;
+              state.complete = true;
+              receiverCompletedShardIds.add(id);
+              bytesReceived += state.total;
+            });
+          }
+
+          setTransferProgress({
+            bytesTransferred: bytesReceived,
+            totalBytes: fileSize,
+            percentage: fileSize > 0 ? (bytesReceived / fileSize) * 100 : 0,
+            speed: 0,
+            timeRemaining: 0,
+            activeStreams: expectedStreams,
+            networkQuality,
+            adaptiveChunkSize: 0,
+            rttMs,
+            candidateType,
+            receiverBackpressureLevel,
+            cachedShardBytes: 0,
+            maxCachedShardBytes: MAX_INDEXEDDB_CACHE_BYTES
+          });
+
+          upsertResumeSession({
+            transferId,
+            role: 'receiver',
+            fileName: incomingFileName,
+            fileSize,
+            shardSize,
+            shardCount,
+            completedShardIds: Array.from(receiverCompletedShardIds),
+            updatedAt: Date.now(),
+            status: 'in_progress'
+          });
 
           if (options?.fileHandle) {
             try {
@@ -2329,6 +2520,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
           conn.send({
             type: 'receiver_ready',
             receiverProfile,
+            timestamp: Date.now()
+          });
+
+          conn.send({
+            type: 'resume_state',
+            transferId,
+            completedShardIds: Array.from(receiverCompletedShardIds),
             timestamp: Date.now()
           });
         } else if (data.type === 'shard_start') {

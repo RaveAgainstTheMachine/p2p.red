@@ -207,7 +207,12 @@ static_resources:
                         - match:
                             prefix: "/download-bridge/"
                           route:
-                            cluster: app
+                            weighted_clusters:
+                              clusters:
+                                - name: app_blue
+                                  weight: 100
+                                - name: app_green
+                                  weight: 100
                           response_headers_to_remove:
                             - content-security-policy
                             - x-frame-options

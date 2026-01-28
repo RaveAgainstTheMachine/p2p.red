@@ -175,7 +175,7 @@ function App() {
   const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
   const { isEncrypting } = useEncryption();
   const { transferProgress, isTransferring, resumeTransfer } = useFileTransfer();
-  const { transferProgress: adaptiveProgress, transferFileAdaptive, prepareStreamSaverDownload } = useAdaptiveMultiStreamTransfer();
+  const { transferProgress: adaptiveProgress, transferFileAdaptive, prepareDownloadBridge } = useAdaptiveMultiStreamTransfer();
  
   const isAssistedConnection = (() => {
     const ct = (adaptiveProgress as any)?.candidateType;
@@ -191,13 +191,10 @@ function App() {
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string; fileType?: string} | null>(null);
+  const [downloadKey, setDownloadKey] = useState<string | null>(null);
   const [resumeSessions, setResumeSessions] = useState<ResumeSession[]>(() => normalizeResumeSessions(loadResumeSessionMap()));
   const [resumeCandidate, setResumeCandidate] = useState<ResumeSession | null>(null);
   const resumeFileInputRef = useRef<HTMLInputElement | null>(null);
-  const streamSaverDownloadExpected = useRef(false);
-  const streamSaverDownloadReceived = useRef(false);
-  const streamSaverDownloadTimeout = useRef<number | null>(null);
-  const streamSaverPromptFailed = useRef(false);
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [requiresPin, setRequiresPin] = useState<boolean>(false);
@@ -245,6 +242,31 @@ function App() {
   const buildVariantRaw = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
   const buildVariant = buildVariantRaw || 'dev';
   const buildVersion = (import.meta as any)?.env?.VITE_BUILD_VERSION;
+  const formatBuildVersion = (version?: string) => {
+    if (!version) return version;
+    const parts = version.split('-');
+    const timestamp = parts[parts.length - 1];
+    if (!/^[0-9]{14}$/.test(timestamp)) return version;
+    const year = Number(timestamp.slice(0, 4));
+    const month = Number(timestamp.slice(4, 6)) - 1;
+    const day = Number(timestamp.slice(6, 8));
+    const hour = Number(timestamp.slice(8, 10));
+    const minute = Number(timestamp.slice(10, 12));
+    const second = Number(timestamp.slice(12, 14));
+    const utcDate = new Date(Date.UTC(year, month, day, hour, minute, second));
+    const estTimestamp = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(utcDate);
+    return `${parts.slice(0, -1).join('-')}-${estTimestamp}`;
+  };
+  const buildVersionLabel = formatBuildVersion(buildVersion);
   const buildIndicatorClass = buildVariant === 'blue'
     ? 'bg-blue-400'
     : buildVariant === 'green'
@@ -392,8 +414,10 @@ function App() {
   useEffect(() => {
     if ((import.meta as any).env?.VITE_E2E) {
       (window as any).__peerConnected = isConnected;
+      (window as any).__peerState = connectionState;
+      (window as any).__peerId = peerId;
     }
-  }, [isConnected]);
+  }, [isConnected, connectionState, peerId]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', themePreference);
@@ -478,35 +502,6 @@ function App() {
       if (twitterDesc) twitterDesc.setAttribute('content', description);
     }
   }, [mode, incomingFileInfo, senderPeerId]);
-
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'streamsaver_debug') {
-        console.log('🧪 StreamSaver debug:', event.data.detail);
-        if (event.data.detail === 'Download started') {
-          streamSaverDownloadReceived.current = true;
-          streamSaverPromptFailed.current = false;
-          if (streamSaverDownloadTimeout.current !== null) {
-            window.clearTimeout(streamSaverDownloadTimeout.current);
-            streamSaverDownloadTimeout.current = null;
-          }
-          console.log('✅ StreamSaver download started (debug)');
-        }
-      }
-      if (event.data?.type === 'streamsaver_download') {
-        streamSaverDownloadReceived.current = true;
-        streamSaverPromptFailed.current = false;
-        if (streamSaverDownloadTimeout.current !== null) {
-          window.clearTimeout(streamSaverDownloadTimeout.current);
-          streamSaverDownloadTimeout.current = null;
-        }
-        console.log('✅ StreamSaver download started');
-      }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, []);
 
   useEffect(() => {
     const handleAnubisChallenge = (event: Event) => {
@@ -737,9 +732,7 @@ function App() {
                 setStatus('transferring');
                 try {
                   await transferFileAdaptive(conn, zipStream, zipFileName, totalSize);
-                  if (!streamSaverPromptFailed.current) {
-                    setStatus('complete');
-                  }
+                  setStatus('complete');
                 } catch (error) {
                   console.error('Multi-stream ZIP transfer failed:', error);
                   setStatus('error');
@@ -982,28 +975,18 @@ function App() {
         await startFileReceive(pickerHandle);
         return;
       } catch (error) {
-        console.warn('⚠️ File picker cancelled, falling back to StreamSaver');
+        console.warn('⚠️ File picker cancelled, falling back to download bridge');
       }
     }
 
     if (incomingFileInfo?.name && typeof incomingFileInfo.size === 'number') {
-      const prepared = await prepareStreamSaverDownload(incomingFileInfo.name, incomingFileInfo.size);
+      const prepared = await prepareDownloadBridge(incomingFileInfo.name, incomingFileInfo.size);
       if (!prepared) {
-        console.error('❌ StreamSaver preflight failed, cannot continue');
+        console.error('❌ Download bridge preflight failed, cannot continue');
         setStatus('error');
         return;
       }
-      streamSaverDownloadExpected.current = true;
-      streamSaverDownloadReceived.current = false;
-      streamSaverPromptFailed.current = false;
-      if (streamSaverDownloadTimeout.current !== null) {
-        window.clearTimeout(streamSaverDownloadTimeout.current);
-      }
-      streamSaverDownloadTimeout.current = window.setTimeout(() => {
-        if (streamSaverDownloadExpected.current && !streamSaverDownloadReceived.current) {
-          console.warn('⚠️ StreamSaver download prompt did not appear yet');
-        }
-      }, 4000);
+      setDownloadKey(prepared);
     }
 
     await handleReceive(null);
@@ -1161,17 +1144,12 @@ function App() {
         console.log('📂 Single file path - Starting adaptive multi-stream download');
         await transferFileAdaptive(conn, null as any, undefined, undefined, {
           fileHandle: activeHandle,
-          requireSave: true
+          requireSave: true,
+          downloadKey
         });
 
-        if (!activeHandle && streamSaverDownloadExpected.current && !streamSaverDownloadReceived.current) {
-          console.warn('⚠️ StreamSaver download event not received; verify the file in Downloads.');
-        }
-
-        if (!streamSaverPromptFailed.current) {
-          setStatus('complete');
-          console.log('✅ File saved successfully');
-        }
+        setStatus('complete');
+        console.log('✅ File saved successfully');
       }
       
       setStatus('complete');
@@ -1875,9 +1853,9 @@ function App() {
                       <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
                       <span>{buildIndicatorLabel}</span>
                     </div>
-                    {buildVersion && (
+                    {buildVersionLabel && (
                       <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50">
-                        {buildVersion}
+                        {buildVersionLabel}
                       </div>
                     )}
                   </div>

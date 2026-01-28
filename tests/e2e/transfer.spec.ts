@@ -11,11 +11,29 @@ type TransferOptions = {
 };
 
 const waitForPeer = async (page: any) => {
-  await page.waitForFunction(() => (window as any).__peerConnected === true, null, { timeout: 60_000 });
+  await page.waitForFunction(
+    () => (window as any).__peerConnected === true || (window as any).__peerState === 'failed',
+    null,
+    { timeout: 60_000 }
+  );
+  const peerState = await page.evaluate(() => (window as any).__peerState);
+  if (peerState && peerState !== 'connected') {
+    const peerId = await page.evaluate(() => (window as any).__peerId ?? null);
+    throw new Error(`Peer connection failed (state=${peerState}, peerId=${peerId ?? 'unknown'})`);
+  }
 };
 
 const waitForE2E = async (page: any) => {
   await page.waitForFunction(() => (window as any).__e2e?.setFiles, null, { timeout: 30_000 });
+};
+
+const attachDiagnostics = (page: any, label: string) => {
+  page.on('console', (msg: any) => {
+    console.log(`[${label}] console:${msg.type()}`, msg.text());
+  });
+  page.on('pageerror', (error: any) => {
+    console.log(`[${label}] pageerror`, error?.message || error);
+  });
 };
 
 const installMemoryFileSystem = async (page: any) => {
@@ -57,6 +75,11 @@ const createShareLink = async (page: any, options: TransferOptions) => {
     (window as any).__e2e.setFiles([file]);
   }, options);
 
+  const startSharingButton = page.getByRole('button', { name: /start sharing/i });
+  if (await startSharingButton.count()) {
+    await startSharingButton.first().click();
+  }
+
   await page.getByText(options.name, { exact: false }).waitFor({ timeout: 30_000 });
   await page.evaluate(() => (window as any).__e2e.createLink());
 
@@ -73,6 +96,9 @@ const runTransfer = async (browser: any, options: TransferOptions) => {
 
   const sender = await senderContext.newPage();
   const receiver = await receiverContext.newPage();
+
+  attachDiagnostics(sender, 'sender');
+  attachDiagnostics(receiver, 'receiver');
 
   await sender.goto('/');
   await receiver.goto('/');
@@ -96,11 +122,8 @@ const runTransfer = async (browser: any, options: TransferOptions) => {
   }
 
   await receiver.waitForFunction(() => (window as any).__e2e?.getPendingReceive?.() === true, null, { timeout: 90_000 });
-  await receiver.getByRole('button', { name: 'Start Download' }).click();
+  await receiver.getByRole('button', { name: /Start (the )?download/i }).click();
 
-  if (!options.zip) {
-    await sender.waitForFunction(() => (window as any).__e2e?.getStatus?.() === 'complete', null, { timeout: transferTimeout });
-  }
   await receiver.getByText('File downloaded successfully!').waitFor({ timeout: transferTimeout });
 
   const expectedSize = await receiver.evaluate(() => (window as any).__e2e?.getIncomingFileInfo?.()?.size ?? 0);

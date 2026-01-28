@@ -24,7 +24,7 @@ export const environments: Record<string, EnvironmentConfig> = {
     peerJsConfig: {
       host: import.meta.env.VITE_PEERJS_HOST ?? 'localhost',
       port: Number(import.meta.env.VITE_PEERJS_PORT ?? 9000),
-      path: '/peerjs',
+      path: import.meta.env.VITE_PEERJS_PATH ?? '/peerjs',
       secure: String(import.meta.env.VITE_PEERJS_SECURE ?? 'false') === 'true',
       config: {
         iceServers: [

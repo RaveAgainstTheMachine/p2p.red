@@ -1,8 +1,7 @@
 import { useRef, useCallback, useState } from 'react';
 import { DataConnection } from 'peerjs';
-import streamSaver from 'streamsaver';
 import { MultiStreamOrchestrator } from '../utils/multiStreamOrchestrator';
-import { clearTransfer, deleteShard, getShard, putShard } from '../utils/shardStore';
+import { clearTransfer, deleteShard, getShard, putShard, putTransferMeta } from '../utils/shardStore';
 
 interface AdaptiveTransferProgress {
   bytesTransferred: number;
@@ -24,11 +23,15 @@ interface AdaptiveTransferProgress {
 interface ReceiveOptions {
   fileHandle?: any;
   requireSave?: boolean;
+  downloadKey?: string | null;
 }
 
 interface ReceiverDeviceProfile {
   hardwareConcurrency?: number;
   deviceMemoryGB?: number;
+  isFirefox?: boolean;
+  supportsDownloadBridge?: boolean;
+  preferredStreamCount?: number;
   connection?: {
     effectiveType?: string;
     downlinkMbps?: number;
@@ -121,11 +124,7 @@ const findSenderResumeSession = (file: File): ResumeSession | null => {
   ) || null;
 };
 
-const supportsStreamSaver = () =>
-  typeof window !== 'undefined' &&
-  typeof window.WritableStream !== 'undefined' &&
-  typeof window.ReadableStream !== 'undefined' &&
-  'serviceWorker' in navigator;
+const supportsDownloadBridge = () => typeof window !== 'undefined' && 'serviceWorker' in navigator;
 
 // Calculate optimal shard size based on network speed
 function calculateShardSize(speed: number): number {
@@ -363,8 +362,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
   const transferProgress = useRef<AdaptiveTransferProgress>(transferProgressState);
 
   const isTransferring = useRef<boolean>(false);
-  const preparedStreamWriterRef = useRef<WritableStreamDefaultWriter<Uint8Array> | null>(null);
-  const preparedStreamMetaRef = useRef<{ fileName: string; fileSize: number } | null>(null);
   const startTime = useRef<number>(0);
 
   const setIsTransferring = useCallback((value: boolean) => {
@@ -496,6 +493,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           await finishHandshake(String(data.pubKey || ''));
         }
       };
+
 
       conn.on('data', handler);
 
@@ -650,7 +648,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let estimatedSpeed = 50 * 1024 * 1024; // Default: 50 MB/s
       
       // Calculate shard size based on estimated speed
-      const SHARD_SIZE = calculateShardSize(estimatedSpeed);
+      let SHARD_SIZE = calculateShardSize(estimatedSpeed);
       console.log(`📊 Shard size: ${(SHARD_SIZE/1024/1024).toFixed(0)}MB (based on estimated ${(estimatedSpeed/1024/1024).toFixed(0)}MB/s)`);
       
       // Create shards
@@ -679,7 +677,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           Math.max(MIN_CHANNELS, Math.ceil(shards.length / 8))
         );
       }
-      
+
       console.log(`🔧 Using ${numChannels} adaptive channels for ${shards.length} shards`);
 
       let networkQuality: AdaptiveTransferProgress['networkQuality'] = 'good';
@@ -873,7 +871,26 @@ export const useAdaptiveMultiStreamTransfer = () => {
         if (eff === '2g') deviceMax = Math.min(deviceMax, 10);
         if (eff === '3g') deviceMax = Math.min(deviceMax, 16);
 
-        adjustedChannels = clamp(adjustedChannels, 4, Math.min(qualityMax, deviceMax, MAX_CHANNELS, shards.length));
+        if (!isFile && typeof receiverProfile?.preferredStreamCount === 'number') {
+          adjustedChannels = receiverProfile.preferredStreamCount;
+        } else if (!isFile && receiverProfile?.isFirefox) {
+          adjustedChannels = 1;
+        } else {
+          adjustedChannels = clamp(adjustedChannels, 4, Math.min(qualityMax, deviceMax, MAX_CHANNELS, shards.length));
+        }
+
+        if (adjustedChannels !== numChannels) {
+          conn.send({
+            type: 'stream_count_update',
+            streamCount: adjustedChannels,
+            timestamp: Date.now()
+          });
+          console.log('📡 Sent stream_count_update', {
+            requested: adjustedChannels,
+            original: numChannels,
+            transferId
+          });
+        }
 
         // Create parallel channels
         console.log('🔧 Creating DataChannels...');
@@ -1475,14 +1492,16 @@ export const useAdaptiveMultiStreamTransfer = () => {
         // Send completion (no CRC32 needed - all shards already verified)
         console.log(`✅ All shards sent!`);
         
-        const completePayload = {
+        const completePayload: Record<string, any> = {
           type: 'multi_stream_complete',
           bytesTransferred: totalBytesTransferred,
           totalBytes: totalBytesTransferred,
-          totalCrc32: finalizeCRC32(totalCrc32),
           fileSize,
           timestamp: Date.now()
         };
+        if (isFile) {
+          completePayload.totalCrc32 = finalizeCRC32(totalCrc32);
+        }
         conn.send(completePayload);
 
         let receiverDone = false;
@@ -1551,22 +1570,56 @@ export const useAdaptiveMultiStreamTransfer = () => {
   }, [createParallelChannels, setTransferProgress]);
 
   // Receive file with shard-based tracking
-  const prepareStreamSaverDownload = useCallback(async (fileName: string, fileSize: number) => {
-    if (!supportsStreamSaver()) return false;
-    try {
-      streamSaver.mitm = '/streamsaver/mitm';
-      const fileStream = streamSaver.createWriteStream(fileName, { size: fileSize });
-      const writer = fileStream.getWriter();
-      preparedStreamWriterRef.current = writer;
-      preparedStreamMetaRef.current = { fileName, fileSize };
-      await writer.write(new Uint8Array(0));
-      return true;
-    } catch (error) {
-      console.warn('⚠️ StreamSaver preflight failed', error);
-      preparedStreamWriterRef.current = null;
-      preparedStreamMetaRef.current = null;
-      return false;
-    }
+  const prepareDownloadBridge = useCallback(async (fileName: string, fileSize: number) => {
+    if (!supportsDownloadBridge()) return null;
+
+    const downloadKey = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const bridgeUrl = `${window.location.origin}/download-bridge/bridge.html`;
+
+    return new Promise<string | null>((resolve) => {
+      const channel = new MessageChannel();
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = bridgeUrl;
+      document.body.appendChild(iframe);
+
+      const cleanup = () => {
+        channel.port1.close();
+        channel.port2.close();
+        iframe.remove();
+      };
+
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        console.warn('⚠️ Download bridge timeout');
+        resolve(null);
+      }, 8000);
+
+      channel.port1.onmessage = (event) => {
+        if (event.data?.debug === 'download_ready') {
+          console.log('✅ Download bridge ready');
+        }
+      };
+
+      window.addEventListener('message', function handler(event) {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type === 'download_bridge_download') {
+          window.clearTimeout(timeout);
+          window.removeEventListener('message', handler);
+          cleanup();
+          resolve(downloadKey);
+        }
+      });
+
+      iframe.onload = () => {
+        iframe.contentWindow?.postMessage({
+          transferId: downloadKey,
+          filename: fileName,
+          size: fileSize,
+          pathname: `download-bridge/download/${downloadKey}`
+        }, window.location.origin, [channel.port2]);
+      };
+    });
   }, []);
 
   const receiveFileMultiStream = useCallback(async (
@@ -1678,15 +1731,11 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
       let incomingFileName = 'download';
 
-      let useStreamSaver = false;
-      let streamWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
       let cachedShardBytes = 0;
-      let nextShardToWrite = 0;
       const storedShardIds = new Set<number>();
-      let streamSaverBytesWritten = 0;
-      let streamWriterFlushPromise: Promise<void> | null = null;
 
       let useBlobDownload = false;
+      let downloadKey: string | null = options?.downloadKey ?? null;
 
       const MAX_WRITE_BUFFER_BYTES = 512 * 1024 * 1024;
       const HIGH_WATERMARK_BYTES = 384 * 1024 * 1024;
@@ -1780,63 +1829,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
         }
       };
 
-      const flushStreamWriter = async () => {
-        if (!useStreamSaver || !streamWriter) return;
-        if (streamWriterFlushPromise) {
-          await streamWriterFlushPromise;
-          return;
-        }
-        streamWriterFlushPromise = (async () => {
-          while (true) {
-            const state = shardStates.get(nextShardToWrite);
-            if (!state || !state.complete) break;
-            let data: ArrayBuffer | null = null;
-
-            const buffer = shardBuffers.get(nextShardToWrite);
-            if (buffer) {
-              data = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + state.total) as ArrayBuffer;
-              shardBuffers.delete(nextShardToWrite);
-              cachedShardBytes = Math.max(0, cachedShardBytes - state.total);
-            }
-
-            if (!data) {
-              data = await getShard(transferId, nextShardToWrite);
-            }
-
-            if (!data) {
-              console.error('❌ StreamSaver missing shard data', { shardId: nextShardToWrite });
-              break;
-            }
-            try {
-              if (streamWriter.ready) {
-                await streamWriter.ready;
-              }
-              const chunk = new Uint8Array(data);
-              await streamWriter.write(chunk);
-              streamSaverBytesWritten += chunk.byteLength;
-              if (streamSaverBytesWritten === chunk.byteLength) {
-                console.log('✅ StreamSaver first write', { bytes: chunk.byteLength, shardId: nextShardToWrite });
-                if (typeof window !== 'undefined') {
-                  window.postMessage({ type: 'streamsaver_download', detail: 'first_write' }, window.location.origin);
-                }
-              }
-            } catch (error) {
-              console.error('❌ StreamSaver write failed', error);
-              setIsTransferring(false);
-              reject(error instanceof Error ? error : new Error('StreamSaver write failed'));
-              return;
-            }
-            await deleteShard(transferId, nextShardToWrite);
-            storedShardIds.delete(nextShardToWrite);
-            nextShardToWrite += 1;
-          }
-        })();
-        try {
-          await streamWriterFlushPromise;
-        } finally {
-          streamWriterFlushPromise = null;
-        }
-      };
 
       const pumpWrites = () => {
         if (!useFileSystemAPI || !writableStream) return;
@@ -1884,7 +1876,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
         if (missingShards.length > 0) return;
         const expectedBytes = expectedTotalBytes ?? fileSize;
         if (!completeSignalReceived) {
-          if (expectedBytes > 0 && bytesReceived >= expectedBytes) {
+          if (expectedBytes > 0 && bytesReceived === expectedBytes) {
             console.warn('⚠️ Missing complete signal, finalizing based on shard completion', {
               bytesReceived,
               expectedBytes
@@ -1907,7 +1899,33 @@ export const useAdaptiveMultiStreamTransfer = () => {
           return;
         }
         if (expectedTotalCrc32) {
-          const actualTotalCrc32 = finalizeCRC32(totalCrc32);
+          let orderedTotalCrc32: string | null = null;
+          if (!useFileSystemAPI && !useBlobDownload && transferId && shardCount > 0) {
+            let orderedCrc = 0xFFFFFFFF;
+            for (let i = 0; i < shardCount; i++) {
+              const state = shardStates.get(i);
+              let shardData = shardBuffers.get(i);
+              if (!shardData && transferId) {
+                const stored = await getShard(transferId, i);
+                if (stored) {
+                  shardData = new Uint8Array(stored);
+                }
+              }
+              if (!shardData) {
+                console.error('❌ Missing shard data for total CRC32 recompute', { shardId: i });
+                orderedCrc = 0xFFFFFFFF;
+                break;
+              }
+              const expectedLength = state?.total ?? shardData.byteLength;
+              const normalized = shardData.byteLength > expectedLength
+                ? shardData.subarray(0, expectedLength)
+                : shardData;
+              orderedCrc = await updateCrc(orderedCrc, normalized);
+            }
+            orderedTotalCrc32 = finalizeCRC32(orderedCrc);
+          }
+
+          const actualTotalCrc32 = orderedTotalCrc32 ?? finalizeCRC32(totalCrc32);
           if (actualTotalCrc32 !== expectedTotalCrc32) {
             console.error('❌ Total CRC32 mismatch', {
               expected: expectedTotalCrc32,
@@ -1935,34 +1953,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
           return;
         }
 
-        if (useStreamSaver && streamWriter) {
-          await flushStreamWriter();
-          const expectedSize = expectedTotalBytes ?? fileSize;
-          if (streamSaverBytesWritten !== expectedSize) {
-            const resolvedBytes = Math.max(bytesReceived, streamSaverBytesWritten);
-            if (streamSaverBytesWritten < expectedSize) {
-              console.error('❌ StreamSaver byte count mismatch', {
-                written: streamSaverBytesWritten,
-                expected: expectedSize
-              });
-              setIsTransferring(false);
-              reject(new Error('StreamSaver wrote fewer bytes than expected'));
-              return;
-            }
-            console.warn('⚠️ StreamSaver byte count mismatch (zip overhead or stream sizing)', {
-              written: streamSaverBytesWritten,
-              expected: expectedSize,
-              resolved: resolvedBytes
-            });
-          }
-          debugLog('🧪 streamsaver closing', {
-            written: streamSaverBytesWritten,
-            expected: expectedTotalBytes ?? fileSize
-          });
-          await streamWriter.close();
+        if (!useFileSystemAPI) {
           conn.send({ type: 'receiver_done', timestamp: Date.now() });
           clearInterval(perfInterval);
-          clearInterval(stallInterval);
           logPerf('receiver-final');
           cryptoWorker?.terminate();
           setIsTransferring(false);
@@ -2185,28 +2178,24 @@ export const useAdaptiveMultiStreamTransfer = () => {
                   console.log(`🔍 Shard ${shardId} complete: ${shardState.received}/${shardState.total} bytes, expectedCRC: ${shardState.expectedCRC}`);
                   const shardVerified = await verifyAndConfirmShard(shardId, shardState);
 
-                  if (shardVerified) {
+                  if (shardVerified && !useFileSystemAPI) {
                     const shardBuffer = shardBuffers.get(shardId);
                     if (shardBuffer) {
                       totalCrc32 = await updateCrc(totalCrc32, shardBuffer);
                     }
                   }
 
-                  if (shardVerified && useStreamSaver && streamWriter) {
+                  if (shardVerified && !useFileSystemAPI && transferId && !storedShardIds.has(shardId)) {
                     const shardBuffer = shardBuffers.get(shardId);
                     if (!shardBuffer) {
-                      console.warn('⚠️ StreamSaver shard buffer missing on completion', { shardId });
-                    } else if (!storedShardIds.has(shardId)) {
-                      if (cachedShardBytes > MAX_INDEXEDDB_CACHE_BYTES) {
-                        const data = shardBuffer.buffer.slice(shardBuffer.byteOffset, shardBuffer.byteOffset + shardState.total) as ArrayBuffer;
-                        await putShard(transferId, shardId, data);
-                        storedShardIds.add(shardId);
-                        shardBuffers.delete(shardId);
-                        cachedShardBytes = Math.max(0, cachedShardBytes - shardState.total);
-                      }
+                      console.warn('⚠️ Shard buffer missing on completion', { shardId });
+                    } else {
+                      const data = shardBuffer.buffer.slice(shardBuffer.byteOffset, shardBuffer.byteOffset + shardState.total) as ArrayBuffer;
+                      await putShard(transferId, shardId, data);
+                      storedShardIds.add(shardId);
+                      shardBuffers.delete(shardId);
+                      cachedShardBytes = Math.max(0, cachedShardBytes - shardState.total);
                     }
-
-                    await flushStreamWriter();
                   }
                 }
 
@@ -2400,31 +2389,24 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
           if (!useFileSystemAPI) {
             useBlobDownload = shouldUseBlobDownload(fileSize);
-            if (useBlobDownload) {
-              if (preparedStreamWriterRef.current) {
-                try {
-                  await preparedStreamWriterRef.current.abort();
-                } catch {
-                  // ignore
-                }
-              }
-              preparedStreamWriterRef.current = null;
-              preparedStreamMetaRef.current = null;
-              console.log('✅ Receiver using Blob download', { fileSize });
+
+            if (!useBlobDownload && !downloadKey && supportsDownloadBridge()) {
+              downloadKey = await prepareDownloadBridge(incomingFileName, fileSize);
             }
-          }
 
-          if (!useFileSystemAPI && !useBlobDownload && preparedStreamWriterRef.current) {
-            streamWriter = preparedStreamWriterRef.current;
-            preparedStreamWriterRef.current = null;
-            preparedStreamMetaRef.current = null;
-            useStreamSaver = true;
-            console.log('✅ StreamSaver preflight active for receiver');
-          }
+            if (downloadKey) {
+              await putTransferMeta({
+                transferId,
+                downloadKey,
+                fileName: incomingFileName,
+                fileSize,
+                shardSize,
+                shardCount
+              });
+            }
 
-          if (!useFileSystemAPI && !useStreamSaver && !useBlobDownload) {
-            if (requireSave) {
-              console.error('❌ No save method available (File System Access + StreamSaver preflight unavailable)');
+            if (!useBlobDownload && !downloadKey && requireSave) {
+              console.error('❌ No save method available (File System Access + Download bridge unavailable)');
               setIsTransferring(false);
               reject(new Error('No save method available'));
               return;
@@ -2509,6 +2491,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
           const receiverProfile: ReceiverDeviceProfile = {
             hardwareConcurrency: typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : undefined,
             deviceMemoryGB: typeof navAny.deviceMemory === 'number' ? navAny.deviceMemory : undefined,
+            isFirefox: isFirefoxBrowser(),
+            supportsDownloadBridge: supportsDownloadBridge(),
             connection: connInfo ? {
               effectiveType: typeof connInfo.effectiveType === 'string' ? connInfo.effectiveType : undefined,
               downlinkMbps: typeof connInfo.downlink === 'number' ? connInfo.downlink : undefined,
@@ -2516,6 +2500,13 @@ export const useAdaptiveMultiStreamTransfer = () => {
               saveData: typeof connInfo.saveData === 'boolean' ? connInfo.saveData : undefined
             } : undefined
           };
+
+          console.log('📡 Sending receiver_ready', {
+            transferId,
+            preferredStreamCount: receiverProfile.preferredStreamCount,
+            isFirefox: receiverProfile.isFirefox,
+            supportsDownloadBridge: receiverProfile.supportsDownloadBridge
+          });
 
           conn.send({
             type: 'receiver_ready',
@@ -2554,7 +2545,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
             state.offset = data.offset || state.offset;
           }
 
-          if (!useFileSystemAPI && !useStreamSaver) {
+          if (!useFileSystemAPI) {
             const existing = shardBuffers.get(data.shardId);
             if (!existing || existing.byteLength !== state.total) {
               if (existing) {
@@ -2599,6 +2590,12 @@ export const useAdaptiveMultiStreamTransfer = () => {
               return;
             }
 
+            const expectedBytes = expectedTotalBytes ?? fileSize;
+            if (expectedBytes > 0 && bytesReceived < expectedBytes) {
+              setTimeout(() => requestMissingAfterSettle(retriesLeft), 500);
+              return;
+            }
+
             const missingShards = states
               .filter(([_, state]) => state.expectedCRC && !state.complete)
               .map(([id]) => id);
@@ -2629,6 +2626,10 @@ export const useAdaptiveMultiStreamTransfer = () => {
         } else if (data.type === 'stream_count_update') {
           if (typeof data.streamCount === 'number') {
             expectedStreams = data.streamCount;
+            console.log('📡 Receiver stream_count_update', {
+              streamCount: data.streamCount,
+              transferId
+            });
           }
         }
       };
@@ -2657,6 +2658,6 @@ export const useAdaptiveMultiStreamTransfer = () => {
     transferFileAdaptive,
     transferProgress: transferProgressState,
     isTransferring,
-    prepareStreamSaverDownload
+    prepareDownloadBridge
   };
 };

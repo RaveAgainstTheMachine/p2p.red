@@ -31,7 +31,8 @@ export default defineConfig({
       ...process.env,
       VITE_API_URL: 'http://127.0.0.1:3001',
       VITE_PEERJS_HOST: '127.0.0.1',
-      VITE_PEERJS_PORT: '9000',
+      VITE_PEERJS_PORT: '5180',
+      VITE_PEERJS_PATH: '/peerjs',
       VITE_PEERJS_SECURE: 'false',
       VITE_E2E: 'true'
     }

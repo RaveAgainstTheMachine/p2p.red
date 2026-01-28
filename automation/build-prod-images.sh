@@ -25,9 +25,14 @@ build_app_image() {
     mkdir -p dist/download-bridge
     cp -f public/download-bridge/bridge dist/download-bridge/bridge
     cp -f public/download-bridge/bridge.html dist/download-bridge/bridge.html
+    cp -f public/download-bridge/bridge.js dist/download-bridge/bridge.js
     cp -f public/download-bridge/sw.js dist/download-bridge/sw.js
     if [ ! -s dist/download-bridge/bridge ]; then
         echo "❌ Missing dist/download-bridge/bridge after build"
+        exit 1
+    fi
+    if [ ! -s dist/download-bridge/bridge.js ]; then
+        echo "❌ Missing dist/download-bridge/bridge.js after build"
         exit 1
     fi
     if [ ! -s dist/download-bridge/sw.js ]; then

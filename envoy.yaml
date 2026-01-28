@@ -205,6 +205,22 @@ static_resources:
                           route:
                             cluster: metadata_api
                         - match:
+                            prefix: "/download-bridge/"
+                          route:
+                            cluster: app
+                          response_headers_to_remove:
+                            - content-security-policy
+                            - x-frame-options
+                          response_headers_to_add:
+                            - header:
+                                key: Content-Security-Policy
+                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; connect-src 'self' wss://p2p.red https://signal.p2p.red wss://signal.p2p.red; font-src 'self'; object-src 'none';"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: X-Frame-Options
+                                value: "SAMEORIGIN"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
                             path: "/js/script.js"
                           route:
                             cluster: plausible

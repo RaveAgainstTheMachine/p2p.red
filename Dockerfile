@@ -25,7 +25,11 @@ ENV VITE_PEERJS_PORT=$VITE_PEERJS_PORT
 ENV VITE_PEERJS_SECURE=$VITE_PEERJS_SECURE
 
 # Build application
-RUN pnpm run build
+RUN pnpm run build && \
+    mkdir -p dist/download-bridge && \
+    cp -f public/download-bridge/bridge dist/download-bridge/bridge && \
+    cp -f public/download-bridge/bridge.html dist/download-bridge/bridge.html && \
+    cp -f public/download-bridge/sw.js dist/download-bridge/sw.js
 
 # Production stage
 FROM node:20-alpine

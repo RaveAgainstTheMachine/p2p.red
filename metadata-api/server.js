@@ -25,6 +25,13 @@ const PORT = process.env.PORT || 3001;
 const TURN_TTL_SECONDS = parseInt(process.env.TURN_TTL_SECONDS, 10) || 3600;
 const STATUS_TIMEOUT_MS = parseInt(process.env.STATUS_TIMEOUT_MS, 10) || 3000;
 const BODY_SIZE_LIMIT = process.env.BODY_SIZE_LIMIT || '100kb';
+const isProduction = process.env.NODE_ENV === 'production';
+const logRequestsEnv = (process.env.METADATA_API_LOG_REQUESTS || '').trim().toLowerCase();
+const logRequests = isProduction
+  ? ['1', 'true', 'on', 'yes'].includes(logRequestsEnv)
+  : logRequestsEnv
+    ? !['0', 'false', 'off', 'no'].includes(logRequestsEnv)
+    : true;
 
 // ============================================================================
 // Database & Cache Configuration
@@ -181,7 +188,9 @@ morgan.token('url', (req) => {
 
 app.use(express.json({ limit: BODY_SIZE_LIMIT }));
 app.use(express.urlencoded({ limit: BODY_SIZE_LIMIT, extended: false }));
-app.use(morgan('combined'));
+if (logRequests) {
+  app.use(morgan('combined'));
+}
 
 // Rate limiting
 const limiter = rateLimit({

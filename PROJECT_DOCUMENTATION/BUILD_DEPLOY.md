@@ -292,6 +292,17 @@ curl -s https://p2p.red/api/status | jq
 curl -s https://p2p.red | head -n 3
 ```
 
+### Ops: Metadata API request logging (prod)
+Request logging is **off by default** in production. To enable temporarily, set:
+```
+METADATA_API_LOG_REQUESTS=on
+```
+in `docker-compose.yml` for the `metadata-api` service and redeploy runtime services:
+```
+sudo METADATA_API_ENV_FILE=/run/secrets/metadata.env docker compose -f docker-compose.yml up -d
+```
+To disable again, set `METADATA_API_LOG_REQUESTS=off` and repeat the same command.
+
 PeerJS smoke checks (prod):
 ```
 curl -fsS https://signal.p2p.red/peerjs/id

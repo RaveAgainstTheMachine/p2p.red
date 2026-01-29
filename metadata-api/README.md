@@ -166,6 +166,7 @@ CREATE TABLE short_links (
 | `RATE_LIMIT_MAX_REQUESTS` | Max requests per window                  | 100        |
 | `TURN_SECRET`            | TURN REST HMAC secret (server-side only)  | (required) |
 | `TURN_TTL_SECONDS`       | TURN credential TTL in seconds            | 3600       |
+| `METADATA_API_LOG_REQUESTS` | Enable HTTP request logging (prod default: off, non-prod default: on). Accepts `true/false`, `1/0`, `on/off`, `yes/no`. | (optional) |
 
 ## Monitoring
 

@@ -115,6 +115,7 @@ services:
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX_REQUESTS: 100
       CORS_ORIGIN: https://p2p.red
+      METADATA_API_LOG_REQUESTS: "off"
     ports:
       - "${METADATA_API_PUBLISH:-127.0.0.1:3001}:3001"
     networks:

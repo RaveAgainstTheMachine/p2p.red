@@ -245,6 +245,10 @@ Prod runtime host does **not** have full source. Build locally and ship tars.
 # It injects prod VITE_* values (API + PeerJS) so prod bundles never
 # inherit dev .env.local settings, and also injects VITE_BUILD_VERSION
 # (SemVer + git SHA + UTC timestamp) with p2p.build_version validation.
+# PeerJS prod routing is via signal.p2p.red with /peerjs path.
+# If PeerJS websocket fails in prod, confirm the build args include:
+#   VITE_PEERJS_HOST=signal.p2p.red
+#   VITE_PEERJS_PATH=/peerjs
 ./automation/build-prod-images.sh
 
 # Copy to prod via WG
@@ -283,6 +287,17 @@ USE_PREBUILT_IMAGES=1 \
 ```
 curl -s https://p2p.red/api/status | jq
 curl -s https://p2p.red | head -n 3
+```
+
+PeerJS smoke checks (prod):
+```
+curl -fsS https://signal.p2p.red/peerjs/id
+curl -sS -D - -o /dev/null --http1.1 \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  -H 'Sec-WebSocket-Version: 13' \
+  -H 'Origin: https://p2p.red' \
+  'https://signal.p2p.red/peerjs?key=peerjs&id=test&token=tok&version=1.5.5'
 ```
 
 #### Prod Incident: Stale UI + nginx crash (2026-01-21)

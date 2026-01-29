@@ -42,12 +42,20 @@ export const environments: Record<string, EnvironmentConfig> = {
     connectionTimeout: 30000 // 30 seconds
   },
   production: {
-    apiUrl: 'https://p2p.red',
+    apiUrl: import.meta.env.VITE_API_URL ?? (typeof window !== 'undefined' ? window.location.origin : 'https://p2p.red'),
     peerJsConfig: {
-      host: 'signal.p2p.red',
-      port: 443,
-      path: '/',
-      secure: true,
+      host: import.meta.env.VITE_PEERJS_HOST ?? (typeof window !== 'undefined' ? window.location.hostname : 'p2p.red'),
+      port: Number(
+        import.meta.env.VITE_PEERJS_PORT ??
+          (typeof window !== 'undefined'
+            ? window.location.port || (window.location.protocol === 'https:' ? 443 : 80)
+            : 443)
+      ),
+      path: import.meta.env.VITE_PEERJS_PATH ?? '/',
+      secure: String(
+        import.meta.env.VITE_PEERJS_SECURE ??
+          (typeof window !== 'undefined' ? window.location.protocol === 'https:' : 'true')
+      ) === 'true',
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },

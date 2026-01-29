@@ -107,6 +107,69 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 ## Prod Workflow (OVH VPS)
 
+## Local Prod Parity (HTTPS + Local IP)
+
+Goal: run the **prod stack locally** (Envoy + blue/green + serve + CSP) without domains.
+Use local IPs with HTTPS so browser behavior matches production.
+
+**Requirements**
+- Local TLS certs at `./local-certs/local.crt` + `./local-certs/local.key`.
+- Secrets at `./local-secrets/metadata.env` + `./local-secrets/plausible.env`.
+- Use OpenBao as the source of truth for secrets.
+
+**Generate local TLS certs (mkcert)**
+```
+LOCAL_P2P_HOST=127.0.0.1 ./automation/local-prod-certs.sh
+```
+
+**Render local secrets (choose one)**
+
+OpenBao (source of truth):
+```
+BAO_ADDR=https://bao.p2p.red:8200 BAO_TOKEN=*** ./automation/render-local-secrets.sh
+```
+
+Local-only (no OpenBao):
+```
+./automation/local-prod-secrets.sh
+```
+
+**Build local images (blue/green + services)**
+```
+LOCAL_P2P_HOST=127.0.0.1 LOCAL_HTTPS_PORT=8443 ./automation/build-local-prod-images.sh
+```
+
+**Start the local prod-parity stack**
+```
+LOCAL_P2P_HOST=127.0.0.1 LOCAL_HTTPS_PORT=8443 docker compose -f docker-compose.local-prod.yml up -d
+```
+
+**Preflight (download bridge + API + Envoy)**
+```
+INSECURE=1 LOCAL_P2P_HOST=127.0.0.1 LOCAL_HTTPS_PORT=8443 ./automation/local-prod-preflight.sh
+```
+
+**Access**
+- App: `https://127.0.0.1:8443`
+- Envoy admin: `http://127.0.0.1:9901`
+
+**Local prod-parity test checklist**
+1. App loads over HTTPS without mixed-content warnings.
+2. Download bridge endpoint returns HTML:
+   - `GET /download-bridge/bridge.html` => `200` + `text/html`.
+3. PeerJS reachable via Envoy:
+   - `GET /peerjs/id` returns a PeerJS ID.
+4. Metadata API reachable via Envoy:
+   - `GET /api/status` returns JSON.
+5. Run a real P2P transfer (no mocks) to validate WebRTC + download bridge.
+
+**Troubleshooting (local parity)**
+- Envoy restarts with `Failed to load incomplete private key`:
+  - Regenerate local certs: `./automation/local-prod-certs.sh`
+  - Ensure `local-certs/local.key` is a PKCS#1 RSA key and readable by the container.
+- Download bridge preflight timeout:
+  - Run `INSECURE=1 ./automation/local-prod-preflight.sh` and confirm bridge HTML.
+
 ## One-Command Safety Workflow (Authoritative)
 
 Use these scripts to eliminate environment confusion and missing-preflight failures.

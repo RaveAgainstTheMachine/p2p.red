@@ -51,7 +51,7 @@ export const environments: Record<string, EnvironmentConfig> = {
             ? window.location.port || (window.location.protocol === 'https:' ? 443 : 80)
             : 443)
       ),
-      path: '/peerjs',
+      path: import.meta.env.VITE_PEERJS_PATH ?? '/',
       secure: String(
         import.meta.env.VITE_PEERJS_SECURE ??
           (typeof window !== 'undefined' ? window.location.protocol === 'https:' : 'true')

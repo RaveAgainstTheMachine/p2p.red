@@ -69,8 +69,8 @@ interface ResumeSession {
   status: 'in_progress' | 'complete';
 }
 
-const MAX_INDEXEDDB_CACHE_BYTES = 512 * 1024 * 1024;
-const LOW_INDEXEDDB_CACHE_BYTES = 384 * 1024 * 1024;
+const MAX_INDEXEDDB_CACHE_BYTES = 192 * 1024 * 1024;
+const LOW_INDEXEDDB_CACHE_BYTES = 128 * 1024 * 1024;
 const ECDH_IV_BYTES = 12;
 const ECDH_TAG_BYTES = 16;
 const ECDH_INFO = new TextEncoder().encode('p2p.red/webrtc-ecdh-v1');
@@ -1595,28 +1595,42 @@ export const useAdaptiveMultiStreamTransfer = () => {
         resolve(null);
       }, 8000);
 
+      const finalizeDownload = (downloadUrl?: string) => {
+        window.clearTimeout(timeout);
+        window.removeEventListener('message', handler);
+        if (downloadUrl && iframe.contentWindow) {
+          iframe.contentWindow.location.href = downloadUrl;
+        }
+        resolve(downloadKey);
+      };
+
       channel.port1.onmessage = (event) => {
         if (event.data?.debug === 'download_ready') {
           console.log('✅ Download bridge ready');
         }
+        if (event.data?.download) {
+          finalizeDownload(event.data.download);
+        }
       };
 
-      window.addEventListener('message', function handler(event) {
+      function handler(event: MessageEvent) {
         if (event.origin !== window.location.origin) return;
         if (event.data?.type === 'download_bridge_download') {
-          window.clearTimeout(timeout);
-          window.removeEventListener('message', handler);
-          cleanup();
-          resolve(downloadKey);
+          finalizeDownload(event.data.url);
         }
-      });
+        if (event.data?.type === 'download_bridge_complete' && event.data?.downloadKey === downloadKey) {
+          window.clearTimeout(timeout);
+          cleanup();
+        }
+      }
+      window.addEventListener('message', handler);
 
       iframe.onload = () => {
         iframe.contentWindow?.postMessage({
           transferId: downloadKey,
           filename: fileName,
           size: fileSize,
-          pathname: `download-bridge/download/${downloadKey}`
+          pathname: `download/${downloadKey}`
         }, window.location.origin, [channel.port2]);
       };
     });
@@ -1734,8 +1748,56 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let cachedShardBytes = 0;
       const storedShardIds = new Set<number>();
 
+      let bridgeMessageHandler: ((event: MessageEvent) => void) | null = null;
+      let downloadBridgeComplete = false;
+      let downloadBridgeCompleteResolve: (() => void) | null = null;
+      let downloadBridgeCompletePromise: Promise<void> | null = null;
+      const ensureDownloadBridgePromise = () => {
+        if (!downloadBridgeCompletePromise) {
+          downloadBridgeCompletePromise = new Promise<void>((resolve) => {
+            downloadBridgeCompleteResolve = resolve;
+          });
+        }
+      };
+      const markDownloadBridgeComplete = () => {
+        if (downloadBridgeComplete) return;
+        downloadBridgeComplete = true;
+        if (downloadBridgeCompleteResolve) {
+          downloadBridgeCompleteResolve();
+        }
+      };
+      const attachBridgeListener = () => {
+        if (bridgeMessageHandler || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+        bridgeMessageHandler = (event: MessageEvent) => {
+          const data = (event as MessageEvent).data;
+          if (!data) return;
+          if (data.type === 'download_bridge_shard_deleted') {
+            if (transferId && data.transferId && data.transferId !== transferId) return;
+            if (typeof data.size === 'number') {
+              cachedShardBytes = Math.max(0, cachedShardBytes - data.size);
+              maybeSendBackpressure();
+            }
+            return;
+          }
+          if (data.type === 'download_bridge_complete') {
+            if (downloadKey && data.downloadKey && data.downloadKey !== downloadKey) return;
+            if (transferId && data.transferId && data.transferId !== transferId) return;
+            markDownloadBridgeComplete();
+          }
+        };
+        navigator.serviceWorker.addEventListener('message', bridgeMessageHandler);
+      };
+      const detachBridgeListener = () => {
+        if (!bridgeMessageHandler || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+        navigator.serviceWorker.removeEventListener('message', bridgeMessageHandler);
+        bridgeMessageHandler = null;
+      };
+
       let useBlobDownload = false;
       let downloadKey: string | null = options?.downloadKey ?? null;
+      if (downloadKey) {
+        ensureDownloadBridgePromise();
+      }
 
       const MAX_WRITE_BUFFER_BYTES = 512 * 1024 * 1024;
       const HIGH_WATERMARK_BYTES = 384 * 1024 * 1024;
@@ -1947,6 +2009,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           logPerf('receiver-final');
           cryptoWorker?.terminate();
           setIsTransferring(false);
+          detachBridgeListener();
           await clearTransfer(transferId);
           removeResumeSession(transferId);
           resolve();
@@ -1954,11 +2017,24 @@ export const useAdaptiveMultiStreamTransfer = () => {
         }
 
         if (!useFileSystemAPI) {
+          if (downloadKey && !useBlobDownload && downloadBridgeCompletePromise) {
+            let completionObserved = false;
+            await Promise.race([
+              downloadBridgeCompletePromise.then(() => {
+                completionObserved = true;
+              }),
+              new Promise<void>((resolve) => setTimeout(resolve, 60000))
+            ]);
+            if (!completionObserved) {
+              console.warn('⚠️ Download bridge completion timeout', { downloadKey });
+            }
+          }
           conn.send({ type: 'receiver_done', timestamp: Date.now() });
           clearInterval(perfInterval);
           logPerf('receiver-final');
           cryptoWorker?.terminate();
           setIsTransferring(false);
+          detachBridgeListener();
           await clearTransfer(transferId);
           removeResumeSession(transferId);
           resolve();
@@ -1995,6 +2071,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
           logPerf('receiver-final');
           cryptoWorker?.terminate();
           setIsTransferring(false);
+          detachBridgeListener();
           resolve();
           return;
         }
@@ -2004,6 +2081,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
         clearInterval(stallInterval);
         cryptoWorker?.terminate();
         setIsTransferring(false);
+        detachBridgeListener();
         reject(new Error('No save method available'));
       };
       
@@ -2191,10 +2269,15 @@ export const useAdaptiveMultiStreamTransfer = () => {
                       console.warn('⚠️ Shard buffer missing on completion', { shardId });
                     } else {
                       const data = shardBuffer.buffer.slice(shardBuffer.byteOffset, shardBuffer.byteOffset + shardState.total) as ArrayBuffer;
-                      await putShard(transferId, shardId, data);
-                      storedShardIds.add(shardId);
-                      shardBuffers.delete(shardId);
-                      cachedShardBytes = Math.max(0, cachedShardBytes - shardState.total);
+                      try {
+                        await putShard(transferId, shardId, data);
+                        storedShardIds.add(shardId);
+                        shardBuffers.delete(shardId);
+                        // Keep cachedShardBytes accounting for persisted shard; service worker deletion will decrement.
+                        maybeSendBackpressure();
+                      } catch (error) {
+                        console.error('❌ Failed to persist shard to IndexedDB', error);
+                      }
                     }
                   }
                 }
@@ -2299,6 +2382,8 @@ export const useAdaptiveMultiStreamTransfer = () => {
             chunkHeaderBytes = 8 + encryptionIvBytes;
           }
 
+          attachBridgeListener();
+
           if (typeof data.fileName === 'string' && data.fileName.length > 0) {
             incomingFileName = data.fileName;
           }
@@ -2392,6 +2477,9 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
             if (!useBlobDownload && !downloadKey && supportsDownloadBridge()) {
               downloadKey = await prepareDownloadBridge(incomingFileName, fileSize);
+              if (downloadKey) {
+                ensureDownloadBridgePromise();
+              }
             }
 
             if (downloadKey) {
@@ -2561,7 +2649,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
             verifyAndConfirmShard(data.shardId, state);
           }
         } else if (data.type === 'multi_stream_complete') {
-          console.log('✅ Transfer complete signal');
+          console.log('✅ Transfer complete signal (sender)');
 
           completeSignalReceived = true;
           if (typeof data.totalBytes === 'number') {

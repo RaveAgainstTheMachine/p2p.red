@@ -77,7 +77,6 @@ const onMessage = (event) => {
     }
     if (evt.data?.download) {
       postToParent({ type: 'download_bridge_download', url: evt.data.download });
-      window.location.href = evt.data.download;
     }
   };
 

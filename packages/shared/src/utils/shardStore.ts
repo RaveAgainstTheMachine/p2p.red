@@ -63,8 +63,8 @@ export const putShard = async (transferId: string, shardId: number, data: ArrayB
     store.put(record);
 
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'));
+    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'));
   });
 };
 
@@ -80,8 +80,8 @@ export const putTransferMeta = async (
       updatedAt: meta.updatedAt ?? Date.now()
     } as TransferMeta);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'));
+    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'));
   });
 };
 
@@ -103,8 +103,8 @@ export const deleteTransferMeta = async (transferId: string) => {
     const store = tx.objectStore(META_STORE_NAME);
     store.delete(transferId);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'));
+    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'));
   });
 };
 
@@ -142,8 +142,8 @@ export const deleteShard = async (transferId: string, shardId: number) => {
     const store = tx.objectStore(STORE_NAME);
     store.delete(makeKey(transferId, shardId));
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'));
+    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'));
   });
 };
 

@@ -49,6 +49,15 @@ const getShard = async (transferId, shardId) => {
   });
 };
 
+const notifyShardDeleted = async (payload) => {
+  try {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    clients.forEach((client) => client.postMessage(payload));
+  } catch (error) {
+    // noop
+  }
+};
+
 const deleteShard = async (transferId, shardId) => {
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -66,6 +75,16 @@ const waitForMeta = async (downloadKey, timeoutMs = 60000) => {
   while (Date.now() - start < timeoutMs) {
     const meta = await getTransferMetaByDownloadKey(downloadKey);
     if (meta) return meta;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return null;
+};
+
+const waitForShard = async (transferId, shardId, timeoutMs = 60000) => {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const data = await getShard(transferId, shardId);
+    if (data) return data;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   return null;
@@ -102,45 +121,89 @@ self.addEventListener('fetch', (event) => {
   const downloadKey = decodeURIComponent(match[1]);
 
   event.respondWith((async () => {
-    const meta = await waitForMeta(downloadKey);
-    if (!meta) {
-      return new Response('Download metadata not found', { status: 404 });
-    }
+    try {
+      const meta = await waitForMeta(downloadKey);
+      if (!meta) {
+        await notifyShardDeleted({
+          type: 'download_bridge_error',
+          downloadKey,
+          error: 'meta_not_found'
+        });
+        return new Response('Download metadata not found', { status: 404 });
+      }
 
-    const { transferId, fileName, fileSize, shardCount } = meta;
-    let nextShardId = 0;
+      const { transferId, fileName, fileSize, shardCount } = meta;
+      const firstShard = await waitForShard(transferId, 0);
+      if (!firstShard) {
+        await notifyShardDeleted({
+          type: 'download_bridge_error',
+          transferId,
+          downloadKey,
+          error: 'first_shard_missing'
+        });
+        return new Response('Download shard not found', { status: 404 });
+      }
+      let nextShardId = 0;
 
-    const stream = new ReadableStream({
-      async pull(controller) {
-        while (nextShardId < shardCount) {
-          const data = await getShard(transferId, nextShardId);
-          if (!data) {
-            await new Promise((resolve) => setTimeout(resolve, 250));
+      const stream = new ReadableStream({
+        async pull(controller) {
+          while (nextShardId < shardCount) {
+            let data = await getShard(transferId, nextShardId);
+            while (!data) {
+              await new Promise((resolve) => setTimeout(resolve, 250));
+              data = await getShard(transferId, nextShardId);
+            }
+            const buffer = new Uint8Array(data);
+            for (let offset = 0; offset < buffer.byteLength; offset += STREAM_CHUNK_SIZE) {
+              controller.enqueue(buffer.subarray(offset, offset + STREAM_CHUNK_SIZE));
+            }
+            await deleteShard(transferId, nextShardId);
+            await notifyShardDeleted({
+              type: 'download_bridge_shard_deleted',
+              transferId,
+              shardId: nextShardId,
+              size: buffer.byteLength
+            });
+            nextShardId += 1;
+            if (nextShardId >= shardCount) {
+              controller.close();
+              await notifyShardDeleted({
+                type: 'download_bridge_complete',
+                transferId,
+                downloadKey
+              });
+            }
             return;
           }
-          const buffer = new Uint8Array(data);
-          for (let offset = 0; offset < buffer.byteLength; offset += STREAM_CHUNK_SIZE) {
-            controller.enqueue(buffer.subarray(offset, offset + STREAM_CHUNK_SIZE));
-          }
-          await deleteShard(transferId, nextShardId);
-          nextShardId += 1;
-          return;
+          controller.close();
+          await notifyShardDeleted({
+            type: 'download_bridge_complete',
+            transferId,
+            downloadKey
+          });
+        },
+        cancel() {
+          // noop
         }
-        controller.close();
-      },
-      cancel() {
-        // noop
+      });
+
+      const headers = new Headers({
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${fileName}"`
+      });
+      if (typeof fileSize === 'number') {
+        headers.set('Content-Length', String(fileSize));
       }
-    });
 
-    const headers = new Headers({
-      'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${fileName}"`
-    });
-    if (typeof fileSize === 'number') {
-      headers.set('Content-Length', String(fileSize));
+      return new Response(stream, { headers });
+    } catch (error) {
+      await notifyShardDeleted({
+        type: 'download_bridge_error',
+        transferId: downloadKey,
+        downloadKey,
+        error: error && error.message ? error.message : 'unknown'
+      });
+      return new Response('Download bridge failed', { status: 500 });
     }
-
-    return new Response(stream, { headers });
   })());
 });

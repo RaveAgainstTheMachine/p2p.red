@@ -964,6 +964,7 @@ function App() {
 
   const handleChooseSaveLocation = async () => {
     setPendingReceive(false);
+    setStatus('connecting');
 
     if ('showSaveFilePicker' in window && incomingFileInfo?.name) {
       try {
@@ -979,18 +980,19 @@ function App() {
       }
     }
 
+    let preparedKey: string | null = null;
     if (incomingFileInfo?.name && typeof incomingFileInfo.size === 'number') {
-      const prepared = await prepareDownloadBridge(incomingFileInfo.name, incomingFileInfo.size);
-      if (!prepared) {
+      preparedKey = await prepareDownloadBridge(incomingFileInfo.name, incomingFileInfo.size);
+      if (!preparedKey) {
         console.error('❌ Download bridge preflight failed, cannot continue');
         setStatus('error');
         return;
       }
-      setDownloadKey(prepared);
+      setDownloadKey(preparedKey);
     }
 
     await handleReceive(null);
-    await startFileReceive(null);
+    await startFileReceive(null, preparedKey);
   };
 
   useEffect(() => {
@@ -1033,7 +1035,7 @@ function App() {
     console.log('📁 Ready to receive file, waiting for user to start download');
   };
 
-  const startFileReceive = async (handle?: any) => {
+  const startFileReceive = async (handle?: any, downloadKeyOverride?: string | null) => {
     if (!senderPeerId) {
       console.error('❌ No sender peer ID');
       return;
@@ -1041,6 +1043,7 @@ function App() {
     
     // Use passed handle or fall back to state
     const activeHandle = handle !== undefined ? handle : fileHandle;
+    const activeDownloadKey = downloadKeyOverride !== undefined ? downloadKeyOverride : downloadKey;
     
     try {
       console.log('Connecting to sender:', senderPeerId, 'with handle:', !!activeHandle);
@@ -1145,7 +1148,7 @@ function App() {
         await transferFileAdaptive(conn, null as any, undefined, undefined, {
           fileHandle: activeHandle,
           requireSave: true,
-          downloadKey
+          downloadKey: activeDownloadKey
         });
 
         setStatus('complete');
@@ -1687,7 +1690,7 @@ function App() {
                 </div>
               )}
               
-              {status === 'idle' && !pendingReceive && (
+              {status === 'idle' && !pendingReceive && !currentHash && (
                 <div>
                   <Download size={64} className="text-white/40 mx-auto mb-4" />
                   <h3 className="text-xl font-semibold text-white mb-2">

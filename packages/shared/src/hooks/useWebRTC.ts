@@ -97,7 +97,7 @@ export const useWebRTC = () => {
       const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env : undefined;
       const host = metaEnv?.VITE_PEERJS_HOST ?? 'p2p.red';
       const port = Number(metaEnv?.VITE_PEERJS_PORT ?? 443);
-      const path = metaEnv?.VITE_PEERJS_PATH ?? '/peerjs';
+      const path = metaEnv?.VITE_PEERJS_PATH ?? '/';
       const secure = String(metaEnv?.VITE_PEERJS_SECURE ?? 'true') === 'true';
 
       const newPeer = new Peer({

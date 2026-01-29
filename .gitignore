@@ -47,6 +47,10 @@ images/
 # Envoy runtime (mutable state)
 envoy-runtime/traffic_split/
 
+# Local prod parity
+local-certs/
+local-secrets/
+
 # Google Cloud
 .gcloudignore
 

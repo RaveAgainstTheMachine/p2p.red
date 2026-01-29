@@ -126,8 +126,10 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 ## Prod Workflow (OVH VPS)
 
-**Latest release notes (2026-01-29)**
-- Removed the site-wide "Under Construction" banner.
+**Latest release notes (2026-01-29) - v1.1.0**
+- Added optional passphrase protection (4-digit PIN or custom passphrase up to 128 chars).
+- Fixed passphrase verification to reject truncated inputs.
+- Added contact emails in the footer (webmaster@p2p.red, legal@p2p.red).
 
 ## Local Prod Parity (HTTPS + Local IP)
 

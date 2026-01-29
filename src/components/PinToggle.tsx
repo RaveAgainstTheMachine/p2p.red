@@ -7,7 +7,10 @@ interface PinToggleProps {
 
 export const PinToggle: React.FC<PinToggleProps> = ({ onPinChange }) => {
   const [enabled, setEnabled] = useState(false);
+  const [mode, setMode] = useState<'pin' | 'passphrase'>('pin');
   const [digits, setDigits] = useState(['', '', '', '']);
+  const [passphrase, setPassphrase] = useState('');
+  const passphraseRef = useRef<HTMLInputElement>(null);
   const inputRefs = [
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
@@ -16,22 +19,45 @@ export const PinToggle: React.FC<PinToggleProps> = ({ onPinChange }) => {
   ];
 
   useEffect(() => {
-    if (enabled) {
+    if (!enabled) {
+      onPinChange('');
+      return;
+    }
+
+    if (mode === 'pin') {
       const pin = digits.join('');
       const finalPin = pin.length === 4 ? pin : '';
       onPinChange(finalPin);
-    } else {
-      onPinChange('');
+      return;
     }
-  }, [digits, enabled, onPinChange]);
+
+    const value = passphrase;
+    onPinChange(value.length > 0 ? value : '');
+  }, [digits, enabled, mode, onPinChange, passphrase]);
 
   const handleToggle = () => {
     const newEnabled = !enabled;
     setEnabled(newEnabled);
     if (newEnabled) {
-      setTimeout(() => inputRefs[0].current?.focus(), 100);
+      setTimeout(() => {
+        if (mode === 'pin') {
+          inputRefs[0].current?.focus();
+        } else {
+          passphraseRef.current?.focus();
+        }
+      }, 100);
     } else {
       setDigits(['', '', '', '']);
+      setPassphrase('');
+    }
+  };
+
+  const handleModeChange = (nextMode: 'pin' | 'passphrase') => {
+    setMode(nextMode);
+    if (nextMode === 'pin') {
+      setTimeout(() => inputRefs[0].current?.focus(), 100);
+    } else {
+      setTimeout(() => passphraseRef.current?.focus(), 100);
     }
   };
 
@@ -91,25 +117,68 @@ export const PinToggle: React.FC<PinToggleProps> = ({ onPinChange }) => {
       </button>
 
       {enabled && (
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex gap-2">
-            {digits.map((digit, index) => (
-              <input
-                key={index}
-                ref={inputRefs[index]}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={digit}
-                onChange={(e) => handleDigitChange(index, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(index, e)}
-                onPaste={index === 0 ? handlePaste : undefined}
-                className="w-12 h-14 text-center text-2xl font-bold bg-white/5 border-2 border-white/20 
-                         rounded-lg text-white focus:outline-none focus:border-blue-400 transition-colors"
-              />
-            ))}
+        <div className="flex flex-col items-center gap-3 w-full">
+          <div className="flex items-center gap-2 text-xs text-white/60">
+            <button
+              type="button"
+              onClick={() => handleModeChange('pin')}
+              className={`px-3 py-1 rounded-full border transition-colors ${
+                mode === 'pin'
+                  ? 'border-blue-400 text-white'
+                  : 'border-white/20 text-white/50 hover:text-white'
+              }`}
+            >
+              4-digit PIN
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange('passphrase')}
+              className={`px-3 py-1 rounded-full border transition-colors ${
+                mode === 'passphrase'
+                  ? 'border-blue-400 text-white'
+                  : 'border-white/20 text-white/50 hover:text-white'
+              }`}
+            >
+              Passphrase
+            </button>
           </div>
-          <p className="text-white/40 text-xs">Type a 4‑digit PIN</p>
+
+          {mode === 'pin' ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex gap-2">
+                {digits.map((digit, index) => (
+                  <input
+                    key={index}
+                    ref={inputRefs[index]}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleDigitChange(index, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(index, e)}
+                    onPaste={index === 0 ? handlePaste : undefined}
+                    className="w-12 h-14 text-center text-2xl font-bold bg-white/5 border-2 border-white/20 
+                             rounded-lg text-white focus:outline-none focus:border-blue-400 transition-colors"
+                  />
+                ))}
+              </div>
+              <p className="text-white/40 text-xs">Type a 4‑digit PIN</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2 w-full max-w-sm">
+              <input
+                ref={passphraseRef}
+                type="password"
+                value={passphrase}
+                maxLength={128}
+                placeholder="Enter a passphrase"
+                onChange={(event) => setPassphrase(event.target.value)}
+                className="w-full px-4 py-3 bg-white/5 border-2 border-white/20 rounded-lg text-white 
+                         focus:outline-none focus:border-blue-400 transition-colors"
+              />
+              <p className="text-white/40 text-xs">Up to 128 characters</p>
+            </div>
+          )}
         </div>
       )}
     </div>

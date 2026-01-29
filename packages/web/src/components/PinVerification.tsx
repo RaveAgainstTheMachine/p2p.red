@@ -14,7 +14,10 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
   remainingAttempts,
   isVerifying = false 
 }) => {
+  const [mode, setMode] = useState<'pin' | 'passphrase'>('pin');
   const [digits, setDigits] = useState(['', '', '', '']);
+  const [passphrase, setPassphrase] = useState('');
+  const passphraseRef = createRef<HTMLInputElement>();
   const inputRefs = useMemo(() => (
     [
       createRef<HTMLInputElement>(),
@@ -25,15 +28,41 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
   ), []);
 
   useEffect(() => {
-    inputRefs[0].current?.focus();
-  }, [inputRefs]);
+    if (mode === 'pin') {
+      inputRefs[0].current?.focus();
+    } else {
+      passphraseRef.current?.focus();
+    }
+  }, [inputRefs, mode, passphraseRef]);
 
   useEffect(() => {
     if (error) {
       setDigits(['', '', '', '']);
-      setTimeout(() => inputRefs[0].current?.focus(), 100);
+      setPassphrase('');
+      setTimeout(() => {
+        if (mode === 'pin') {
+          inputRefs[0].current?.focus();
+        } else {
+          passphraseRef.current?.focus();
+        }
+      }, 100);
     }
-  }, [error, inputRefs]);
+  }, [error, inputRefs, mode, passphraseRef]);
+
+  const handleModeChange = (nextMode: 'pin' | 'passphrase') => {
+    setMode(nextMode);
+    if (nextMode === 'pin') {
+      setTimeout(() => inputRefs[0].current?.focus(), 100);
+    } else {
+      setTimeout(() => passphraseRef.current?.focus(), 100);
+    }
+  };
+
+  const handlePassphraseSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!passphrase) return;
+    onVerify(passphrase);
+  };
 
   const handleDigitChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
@@ -87,33 +116,83 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
     <div className="flex flex-col items-center gap-6 p-8">
       <div className="flex items-center gap-3 text-white">
         <Lock size={24} className="text-blue-400" />
-        <h3 className="text-xl font-semibold">PIN Required</h3>
+        <h3 className="text-xl font-semibold">Locked link</h3>
       </div>
 
       <p className="text-white/60 text-center">
-        This file is protected. Enter the 4-digit PIN to continue.
+        Enter the PIN or passphrase to continue.
       </p>
 
-      <div className="flex gap-3">
-        {digits.map((digit, index) => (
+      <div className="flex items-center gap-2 text-xs text-white/60">
+        <button
+          type="button"
+          onClick={() => handleModeChange('pin')}
+          className={`px-3 py-1 rounded-full border transition-colors ${
+            mode === 'pin'
+              ? 'border-blue-400 text-white'
+              : 'border-white/20 text-white/50 hover:text-white'
+          }`}
+        >
+          4-digit PIN
+        </button>
+        <button
+          type="button"
+          onClick={() => handleModeChange('passphrase')}
+          className={`px-3 py-1 rounded-full border transition-colors ${
+            mode === 'passphrase'
+              ? 'border-blue-400 text-white'
+              : 'border-white/20 text-white/50 hover:text-white'
+          }`}
+        >
+          Passphrase
+        </button>
+      </div>
+
+      {mode === 'pin' ? (
+        <div className="flex gap-3">
+          {digits.map((digit, index) => (
+            <input
+              key={index}
+              ref={inputRefs[index]}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleDigitChange(index, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(index, e)}
+              onPaste={index === 0 ? handlePaste : undefined}
+              disabled={isVerifying}
+              className={`w-14 h-16 text-center text-2xl font-bold bg-white/5 border-2 rounded-lg 
+                         text-white focus:outline-none transition-colors
+                         ${error ? 'border-red-400 animate-shake' : 'border-white/20 focus:border-blue-400'}
+                         ${isVerifying ? 'opacity-50 cursor-not-allowed' : ''}`}
+            />
+          ))}
+        </div>
+      ) : (
+        <form onSubmit={handlePassphraseSubmit} className="w-full max-w-sm flex flex-col gap-2">
           <input
-            key={index}
-            ref={inputRefs[index]}
-            type="text"
-            inputMode="numeric"
-            maxLength={1}
-            value={digit}
-            onChange={(e) => handleDigitChange(index, e.target.value)}
-            onKeyDown={(e) => handleKeyDown(index, e)}
-            onPaste={index === 0 ? handlePaste : undefined}
+            ref={passphraseRef}
+            type="password"
+            value={passphrase}
+            maxLength={128}
+            placeholder="Enter passphrase"
+            onChange={(event) => setPassphrase(event.target.value)}
             disabled={isVerifying}
-            className={`w-14 h-16 text-center text-2xl font-bold bg-white/5 border-2 rounded-lg 
-                       text-white focus:outline-none transition-colors
-                       ${error ? 'border-red-400 animate-shake' : 'border-white/20 focus:border-blue-400'}
+            className={`w-full px-4 py-3 bg-white/5 border-2 rounded-lg text-white focus:outline-none transition-colors
+                       ${error ? 'border-red-400' : 'border-white/20 focus:border-blue-400'}
                        ${isVerifying ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
-        ))}
-      </div>
+          <p className="text-white/40 text-xs text-center">Up to 128 characters</p>
+          <button
+            type="submit"
+            disabled={isVerifying || !passphrase}
+            className="btn-primary w-full"
+          >
+            Unlock
+          </button>
+        </form>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg p-3 max-w-sm">

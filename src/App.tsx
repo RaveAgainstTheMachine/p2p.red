@@ -621,7 +621,12 @@ function App() {
     const effectivePin = (import.meta as any).env?.VITE_E2E && e2ePinOverride !== null
       ? e2ePinOverride
       : pin;
-    const pinToSend = effectivePin && effectivePin.length === 4 ? effectivePin : undefined;
+    if (effectivePin && effectivePin.length > 128) {
+      setTransferErrorMessage('Passphrase must be 128 characters or fewer.');
+      setStatus('error');
+      return;
+    }
+    const pinToSend = effectivePin && effectivePin.length > 0 ? effectivePin : undefined;
     
     try {
       // Debug: Log all files received

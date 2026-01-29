@@ -8,6 +8,25 @@ This guide covers dev and prod build/deploy flows. Dev uses external Nginx Proxy
 - Dev reverse proxy is external NginxPM; do **not** edit prod Envoy for dev.
 - Dev deploy scripts use `envoy.dev.yaml` (HTTP-only) when `DEPLOY_ENV=dev`.
 
+## Release Versioning Policy
+- We follow **SemVer**: `MAJOR.MINOR.PATCH`.
+- **PATCH**: bug fixes, copy tweaks, or internal changes (no breaking behavior).
+- **MINOR**: new features that keep existing behavior compatible.
+- **MAJOR**: breaking changes to APIs, protocol behavior, or UI/flows that require user action.
+
+**Authoritative version source:**
+- Root `package.json` (`/opt/p2p-file-share/package.json`) is the app version used for builds.
+
+**Build labels:**
+- `automation/build-prod-images.sh` and `automation/build-local-prod-images.sh` generate `VITE_BUILD_VERSION` from:
+  - `APP_VERSION` (root `package.json`)
+  - short git SHA
+  - UTC timestamp
+
+**Bumping the version:**
+- Update the root `package.json` version before a release.
+- Use the SemVer rules above to decide the bump (e.g., `1.0.0` -> `1.0.1` for a patch).
+
 ## Dev Workflow (LAN + NginxPM)
 
 Note: `deploy.sh`/`deploy-and-test.sh` in dev mount `envoy.dev.yaml` via `ENVOY_CONFIG` (HTTP-only) for local testing; NginxPM still owns dev domains.

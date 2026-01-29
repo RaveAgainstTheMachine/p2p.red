@@ -184,6 +184,18 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) =>
         <footer className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6 text-xs text-white/50">
           <div>© {new Date().getFullYear()} p2p.red</div>
           <div className="flex flex-wrap items-center gap-4">
+            <a
+              href="mailto:webmaster@p2p.red"
+              className="transition hover:text-white"
+            >
+              webmaster@p2p.red
+            </a>
+            <a
+              href="mailto:legal@p2p.red"
+              className="transition hover:text-white"
+            >
+              legal@p2p.red
+            </a>
             <button
               type="button"
               onClick={onInfo}

@@ -78,6 +78,10 @@ const checkHttp = async (url, options) => {
   }
 };
 
+const PASSPHRASE_PREFIX = 'passphrase:';
+
+const hashPassphrase = (value) => crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+
 const checkTcp = (host, port) =>
   new Promise((resolve) => {
     const socket = net.createConnection({ host, port, timeout: STATUS_TIMEOUT_MS }, () => {
@@ -401,15 +405,27 @@ app.post('/api/metadata', async (req, res) => {
     const expiryHours = parseInt(process.env.LINK_EXPIRY_HOURS) || 24;
     const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
     
-    // Hash PIN if provided (4 digits)
+    // Hash PIN/passphrase if provided (4 digits or custom passphrase <= 128 chars)
     let pinHash = null;
-    if (pin) {
-      if (!/^\d{4}$/.test(pin)) {
+    if (pin !== undefined && pin !== null && String(pin).length > 0) {
+      const pinValue = String(pin);
+      const isFourDigitPin = /^\d{4}$/.test(pinValue);
+      if (!isFourDigitPin && pinValue.length > 128) {
         return res.status(400).json({
-          error: 'PIN must be exactly 4 digits',
+          error: 'Passphrase must be 128 characters or fewer',
         });
       }
-      pinHash = await bcrypt.hash(pin, 10);
+      if (!isFourDigitPin && pinValue.length === 0) {
+        return res.status(400).json({
+          error: 'PIN or passphrase cannot be empty',
+        });
+      }
+      if (isFourDigitPin) {
+        pinHash = await bcrypt.hash(pinValue, 10);
+      } else {
+        const passphraseHash = await bcrypt.hash(hashPassphrase(pinValue), 10);
+        pinHash = `${PASSPHRASE_PREFIX}${passphraseHash}`;
+      }
     }
     
     // Insert into database
@@ -745,14 +761,18 @@ app.get('/api/metadata/:key', async (req, res) => {
         
         const link = result.rows[0];
         
-        if (!pin) {
+        const pinValue = pin !== undefined && pin !== null ? String(pin) : '';
+        if (!pinValue) {
           return res.status(401).json({
-            error: 'PIN required',
+            error: 'PIN or passphrase required',
             requiresPin: true,
           });
         }
-        
-        const pinValid = await bcrypt.compare(pin, link.pin_hash);
+
+        const pinHash = link.pin_hash || '';
+        const pinValid = pinHash.startsWith(PASSPHRASE_PREFIX)
+          ? await bcrypt.compare(hashPassphrase(pinValue), pinHash.slice(PASSPHRASE_PREFIX.length))
+          : await bcrypt.compare(pinValue, pinHash);
         if (!pinValid) {
           // Increment failed attempts
           const currentAttempts = parseInt(attempts || '0') + 1;
@@ -760,10 +780,10 @@ app.get('/api/metadata/:key', async (req, res) => {
           
           const remainingAttempts = maxAttempts - currentAttempts;
           return res.status(403).json({
-            error: 'Invalid PIN',
+            error: 'Invalid PIN or passphrase',
             remainingAttempts: Math.max(0, remainingAttempts),
             message: remainingAttempts > 0 
-              ? `Invalid PIN. ${remainingAttempts} attempts remaining.`
+              ? `Invalid PIN or passphrase. ${remainingAttempts} attempts remaining.`
               : `Too many failed attempts. Try again in ${lockoutMinutes} minutes.`,
           });
         }
@@ -795,14 +815,18 @@ app.get('/api/metadata/:key', async (req, res) => {
     
     // Check PIN if required
     if (link.pin_hash) {
-      if (!pin) {
+      const pinValue = pin !== undefined && pin !== null ? String(pin) : '';
+      if (!pinValue) {
         return res.status(401).json({
-          error: 'PIN required',
+          error: 'PIN or passphrase required',
           requiresPin: true,
         });
       }
-      
-      const pinValid = await bcrypt.compare(pin, link.pin_hash);
+
+      const pinHash = link.pin_hash || '';
+      const pinValid = pinHash.startsWith(PASSPHRASE_PREFIX)
+        ? await bcrypt.compare(hashPassphrase(pinValue), pinHash.slice(PASSPHRASE_PREFIX.length))
+        : await bcrypt.compare(pinValue, pinHash);
       if (!pinValid) {
         // Increment failed attempts
         const currentAttempts = parseInt(attempts || '0') + 1;
@@ -810,10 +834,10 @@ app.get('/api/metadata/:key', async (req, res) => {
         
         const remainingAttempts = maxAttempts - currentAttempts;
         return res.status(403).json({
-          error: 'Invalid PIN',
+          error: 'Invalid PIN or passphrase',
           remainingAttempts: Math.max(0, remainingAttempts),
           message: remainingAttempts > 0 
-            ? `Invalid PIN. ${remainingAttempts} attempts remaining.`
+            ? `Invalid PIN or passphrase. ${remainingAttempts} attempts remaining.`
             : `Too many failed attempts. Try again in ${lockoutMinutes} minutes.`,
         });
       }

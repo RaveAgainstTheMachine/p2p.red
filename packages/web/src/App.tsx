@@ -390,6 +390,12 @@ function App() {
     if (!selectedFiles) return;
     setStatus('encrypting');
     const files = selectedFiles;
+    if (pin && pin.length > 128) {
+      console.error('Passphrase must be 128 characters or fewer.');
+      setStatus('error');
+      return;
+    }
+    const pinToSend = pin && pin.length > 0 ? pin : undefined;
     
     try {
       // Debug: Log all files received
@@ -461,7 +467,6 @@ function App() {
           
           // Create short link via metadata API
           try {
-            const pinToSend = pin && pin.length === 4 ? pin : undefined;
             const shortKey = await createShortLink({
               peerId: peerId!,
               fileName: zipFileName,
@@ -535,7 +540,6 @@ function App() {
         
         // Create short link via metadata API
         try {
-          const pinToSend = pin && pin.length === 4 ? pin : undefined;
           const shortKey = await createShortLink({
             peerId: peerId!,
             fileName: zipFileName,
@@ -604,7 +608,6 @@ function App() {
         
         // Create short link via metadata API
         try {
-          const pinToSend = pin && pin.length === 4 ? pin : undefined;
           // Determine display name
           let displayName: string;
           if (isFolderSelection) {
@@ -685,7 +688,6 @@ function App() {
       
       // Create short link via metadata API
       try {
-        const pinToSend = pin && pin.length === 4 ? pin : undefined;
         const shortKey = await createShortLink({
           peerId: peerId!,
           fileName: fileToTransfer.name,

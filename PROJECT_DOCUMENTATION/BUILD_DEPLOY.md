@@ -107,6 +107,9 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 ## Prod Workflow (OVH VPS)
 
+**Latest release notes (2026-01-29)**
+- Removed the site-wide "Under Construction" banner.
+
 ## Local Prod Parity (HTTPS + Local IP)
 
 Goal: run the **prod stack locally** (Envoy + blue/green + serve + CSP) without domains.

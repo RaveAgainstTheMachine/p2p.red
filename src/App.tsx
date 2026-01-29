@@ -1897,12 +1897,6 @@ function App() {
         </div>
       )}
       
-      {/* Under Construction Ribbon - Above Footer */}
-      <div className="fixed bottom-16 left-0 right-0 z-40">
-        <div className="bg-yellow-400 text-black py-3 px-4 text-center font-bold text-base shadow-xl border-t-2 border-yellow-500">
-          🚧 Under Construction - This site is currently being developed
-        </div>
-      </div>
     </div>
   );
 }

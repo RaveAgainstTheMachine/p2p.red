@@ -253,6 +253,29 @@ ExecStart=/usr/bin/docker run --rm --name openbao-agent \
 - Unseal: `docker exec -it openbao bao operator unseal`
 - Backup: snapshot `openbao_openbao_data` volume daily (encrypted)
 
+## WireGuard Health Alerts (bao host)
+WireGuard health monitoring runs on the bao host and posts to a Discord webhook.
+
+**Files**
+- Script: `/usr/local/sbin/wg-healthcheck.sh`
+- Webhook URL: `/etc/wg-healthcheck/webhook.url`
+- State: `/var/lib/wg-healthcheck/state.env`
+
+**Systemd**
+- Timer (every 5 min): `wg-healthcheck.timer`
+- Hourly summary: `wg-healthcheck-summary.timer`
+
+**Manual tests**
+```
+sudo systemctl start wg-healthcheck-summary.service
+sudo /usr/local/sbin/wg-healthcheck.sh summary
+```
+
+**Notes**
+- Summary posts hourly even when healthy.
+- Alerts are suppressed for the dev peer (`10.88.0.13/32`).
+- Discord summary format: one host per line with ✅/❌ status markers.
+
 ## Auto-Restart on Reboot
 - OpenBao uses `restart: unless-stopped` in compose.
 - Ensure Docker is enabled to start on boot:

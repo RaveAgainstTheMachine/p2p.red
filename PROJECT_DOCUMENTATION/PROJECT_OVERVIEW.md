@@ -52,9 +52,8 @@
 ### File Transfer
 - True peer-to-peer transfer (WebRTC DataChannels)
 - No server relay (files never touch servers)
-- Streaming ZIP compression (default for all files)
+- Streaming ZIP compression (always on)
 - Single files, multiple files, and folders supported
-- Toggle to disable ZIP compression
 - Real-time transfer progress
 - Resume capability for interrupted transfers
 

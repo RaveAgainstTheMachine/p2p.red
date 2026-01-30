@@ -214,7 +214,6 @@ function App() {
   const [currentHash, setCurrentHash] = useState<string>(window.location.hash);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const themeToggleRef = useRef<HTMLDivElement | null>(null);
-  const [enableZip, setEnableZip] = useState<boolean>(true);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
   const [anubisStatusMessage, setAnubisStatusMessage] = useState<string | null>(null);
   const [humanToastMessage, setHumanToastMessage] = useState<string | null>(null);
@@ -642,15 +641,13 @@ function App() {
         });
       }
       
-      let fileToTransfer: File;
-      
       // Check if this is a folder selection or multiple files
       const isFolderSelection = files.length > 1 || 
         (files.length === 1 && files[0].webkitRelativePath && files[0].webkitRelativePath.includes('/')) ||
         (files.length === 1 && files[0].size === 0 && files[0].name && !files[0].type);
       
-      // Use streaming ZIP for all files if enabled (default), unless single file and ZIP disabled
-      const shouldZip = enableZip && (isFolderSelection || files.length > 0);
+      // Always use streaming ZIP for all shares
+      const shouldZip = true;
       
       if (shouldZip && isFolderSelection) {
         console.log('Detected folder/multiple files');
@@ -833,134 +830,9 @@ function App() {
           });
         }
         return;
-      } else if (!enableZip && (files.length > 1 || isFolderSelection)) {
-        // Multiple files or folder without ZIP - send them individually
-        console.log('Multiple files/folder without ZIP, sending individually');
-        
-        // Calculate total size for metadata
-        let totalSize = 0;
-        for (let i = 0; i < files.length; i++) {
-          totalSize += files[i].size;
-        }
-        
-        // Create short link via metadata API
-        try {
-          // Determine display name
-          let displayName: string;
-          if (isFolderSelection) {
-            // Get folder name from first file's path
-            displayName = 'folder';
-            if (files.length > 0 && files[0].webkitRelativePath) {
-              const pathParts = files[0].webkitRelativePath.split('/');
-              if (pathParts.length > 1) {
-                displayName = `${pathParts[0]} (folder)`;
-              }
-            }
-          } else {
-            displayName = `${files.length} files`;
-          }
-          
-          const shortKey = await createShortLink({
-            peerId: peerId!,
-            fileName: displayName,
-            fileSize: totalSize,
-            fileType: isFolderSelection ? 'folder/files' : 'multiple/files'
-          }, pinToSend);
-          const shareLink = `${window.location.origin}${window.location.pathname}#${shortKey}`;
-          setShareLink(shareLink);
-          await copyShareLinkToClipboard(shareLink);
-          setStatus('waiting');
-          showHumanToast();
-        } catch (error) {
-          console.error('Failed to create short link:', error);
-          setTransferErrorMessage('Failed to create short link. Please try again.');
-        }
-        
-        // Wait for receiver connection
-        if (peer) {
-          peer.on('connection', async (conn) => {
-            console.log('Sender: Incoming connection from receiver:', conn.peer);
-            conn.on('open', async () => {
-              if (!(await confirmRelayTransfer(conn, totalSize))) {
-                return;
-              }
-              console.log('Sender: Connection open, starting multiple file transfer');
-              setShowEncryptionIndicator(true);
-              setIsEncryptedConnection(true);
-              setStatus('transferring');
-              try {
-                // Send all files sequentially with adaptive multi-stream
-                for (let i = 0; i < files.length; i++) {
-                  console.log(`Sending file ${i + 1}/${files.length}: ${files[i].name}`);
-                  await transferFileAdaptive(conn, files[i]);
-                  // Small delay between files
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                }
-                setStatus('complete');
-              } catch (error) {
-                console.error('Multiple file transfer failed:', error);
-                setStatus('error');
-              }
-            });
-          });
-        }
-        return; // Exit early, don't use normal file transfer flow
-      } else {
-        // Single file without ZIP
-        console.log('Single file without ZIP, using directly');
-        fileToTransfer = files[0];
-        console.log('Single file details:', {
-          name: fileToTransfer.name,
-          size: fileToTransfer.size,
-          type: fileToTransfer.type
-        });
       }
-      
-      // Validate file - allow empty files if it's an archive (folder)
-      if (!fileToTransfer) {
-        throw new Error('No file to transfer');
-      }
-      
-      // Only reject empty files if they're not archives (single empty files)
-      if (fileToTransfer.size === 0 && !fileToTransfer.name.includes('.archive') && !fileToTransfer.name.includes('.zip')) {
-        throw new Error(`Invalid file: ${fileToTransfer.name} (0 bytes)`);
-      }
-      
-      // Create short link via metadata API
-      try {
-        const shortKey = await createShortLink({
-          peerId: peerId!,
-          fileName: fileToTransfer.name,
-          fileSize: fileToTransfer.size,
-          fileType: fileToTransfer.type
-        }, pinToSend);
-        const link = `${window.location.origin}${window.location.pathname}#${shortKey}`;
-        setShareLink(link);
-        await copyShareLinkToClipboard(link);
-        setStatus('waiting');
-        showHumanToast();
-      } catch (error) {
-        console.error('Failed to create short link:', error);
-        setTransferErrorMessage('Failed to create short link. Please try again.');
-      }
-      
-      // Listen for incoming connection
-      if (peer) {
-        peer.on('connection', async (conn) => {
-          console.log('Sender: Incoming connection from receiver:', conn.peer);
-          conn.on('open', async () => {
-            if (!(await confirmRelayTransfer(conn, fileToTransfer.size))) {
-              return;
-            }
-            console.log('Sender: Connection open, starting file transfer');
-            setShowEncryptionIndicator(true);
-            setIsEncryptedConnection(true);
-            setStatus('transferring');
-            await transferFileAdaptive(conn, fileToTransfer);
-            setStatus('complete');
-          });
-        });
-      }
+
+      throw new Error('Unhandled transfer state: ZIP flow did not start');
     } catch (error) {
       console.error('Share failed:', error);
       setStatus('error');
@@ -970,6 +842,24 @@ function App() {
   const handleChooseSaveLocation = async () => {
     setPendingReceive(false);
     setStatus('connecting');
+
+    const fileType = incomingFileInfo?.fileType;
+    const isMultiFile = fileType === 'multiple/files' || fileType === 'folder/files';
+
+    if (isMultiFile && 'showDirectoryPicker' in window) {
+      try {
+        const dirHandle = await (window as any).showDirectoryPicker({
+          mode: 'readwrite'
+        });
+        await handleReceive(dirHandle);
+        await startFileReceive(dirHandle);
+        return;
+      } catch (error) {
+        console.warn('⚠️ Directory picker cancelled, cannot receive multiple files');
+        setStatus('error');
+        return;
+      }
+    }
 
     if ('showSaveFilePicker' in window && incomingFileInfo?.name) {
       try {
@@ -986,7 +876,7 @@ function App() {
     }
 
     let preparedKey: string | null = null;
-    if (incomingFileInfo?.name && typeof incomingFileInfo.size === 'number') {
+    if (!isMultiFile && incomingFileInfo?.name && typeof incomingFileInfo.size === 'number') {
       preparedKey = await prepareDownloadBridge(incomingFileInfo.name, incomingFileInfo.size);
       if (!preparedKey) {
         console.error('❌ Download bridge preflight failed, cannot continue');
@@ -1009,7 +899,6 @@ function App() {
         setPin(value);
         setE2ePinOverride(value);
       },
-      setZip: (value: boolean) => setEnableZip(value),
       createLink: () => handleProceedWithTransfer(),
       getShareLink: () => shareLink,
       getStatus: () => status,
@@ -1432,23 +1321,6 @@ function App() {
                       <FileStructure files={selectedFiles} />
                     )}
 
-                    {/* ZIP Toggle */}
-                    <div className="flex items-center justify-center gap-2 text-white/80">
-                      <button
-                        type="button"
-                        onClick={() => setEnableZip(!enableZip)}
-                        className="flex items-center gap-2 text-sm hover:text-white transition-colors"
-                      >
-                        <div className={`w-10 h-6 rounded-full transition-colors ${
-                          enableZip ? 'bg-blue-500' : 'bg-white/20'
-                        } relative`}>
-                          <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                            enableZip ? 'translate-x-5' : 'translate-x-1'
-                          }`} />
-                        </div>
-                        <span>Squish into a ZIP</span>
-                      </button>
-                    </div>
 
                     {/* PIN Toggle */}
                     <PinToggle onPinChange={setPin} />

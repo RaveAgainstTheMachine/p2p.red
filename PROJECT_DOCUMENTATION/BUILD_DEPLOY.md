@@ -135,6 +135,8 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 **Latest release notes (2026-01-30) - v1.1.1**
 - Fixed Plausible first-party proxy routing so `/api/event` hits Plausible (not metadata API).
 - Added privacy-safe telemetry logging (Redis, 7-day retention, 10k/day cap).
+- Enforced ZIP-only shares for files/folders to avoid unsupported unzipped multi-file transfers.
+- Deployed to prod (blue) with local-prod + cross-browser verification.
 
 **Previous release notes (2026-01-29) - v1.1.0**
 - Added optional passphrase protection (4-digit PIN or custom passphrase up to 128 chars).

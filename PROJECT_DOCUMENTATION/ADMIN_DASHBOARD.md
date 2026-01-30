@@ -7,6 +7,11 @@ Internal admin dashboard for p2p.red operations. Same stack (React + metadata-ap
 - Minimal operational controls (safe toggles only).
 - No exposure of file contents, peer IDs, IPs, or user-identifiable data.
 
+## Progress (2026-01-30)
+- ✅ Backend admin auth + routes implemented in `metadata-api` (userpass login, JWT cookie sessions).
+- ✅ Admin APIs: status, telemetry summary/events, telemetry/logging toggles.
+- ⏳ Admin UI shell for `dash.p2p.red` pending (login + overview + telemetry charts).
+
 ## Access Control
 - **Auth source:** OpenBao (AppRole or userpass policy scoped to admin).
 - **Session:** short-lived JWT (signed by metadata-api) or encrypted session cookie.

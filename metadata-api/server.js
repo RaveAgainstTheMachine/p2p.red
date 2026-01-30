@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
+const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
 const redis = require('redis');
@@ -32,6 +33,16 @@ const logRequests = isProduction
   : logRequestsEnv
     ? !['0', 'false', 'off', 'no'].includes(logRequestsEnv)
     : true;
+const telemetryIngestEnv = (process.env.TELEMETRY_INGEST_ENABLED || '').trim().toLowerCase();
+let telemetryIngestEnabled = telemetryIngestEnv
+  ? !['0', 'false', 'off', 'no'].includes(telemetryIngestEnv)
+  : true;
+const OPENBAO_ADDR = (process.env.OPENBAO_ADDR || 'https://bao.p2p.red').replace(/\/$/, '');
+const OPENBAO_USERPASS_PATH = process.env.OPENBAO_USERPASS_PATH || '/v1/auth/userpass/login';
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || '';
+const ADMIN_JWT_TTL_SECONDS = parseInt(process.env.ADMIN_JWT_TTL_SECONDS || '3600', 10);
+const ADMIN_COOKIE_NAME = process.env.ADMIN_COOKIE_NAME || 'p2p_admin_session';
+const ADMIN_COOKIE_DOMAIN = process.env.ADMIN_COOKIE_DOMAIN || '.p2p.red';
 const TELEMETRY_RETENTION_DAYS = parseInt(process.env.TELEMETRY_RETENTION_DAYS || '7', 10);
 const TELEMETRY_DAILY_LIMIT = parseInt(process.env.TELEMETRY_DAILY_LIMIT || '10000', 10);
 
@@ -228,9 +239,12 @@ morgan.token('url', (req) => {
 
 app.use(express.json({ limit: BODY_SIZE_LIMIT }));
 app.use(express.urlencoded({ limit: BODY_SIZE_LIMIT, extended: false }));
-if (logRequests) {
-  app.use(morgan('combined'));
-}
+let requestLoggingEnabled = logRequests;
+app.use(
+  morgan('combined', {
+    skip: () => !requestLoggingEnabled,
+  })
+);
 
 // Rate limiting
 const limiter = rateLimit({
@@ -267,6 +281,171 @@ function getCacheKey(shortKey) {
   return `link:${shortKey}`;
 }
 
+const parseCookies = (cookieHeader = '') =>
+  cookieHeader
+    .split(';')
+    .map((cookie) => cookie.trim())
+    .filter(Boolean)
+    .reduce((acc, item) => {
+      const [key, ...rest] = item.split('=');
+      if (!key) return acc;
+      acc[key] = decodeURIComponent(rest.join('=') || '');
+      return acc;
+    }, {});
+
+const getAdminToken = (req) => {
+  const authHeader = req.get('authorization');
+  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  const cookies = parseCookies(req.headers.cookie || '');
+  return cookies[ADMIN_COOKIE_NAME];
+};
+
+const requireAdmin = (req, res, next) => {
+  if (!ADMIN_JWT_SECRET) {
+    return res.status(503).json({ error: 'Admin auth not configured' });
+  }
+  const token = getAdminToken(req);
+  if (!token) {
+    return res.status(401).json({ error: 'Admin authentication required' });
+  }
+  try {
+    const payload = jwt.verify(token, ADMIN_JWT_SECRET);
+    req.admin = payload;
+    return next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid or expired admin session' });
+  }
+};
+
+const setAdminCookie = (res, token) => {
+  const cookieParts = [
+    `${ADMIN_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    'Path=/',
+    `Max-Age=${ADMIN_JWT_TTL_SECONDS}`,
+    'HttpOnly',
+    'Secure',
+    'SameSite=None',
+  ];
+  if (ADMIN_COOKIE_DOMAIN) {
+    cookieParts.push(`Domain=${ADMIN_COOKIE_DOMAIN}`);
+  }
+  res.setHeader('Set-Cookie', cookieParts.join('; '));
+};
+
+const clearAdminCookie = (res) => {
+  const cookieParts = [
+    `${ADMIN_COOKIE_NAME}=`,
+    'Path=/',
+    'Max-Age=0',
+    'HttpOnly',
+    'Secure',
+    'SameSite=None',
+  ];
+  if (ADMIN_COOKIE_DOMAIN) {
+    cookieParts.push(`Domain=${ADMIN_COOKIE_DOMAIN}`);
+  }
+  res.setHeader('Set-Cookie', cookieParts.join('; '));
+};
+
+const resolveRangeDays = (range) => {
+  if (!range) return 7;
+  const trimmed = String(range).trim().toLowerCase();
+  if (trimmed.endsWith('d')) {
+    const days = parseInt(trimmed.replace('d', ''), 10);
+    return Number.isFinite(days) ? Math.min(Math.max(days, 1), 30) : 7;
+  }
+  const days = parseInt(trimmed, 10);
+  return Number.isFinite(days) ? Math.min(Math.max(days, 1), 30) : 7;
+};
+
+const formatDateKey = (date) => date.toISOString().slice(0, 10).replace(/-/g, '');
+
+const getDatesBetween = (startDate, endDate) => {
+  const dates = [];
+  const current = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+  const end = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
+  while (current <= end) {
+    dates.push(new Date(current));
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return dates;
+};
+
+const parseDateInput = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+};
+
+const buildStatusPayload = async () => {
+  const isDev = (process.env.NODE_ENV || 'development') !== 'production';
+  const webUrl = process.env.WEB_STATUS_URL || (isDev ? 'https://dev.p2p.red' : 'https://p2p.red');
+  const signalHost = process.env.SIGNAL_STATUS_HOST || (isDev ? 'dev-signal.p2p.red' : 'signal.p2p.red');
+  const signalUrl = process.env.SIGNAL_STATUS_URL || `https://${signalHost}/peerjs/id`;
+  const analyticsUrl = process.env.ANALYTICS_STATUS_URL || 'https://plausible.p2p.red/js/script.js';
+  const openBaoUrl = process.env.OPENBAO_STATUS_URL || 'https://bao.p2p.red/v1/sys/health';
+  const turnHost = process.env.TURN_STATUS_HOST || (isDev ? 'dev-turn.p2p.red' : 'turn1.p2p.red');
+  const turnPort = parseInt(process.env.TURN_STATUS_PORT || '3478', 10);
+
+  const [webOk, signalOk, analyticsOk, openBaoOk, turnOk] = await Promise.all([
+    checkHttp(webUrl, { method: 'HEAD' }),
+    checkHttp(signalUrl, { method: 'GET' }),
+    checkHttp(analyticsUrl, { method: 'HEAD' }),
+    checkHttp(openBaoUrl, { method: 'GET' }),
+    checkTcp(turnHost, turnPort),
+  ]);
+
+  let databaseOk = false;
+  let cacheOk = false;
+  try {
+    await pool.query('SELECT 1');
+    databaseOk = true;
+  } catch (error) {
+    databaseOk = false;
+  }
+
+  try {
+    await redisClient.ping();
+    cacheOk = true;
+  } catch (error) {
+    cacheOk = false;
+  }
+
+  const apiStatus = databaseOk && cacheOk ? 'online' : 'degraded';
+  const databaseStatus = databaseOk && cacheOk ? 'online' : databaseOk || cacheOk ? 'degraded' : 'offline';
+
+  const services = {
+    web: webOk ? 'online' : 'offline',
+    signal: signalOk ? 'online' : 'offline',
+    api: apiStatus,
+    databases: databaseStatus,
+    analytics: analyticsOk ? 'online' : 'offline',
+    turn: turnOk ? 'online' : 'offline',
+    secrets: openBaoOk ? 'online' : 'offline',
+  };
+
+  const statusValues = Object.values(services);
+  const hasOnline = statusValues.includes('online');
+  const hasOffline = statusValues.includes('offline');
+  const overall = hasOnline && hasOffline ? 'degraded' : hasOnline ? 'online' : 'offline';
+
+  return {
+    status: overall,
+    checkedAt: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    services,
+    details: {
+      databases: {
+        postgres: databaseOk ? 'online' : 'offline',
+        redis: cacheOk ? 'online' : 'offline',
+      },
+    },
+  };
+};
+
 function buildTurnCredentials() {
   if (!process.env.TURN_SECRET) {
     throw new Error('TURN secret not configured');
@@ -298,73 +477,246 @@ app.get('/api/turn-credentials', (req, res) => {
 });
 
 app.get('/api/status', async (req, res) => {
-  const isDev = (process.env.NODE_ENV || 'development') !== 'production';
-  const webUrl = process.env.WEB_STATUS_URL || (isDev ? 'https://dev.p2p.red' : 'https://p2p.red');
-  const signalHost = process.env.SIGNAL_STATUS_HOST || (isDev ? 'dev-signal.p2p.red' : 'signal.p2p.red');
-  const signalUrl = process.env.SIGNAL_STATUS_URL || `https://${signalHost}/peerjs/id`;
-  const analyticsUrl = process.env.ANALYTICS_STATUS_URL || 'https://plausible.p2p.red/js/script.js';
-  const openBaoUrl = process.env.OPENBAO_STATUS_URL || 'https://bao.p2p.red/v1/sys/health';
-  const turnHost = process.env.TURN_STATUS_HOST || (isDev ? 'dev-turn.p2p.red' : 'turn1.p2p.red');
-  const turnPort = parseInt(process.env.TURN_STATUS_PORT || '3478', 10);
-
-  const [webOk, signalOk, analyticsOk, openBaoOk, turnOk] = await Promise.all([
-    checkHttp(webUrl, { method: 'HEAD' }),
-    checkHttp(signalUrl, { method: 'GET' }),
-    checkHttp(analyticsUrl, { method: 'HEAD' }),
-    checkHttp(openBaoUrl, { method: 'GET' }),
-    checkTcp(turnHost, turnPort)
-  ]);
-
-  let databaseOk = false;
-  let cacheOk = false;
   try {
-    await pool.query('SELECT 1');
-    databaseOk = true;
+    const payload = await buildStatusPayload();
+    res.json(payload);
   } catch (error) {
-    databaseOk = false;
+    console.error('Status check failed:', error);
+    res.status(500).json({ error: 'Status unavailable' });
+  }
+});
+
+app.post('/api/admin/login', async (req, res) => {
+  if (!ADMIN_JWT_SECRET) {
+    return res.status(503).json({ error: 'Admin auth not configured' });
+  }
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
   }
 
+  const loginPath = OPENBAO_USERPASS_PATH.replace(/\/$/, '');
+  const loginUrl = `${OPENBAO_ADDR}${loginPath}/${encodeURIComponent(username)}`;
+
   try {
-    await redisClient.ping();
-    cacheOk = true;
+    const response = await fetch(loginUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+
+    if (!response.ok) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const data = await response.json();
+    const auth = data?.auth;
+    if (!auth?.client_token) {
+      return res.status(401).json({ error: 'Admin authentication failed' });
+    }
+
+    const token = jwt.sign(
+      {
+        sub: String(username),
+        policies: auth.policies || [],
+        source: 'openbao',
+      },
+      ADMIN_JWT_SECRET,
+      { expiresIn: ADMIN_JWT_TTL_SECONDS }
+    );
+
+    setAdminCookie(res, token);
+    return res.json({ status: 'ok' });
   } catch (error) {
-    cacheOk = false;
+    console.error('Admin login error:', error);
+    return res.status(500).json({ error: 'Admin login failed' });
   }
+});
 
-  const apiStatus = databaseOk && cacheOk ? 'online' : 'degraded';
-  const databaseStatus = databaseOk && cacheOk ? 'online' : databaseOk || cacheOk ? 'degraded' : 'offline';
+app.post('/api/admin/logout', (req, res) => {
+  clearAdminCookie(res);
+  res.json({ status: 'ok' });
+});
 
-  const services = {
-    web: webOk ? 'online' : 'offline',
-    signal: signalOk ? 'online' : 'offline',
-    api: apiStatus,
-    databases: databaseStatus,
-    analytics: analyticsOk ? 'online' : 'offline',
-    turn: turnOk ? 'online' : 'offline',
-    secrets: openBaoOk ? 'online' : 'offline'
-  };
+app.get('/api/admin/status', requireAdmin, async (req, res) => {
+  try {
+    const payload = await buildStatusPayload();
+    res.json({
+      ...payload,
+      admin: {
+        telemetryIngestEnabled,
+        requestLoggingEnabled,
+        telemetryRetentionDays: TELEMETRY_RETENTION_DAYS,
+        telemetryDailyLimit: TELEMETRY_DAILY_LIMIT
+      }
+    });
+  } catch (error) {
+    console.error('Admin status error:', error);
+    res.status(500).json({ error: 'Admin status unavailable' });
+  }
+});
 
-  const statusValues = Object.values(services);
-  const hasOnline = statusValues.includes('online');
-  const hasOffline = statusValues.includes('offline');
-  const overall = hasOnline && hasOffline ? 'degraded' : hasOnline ? 'online' : 'offline';
+app.get('/api/admin/telemetry/summary', requireAdmin, async (req, res) => {
+  try {
+    const rangeDays = resolveRangeDays(req.query.range);
+    const endDate = parseDateInput(req.query.end) || new Date();
+    const startDate = parseDateInput(req.query.start)
+      || new Date(endDate.getTime() - (rangeDays - 1) * 86400 * 1000);
 
-  res.json({
-    status: overall,
-    checkedAt: new Date().toISOString(),
-    uptimeSeconds: Math.floor(process.uptime()),
-    services,
-    details: {
-      databases: {
-        postgres: databaseOk ? 'online' : 'offline',
-        redis: cacheOk ? 'online' : 'offline'
+    if (startDate > endDate) {
+      return res.status(400).json({ error: 'Invalid date range' });
+    }
+
+    const dates = getDatesBetween(startDate, endDate);
+    const countKeys = dates.map((date) => `telemetry:transfer:count:${formatDateKey(date)}`);
+    const countValues = await Promise.all(countKeys.map((key) => redisClient.get(key)));
+    const daily = dates.map((date, index) => ({
+      date: date.toISOString().slice(0, 10),
+      count: parseInt(countValues[index] || '0', 10)
+    }));
+
+    const breakdown = {
+      eventType: {},
+      role: {},
+      connectionType: {},
+      stage: {},
+      errorCode: {}
+    };
+    let totalEvents = 0;
+
+    for (const date of dates) {
+      const listKey = `telemetry:transfer:${formatDateKey(date)}`;
+      const events = await redisClient.lRange(listKey, 0, -1);
+      for (const raw of events) {
+        try {
+          const event = JSON.parse(raw);
+          totalEvents += 1;
+          if (event.eventType) breakdown.eventType[event.eventType] = (breakdown.eventType[event.eventType] || 0) + 1;
+          if (event.role) breakdown.role[event.role] = (breakdown.role[event.role] || 0) + 1;
+          if (event.connectionType) breakdown.connectionType[event.connectionType] = (breakdown.connectionType[event.connectionType] || 0) + 1;
+          if (event.stage) breakdown.stage[event.stage] = (breakdown.stage[event.stage] || 0) + 1;
+          if (event.errorCode) breakdown.errorCode[event.errorCode] = (breakdown.errorCode[event.errorCode] || 0) + 1;
+        } catch (parseError) {
+          continue;
+        }
       }
     }
-  });
+
+    res.json({
+      range: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        days: dates.length
+      },
+      totals: { events: totalEvents },
+      daily,
+      breakdown,
+      telemetry: {
+        retentionDays: TELEMETRY_RETENTION_DAYS,
+        dailyLimit: TELEMETRY_DAILY_LIMIT,
+        ingestEnabled: telemetryIngestEnabled
+      }
+    });
+  } catch (error) {
+    console.error('Admin telemetry summary error:', error);
+    res.status(500).json({ error: 'Telemetry summary unavailable' });
+  }
+});
+
+app.get('/api/admin/telemetry/events', requireAdmin, async (req, res) => {
+  try {
+    const endDate = parseDateInput(req.query.end) || new Date();
+    const startDate = parseDateInput(req.query.start)
+      || new Date(endDate.getTime() - 86400 * 1000);
+    if (startDate > endDate) {
+      return res.status(400).json({ error: 'Invalid date range' });
+    }
+
+    const filters = {
+      eventType: req.query.eventType,
+      role: req.query.role,
+      connectionType: req.query.connectionType,
+      stage: req.query.stage,
+      errorCode: req.query.errorCode,
+    };
+    const limit = Math.min(parseInt(req.query.limit || '500', 10) || 500, 2000);
+
+    const dates = getDatesBetween(startDate, endDate);
+    const events = [];
+
+    for (const date of dates) {
+      const listKey = `telemetry:transfer:${formatDateKey(date)}`;
+      const dayEvents = await redisClient.lRange(listKey, 0, -1);
+      for (const raw of dayEvents) {
+        try {
+          const event = JSON.parse(raw);
+          const timestamp = event.timestamp || event.receivedAt;
+          const eventDate = timestamp ? new Date(timestamp) : null;
+          if (eventDate && (eventDate < startDate || eventDate > endDate)) {
+            continue;
+          }
+
+          let matches = true;
+          for (const [key, value] of Object.entries(filters)) {
+            if (!value) continue;
+            if (String(event[key] || '') !== String(value)) {
+              matches = false;
+              break;
+            }
+          }
+          if (!matches) continue;
+
+          events.push(event);
+        } catch (parseError) {
+          continue;
+        }
+      }
+    }
+
+    events.sort((a, b) => {
+      const aTime = new Date(a.timestamp || a.receivedAt || 0).getTime();
+      const bTime = new Date(b.timestamp || b.receivedAt || 0).getTime();
+      return bTime - aTime;
+    });
+
+    res.json({
+      range: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        days: dates.length
+      },
+      count: events.length,
+      events: events.slice(0, limit)
+    });
+  } catch (error) {
+    console.error('Admin telemetry events error:', error);
+    res.status(500).json({ error: 'Telemetry events unavailable' });
+  }
+});
+
+app.post('/api/admin/telemetry/toggle', requireAdmin, (req, res) => {
+  const { enabled } = req.body || {};
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be boolean' });
+  }
+  telemetryIngestEnabled = enabled;
+  res.json({ enabled: telemetryIngestEnabled });
+});
+
+app.post('/api/admin/logging/toggle', requireAdmin, (req, res) => {
+  const { enabled } = req.body || {};
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be boolean' });
+  }
+  requestLoggingEnabled = enabled;
+  res.json({ enabled: requestLoggingEnabled });
 });
 
 app.post('/api/telemetry/transfer', async (req, res) => {
   try {
+    if (!telemetryIngestEnabled) {
+      return res.status(503).json({ error: 'Telemetry ingest disabled' });
+    }
     const payload = buildTelemetryPayload(req.body);
     if (!payload) {
       return res.status(400).json({ error: 'Invalid telemetry payload' });

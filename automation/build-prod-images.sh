@@ -9,6 +9,8 @@ GIT_SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 BUILD_TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
 BUILD_VERSION="${APP_VERSION}-${GIT_SHA}-${BUILD_TIMESTAMP}"
 
+"$REPO_ROOT/automation/preflight.sh" build
+
 mkdir -p "$IMAGES_DIR"
 
 build_app_image() {

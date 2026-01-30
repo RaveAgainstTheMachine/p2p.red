@@ -27,6 +27,12 @@ This guide covers dev and prod build/deploy flows. Dev uses external Nginx Proxy
 - Update the root `package.json` version before a release.
 - Use the SemVer rules above to decide the bump (e.g., `1.0.0` -> `1.0.1` for a patch).
 
+**Enforcement (required):**
+- `automation/preflight.sh build` runs `automation/semver-check.sh`.
+- `automation/build-prod-images.sh` calls the build preflight and will fail if SemVer is invalid.
+- If the latest git tag matches `package.json` (e.g., `v1.1.1`), the check fails to prevent missed bumps.
+- Override only when explicitly needed: `ALLOW_SAME_VERSION=1`.
+
 ## Dev Workflow (LAN + NginxPM)
 
 Note: `deploy.sh`/`deploy-and-test.sh` in dev mount `envoy.dev.yaml` via `ENVOY_CONFIG` (HTTP-only) for local testing; NginxPM still owns dev domains.

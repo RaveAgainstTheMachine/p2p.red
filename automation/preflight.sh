@@ -82,6 +82,12 @@ require_metadata_health() {
   fi
 }
 
+require_semver() {
+  if [ -x "$REPO_ROOT/automation/semver-check.sh" ]; then
+    "$REPO_ROOT/automation/semver-check.sh"
+  fi
+}
+
 require_envoy_admin() {
   if ! curl -fsS "$ENVOY_ADMIN_URL/server_info" >/dev/null 2>&1; then
     fail "Envoy admin API not reachable at $ENVOY_ADMIN_URL"
@@ -121,6 +127,7 @@ case "$PHASE" in
     ;;
   build)
     require_git_clean
+    require_semver
     ;;
   "")
     warn "No phase provided. Use: preflight.sh {dev|prod|build}"

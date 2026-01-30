@@ -6,15 +6,17 @@ interface PinVerificationProps {
   error?: string;
   remainingAttempts?: number;
   isVerifying?: boolean;
+  modeOverride?: 'pin' | 'passphrase' | null;
 }
 
 export const PinVerification: React.FC<PinVerificationProps> = ({ 
   onVerify, 
   error, 
   remainingAttempts,
-  isVerifying = false 
+  isVerifying = false,
+  modeOverride = null,
 }) => {
-  const [mode, setMode] = useState<'pin' | 'passphrase'>('pin');
+  const [mode, setMode] = useState<'pin' | 'passphrase'>(modeOverride || 'pin');
   const [digits, setDigits] = useState(['', '', '', '']);
   const [passphrase, setPassphrase] = useState('');
   const passphraseRef = useRef<HTMLInputElement>(null);
@@ -24,6 +26,12 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
   ];
+
+  useEffect(() => {
+    if (modeOverride && modeOverride !== mode) {
+      setMode(modeOverride);
+    }
+  }, [modeOverride, mode]);
 
   useEffect(() => {
     if (mode === 'pin') {
@@ -48,6 +56,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
   }, [error, mode]);
 
   const handleModeChange = (nextMode: 'pin' | 'passphrase') => {
+    if (modeOverride) return;
     setMode(nextMode);
     if (nextMode === 'pin') {
       setTimeout(() => inputRefs[0].current?.focus(), 100);
@@ -118,33 +127,37 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
       </div>
 
       <p className="text-white/60 text-center">
-        Enter the PIN or passphrase to continue.
+        {mode === 'passphrase'
+          ? 'Enter the passphrase to continue.'
+          : 'Enter the 4-digit PIN to continue.'}
       </p>
 
-      <div className="flex items-center gap-2 text-xs text-white/60">
-        <button
-          type="button"
-          onClick={() => handleModeChange('pin')}
-          className={`px-3 py-1 rounded-full border transition-colors ${
-            mode === 'pin'
-              ? 'border-blue-400 text-white'
-              : 'border-white/20 text-white/50 hover:text-white'
-          }`}
-        >
-          4-digit PIN
-        </button>
-        <button
-          type="button"
-          onClick={() => handleModeChange('passphrase')}
-          className={`px-3 py-1 rounded-full border transition-colors ${
-            mode === 'passphrase'
-              ? 'border-blue-400 text-white'
-              : 'border-white/20 text-white/50 hover:text-white'
-          }`}
-        >
-          Passphrase
-        </button>
-      </div>
+      {!modeOverride && (
+        <div className="flex items-center gap-2 text-xs text-white/60">
+          <button
+            type="button"
+            onClick={() => handleModeChange('pin')}
+            className={`px-3 py-1 rounded-full border transition-colors ${
+              mode === 'pin'
+                ? 'border-blue-400 text-white'
+                : 'border-white/20 text-white/50 hover:text-white'
+            }`}
+          >
+            4-digit PIN
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeChange('passphrase')}
+            className={`px-3 py-1 rounded-full border transition-colors ${
+              mode === 'passphrase'
+                ? 'border-blue-400 text-white'
+                : 'border-white/20 text-white/50 hover:text-white'
+            }`}
+          >
+            Passphrase
+          </button>
+        </div>
+      )}
 
       {mode === 'pin' ? (
         <div className="flex gap-3">

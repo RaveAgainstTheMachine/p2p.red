@@ -132,7 +132,11 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 ## Prod Workflow (OVH VPS)
 
-**Latest release notes (2026-01-30) - v1.1.1**
+**Latest release notes (2026-01-30) - v1.1.2**
+- Receiver unlock UI now shows passphrase input when sender used a passphrase.
+- Admin dashboard scope documented (telemetry charts + OpenBao auth).
+
+**Previous release notes (2026-01-30) - v1.1.1**
 - Fixed Plausible first-party proxy routing so `/api/event` hits Plausible (not metadata API).
 - Added privacy-safe telemetry logging (Redis, 7-day retention, 10k/day cap).
 - Enforced ZIP-only shares for files/folders to avoid unsupported unzipped multi-file transfers.

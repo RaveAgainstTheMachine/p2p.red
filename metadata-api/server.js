@@ -473,6 +473,7 @@ app.post('/api/metadata', async (req, res) => {
     
     // Hash PIN/passphrase if provided (4 digits or custom passphrase <= 128 chars)
     let pinHash = null;
+    let pinType = null;
     if (pin !== undefined && pin !== null && String(pin).length > 0) {
       const pinValue = String(pin);
       const isFourDigitPin = /^\d{4}$/.test(pinValue);
@@ -488,9 +489,11 @@ app.post('/api/metadata', async (req, res) => {
       }
       if (isFourDigitPin) {
         pinHash = await bcrypt.hash(pinValue, 10);
+        pinType = 'pin';
       } else {
         const passphraseHash = await bcrypt.hash(hashPassphrase(pinValue), 10);
         pinHash = `${PASSPHRASE_PREFIX}${passphraseHash}`;
+        pinType = 'passphrase';
       }
     }
     
@@ -509,6 +512,7 @@ app.post('/api/metadata', async (req, res) => {
       fileSize,
       fileType: fileType || 'application/octet-stream',
       hasPin: !!pinHash,
+      pinType: pinType || null,
     });
     
     await redisClient.setEx(
@@ -810,6 +814,7 @@ app.get('/api/metadata/:key', async (req, res) => {
     if (cached) {
       console.log(`📦 Cache hit for key: ${key}`);
       const data = JSON.parse(cached);
+      let resolvedPinType = data.pinType || null;
       
       // If cache indicates PIN required, we must verify it
       if (data.hasPin) {
@@ -826,12 +831,14 @@ app.get('/api/metadata/:key', async (req, res) => {
         }
         
         const link = result.rows[0];
+        resolvedPinType = resolvedPinType || (link.pin_hash?.startsWith(PASSPHRASE_PREFIX) ? 'passphrase' : link.pin_hash ? 'pin' : null);
         
         const pinValue = pin !== undefined && pin !== null ? String(pin) : '';
         if (!pinValue) {
           return res.status(401).json({
             error: 'PIN or passphrase required',
             requiresPin: true,
+            pinType: resolvedPinType,
           });
         }
 
@@ -859,7 +866,7 @@ app.get('/api/metadata/:key', async (req, res) => {
       }
       
       // Return cached data (PIN verified or not required)
-      return res.json(data);
+      return res.json({ ...data, pinType: resolvedPinType });
     }
     
     // Cache miss - query database
@@ -886,6 +893,7 @@ app.get('/api/metadata/:key', async (req, res) => {
         return res.status(401).json({
           error: 'PIN or passphrase required',
           requiresPin: true,
+          pinType,
         });
       }
 
@@ -936,6 +944,7 @@ app.get('/api/metadata/:key', async (req, res) => {
       fileSize: parseInt(link.file_size),
       fileType: link.file_type,
       hasPin: !!link.pin_hash,
+      pinType,
       expiresAt: link.expires_at.toISOString(),
     };
     

@@ -17,6 +17,7 @@ export interface TransferMetadata {
   fileType: string;
   pin?: string;
   hasPin?: boolean;
+  pinType?: 'pin' | 'passphrase' | null;
   expiresAt?: string;
 }
 
@@ -130,6 +131,7 @@ export async function getMetadata(key: string, pin?: string): Promise<TransferMe
       if (response.status === 401 && error.requiresPin) {
         const err: any = new Error('PIN_REQUIRED');
         err.requiresPin = true;
+        err.pinType = error.pinType || null;
         throw err;
       }
       if (response.status === 403) {

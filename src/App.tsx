@@ -198,6 +198,7 @@ function App() {
   const [isEncryptedConnection, setIsEncryptedConnection] = useState<boolean>(false);
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [requiresPin, setRequiresPin] = useState<boolean>(false);
+  const [pinModeOverride, setPinModeOverride] = useState<'pin' | 'passphrase' | null>(null);
   const [pinError, setPinError] = useState<string>('');
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
@@ -571,6 +572,7 @@ function App() {
           console.error('❌ Failed to fetch metadata:', error);
           if (error.message === 'PIN_REQUIRED' || error.response?.status === 401) {
             setRequiresPin(true);
+            setPinModeOverride(error.pinType || null);
             setStatus('idle');
           } else {
             setStatus('error');
@@ -601,6 +603,7 @@ function App() {
       setSenderPeerId(metadata.peerId);
       setIncomingFileInfo({ name: metadata.fileName, size: metadata.fileSize, expiresAt: metadata.expiresAt, fileType: metadata.fileType });
       setRequiresPin(false);
+      setPinModeOverride(null);
       setPendingReceive(true);
     } catch (error: any) {
       console.error('❌ PIN verification failed:', error);
@@ -1247,6 +1250,7 @@ function App() {
               error={pinError}
               remainingAttempts={remainingAttempts}
               isVerifying={isVerifyingPin}
+              modeOverride={pinModeOverride}
             />
           </div>
         ) : mode === 'share' ? (

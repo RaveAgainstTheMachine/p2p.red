@@ -66,7 +66,8 @@ services:
       CLEANUP_INTERVAL_MINUTES: 60
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX_REQUESTS: 100
-      CORS_ORIGIN: https://${LOCAL_P2P_HOST:-127.0.0.1}:8443
+      CORS_ORIGIN: https://${LOCAL_P2P_HOST:-127.0.0.1}:8443,https://dash.p2p.red
+      ADMIN_JWT_SECRET: local-dev-admin-secret
     ports:
       - "${LOCAL_METADATA_PUBLISH:-127.0.0.1:3001}:3001"
     networks:
@@ -161,6 +162,7 @@ services:
       - VITE_HOST=0.0.0.0
       - HOST_CHECK_DISABLED=true
       - VITE_BUILD_VARIANT=blue
+      - VITE_ADMIN_API_URL=https://${LOCAL_P2P_HOST:-127.0.0.1}:8443
     networks:
       - local-p2p
     labels:
@@ -178,6 +180,7 @@ services:
       - VITE_HOST=0.0.0.0
       - HOST_CHECK_DISABLED=true
       - VITE_BUILD_VARIANT=green
+      - VITE_ADMIN_API_URL=https://${LOCAL_P2P_HOST:-127.0.0.1}:8443
     networks:
       - local-p2p
     labels:

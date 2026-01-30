@@ -55,6 +55,14 @@ static_resources:
                             prefix: "/"
                           redirect:
                             https_redirect: true
+                    - name: redirect_dash
+                      domains:
+                        - dash.p2p.red
+                      routes:
+                        - match:
+                            prefix: "/"
+                          redirect:
+                            https_redirect: true
                 http_filters:
                   - name: envoy.filters.http.router
                     typed_config:
@@ -295,27 +303,86 @@ static_resources:
                                   weight: 0
                               total_weight: 100
                               runtime_key_prefix: traffic_split
-                          response_headers_to_add:
-                            - header:
-                                key: Cache-Control
-                                value: "no-cache, no-store, must-revalidate, max-age=0"
-                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
-                            - header:
-                                key: Pragma
-                                value: "no-cache"
-                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
-                            - header:
-                                key: Expires
-                                value: "0"
-                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
                 http_filters:
-                  - name: envoy.filters.http.buffer
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
-                      max_request_bytes: 1048576
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        - filter_chain_match:
+            server_names:
+              - dash.p2p.red
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - pkcs12:
+                      filename: /var/snap/docker/common/p2p-envoy-certs/dash.p2p.red.p12
+                    password:
+                      inline_string: "p2pred"
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_2
+                  tls_maximum_protocol_version: TLSv1_3
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_https_dash
+                use_remote_address: true
+                xff_num_trusted_hops: 0
+                route_config:
+                  name: dash_routes
+                  virtual_hosts:
+                    - name: dash
+                      domains:
+                        - dash.p2p.red
+                      response_headers_to_add:
+                        - header:
+                            key: X-Content-Type-Options
+                            value: "nosniff"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: X-XSS-Protection
+                            value: "1; mode=block"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: Content-Security-Policy
+                            value: "default-src 'self'; script-src 'self' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://dash.p2p.red; font-src 'self'; object-src 'none';"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: X-Frame-Options
+                            value: "SAMEORIGIN"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                      routes:
+                        - match:
+                            path: "/js/script.js"
+                          direct_response:
+                            status: 204
+                          response_headers_to_add:
+                            - header:
+                                key: Content-Type
+                                value: "application/javascript"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            prefix: "/api/"
+                          route:
+                            cluster: metadata_api
+                        - match:
+                            prefix: "/"
+                          route:
+                            weighted_clusters:
+                              clusters:
+                                - name: app_blue
+                                  weight: 100
+                                - name: app_green
+                                  weight: 0
+                              total_weight: 100
+                              runtime_key_prefix: traffic_split
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
 
         - filter_chain_match:
             server_names:

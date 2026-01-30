@@ -132,7 +132,16 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 ## Prod Workflow (OVH VPS)
 
-**Latest release notes (2026-01-30) - v1.1.2**
+**Latest release notes (2026-01-30) - v1.2.3**
+- Fix dash admin CSP + routing for `/js/script.js` and `/api/*` endpoints.
+- Admin UI now uses dash origin for API requests to avoid CORS.
+
+**Previous release notes (2026-01-30) - v1.2.2**
+- Internal admin dashboard UI shell on `dash.p2p.red` (telemetry + ops toggles).
+- OpenBao-backed admin auth + admin API endpoints for status/telemetry/toggles.
+- Envoy routing and TLS bundle for `dash.p2p.red`.
+
+**Previous release notes (2026-01-30) - v1.1.2**
 - Receiver unlock UI now shows passphrase input when sender used a passphrase.
 - Admin dashboard scope documented (telemetry charts + OpenBao auth).
 

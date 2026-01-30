@@ -529,7 +529,7 @@ app.post('/api/admin/login', async (req, res) => {
     return res.json({ status: 'ok' });
   } catch (error) {
     console.error('Admin login error:', error);
-    return res.status(500).json({ error: 'Admin login failed' });
+    return res.status(503).json({ error: 'OpenBao unavailable' });
   }
 });
 

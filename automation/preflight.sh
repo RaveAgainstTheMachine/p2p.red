@@ -99,6 +99,7 @@ require_envoy_certs() {
     "$ENVOY_CERTS_DIR/p2p.red.p12"
     "$ENVOY_CERTS_DIR/signal.p2p.red.p12"
     "$ENVOY_CERTS_DIR/plausible.p2p.red.p12"
+    "$ENVOY_CERTS_DIR/dash.p2p.red.p12"
   )
   local missing=0
   for f in "${required[@]}"; do

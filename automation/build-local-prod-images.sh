@@ -31,6 +31,7 @@ build_app_image() {
     --build-arg "VITE_BUILD_VARIANT=$color" \
     --build-arg "VITE_BUILD_VERSION=$BUILD_VERSION" \
     --build-arg "VITE_API_URL=https://${LOCAL_P2P_HOST}:${LOCAL_HTTPS_PORT}" \
+    --build-arg "VITE_ADMIN_API_URL=https://${LOCAL_P2P_HOST}:${LOCAL_HTTPS_PORT}" \
     --build-arg "VITE_PEERJS_HOST=${LOCAL_P2P_HOST}" \
     --build-arg "VITE_PEERJS_PORT=${LOCAL_HTTPS_PORT}" \
     --build-arg "VITE_PEERJS_SECURE=true" \

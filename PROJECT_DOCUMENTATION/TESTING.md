@@ -14,5 +14,6 @@ This project uses Vitest for unit/component tests and Playwright for end-to-end 
 - Playwright will start the Vite dev server on port 5180 (or reuse it if already running).
 - For headless CI, use the default `npm run test:e2e` command.
 - Test TUI runs lint → type-check → unit+E2E → metadata API tests with live logs.
-- TUI controls: `a` (all), `1` (lint), `2` (type-check), `3` (unit), `4` (e2e), `5` (metadata), `s` (services up), `d` (services down), `q` (quit).
-- Local E2E services: `docker compose -f docker-compose.e2e.yml up -d --build` (Postgres, Redis, metadata API, PeerJS).
+- TUI controls: `a` (all), `1` (lint), `2` (type-check), `3` (unit), `4` (e2e), `5` (metadata), `s` (local-prod up), `p` (local-prod preflight), `d` (local-prod down), `q` (quit).
+- Local-prod stack: `docker compose -f docker-compose.local-prod.yml up -d`.
+- Local-prod preflight: `INSECURE=1 LOCAL_P2P_HOST=127.0.0.1 LOCAL_HTTPS_PORT=8443 ./automation/local-prod-preflight.sh`.

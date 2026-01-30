@@ -22,7 +22,7 @@ const header = blessed.box({
     fg: 'white',
     bg: 'blue'
   },
-  content: '{bold}p2p.red Test Suite{/bold}  |  {bold}a{/bold} all  {bold}1{/bold} lint  {bold}2{/bold} type  {bold}3{/bold} unit  {bold}4{/bold} e2e  {bold}5{/bold} metadata  {bold}s{/bold} services up  {bold}d{/bold} services down  |  {bold}q{/bold} quit'
+  content: '{bold}p2p.red Test Suite{/bold}  |  {bold}a{/bold} all  {bold}1{/bold} lint  {bold}2{/bold} type  {bold}3{/bold} unit  {bold}4{/bold} e2e  {bold}5{/bold} metadata  {bold}s{/bold} local-prod up  {bold}p{/bold} preflight  {bold}d{/bold} local-prod down  |  {bold}q{/bold} quit'
 });
 
 const statusBox = blessed.box({
@@ -80,8 +80,27 @@ const tasks = {
   unit: { name: 'unit', label: 'Unit', cmd: 'npm', args: ['run', 'test:unit'], cwd: '/opt/p2p-file-share' },
   e2e: { name: 'e2e', label: 'E2E', cmd: 'npm', args: ['run', 'test:e2e'], cwd: '/opt/p2p-file-share' },
   metadata: { name: 'metadata', label: 'Metadata API', cmd: 'npm', args: ['test'], cwd: '/opt/p2p-file-share/metadata-api' },
-  servicesUp: { name: 'services-up', label: 'Services Up', cmd: 'docker', args: ['compose', '-f', 'docker-compose.e2e.yml', 'up', '-d', '--build'], cwd: '/opt/p2p-file-share' },
-  servicesDown: { name: 'services-down', label: 'Services Down', cmd: 'docker', args: ['compose', '-f', 'docker-compose.e2e.yml', 'down'], cwd: '/opt/p2p-file-share' }
+  servicesUp: {
+    name: 'local-prod-up',
+    label: 'Local-prod Up',
+    cmd: 'docker',
+    args: ['compose', '-f', 'docker-compose.local-prod.yml', 'up', '-d'],
+    cwd: '/opt/p2p-file-share'
+  },
+  servicesDown: {
+    name: 'local-prod-down',
+    label: 'Local-prod Down',
+    cmd: 'docker',
+    args: ['compose', '-f', 'docker-compose.local-prod.yml', 'down'],
+    cwd: '/opt/p2p-file-share'
+  },
+  localProdPreflight: {
+    name: 'local-prod-preflight',
+    label: 'Local-prod Preflight',
+    cmd: 'bash',
+    args: ['-lc', 'INSECURE=1 LOCAL_P2P_HOST=127.0.0.1 LOCAL_HTTPS_PORT=8443 ./automation/local-prod-preflight.sh'],
+    cwd: '/opt/p2p-file-share'
+  }
 };
 
 const updateStatus = (text, color = 'cyan') => {
@@ -202,6 +221,11 @@ screen.key(['5'], () => {
 screen.key(['s'], () => {
   if (runningProcess) return;
   runSingle(tasks.servicesUp);
+});
+
+screen.key(['p'], () => {
+  if (runningProcess) return;
+  runSingle(tasks.localProdPreflight);
 });
 
 screen.key(['d'], () => {

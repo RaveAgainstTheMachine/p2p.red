@@ -46,3 +46,10 @@ Retention:
     -H 'Content-Type: application/json' \
     -d '{"eventType":"transfer_error","role":"sender","errorCode":"manual_test"}'
   ```
+
+## Management UI (planned scope)
+- Logs dashboard: filter by time range, eventType, role, errorCode, connectionType.
+- Uptime/health: surface `/api/status` data with last-checked timestamp.
+- Ops controls (guarded): enable/disable request logging or telemetry ingestion.
+- Blue/green visibility: show active color (read-only).
+- Access control: admin-only, no public access.

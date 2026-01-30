@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
-import { DataConnection } from 'peerjs';
+import type { DataConnection } from 'peerjs';
 import { performanceMonitor } from '../utils/performanceMonitor';
+import { sendTelemetry } from '../services/telemetry';
 
 export interface TransferProgress {
   bytesTransferred: number;
@@ -308,6 +309,13 @@ export const useFileTransfer = () => {
       }
     } catch (error) {
       console.error('File transfer error:', error);
+      void sendTelemetry({
+        eventType: 'transfer_error',
+        role: 'sender',
+        stage: 'transfer',
+        errorCode: 'file_transfer',
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
       console.log('Transfer state saved for resume');
       throw error;
     } finally {
@@ -767,6 +775,13 @@ export const useFileTransfer = () => {
       setIsTransferring(false);
     } catch (error) {
       console.error('Stream transfer error:', error);
+      void sendTelemetry({
+        eventType: 'transfer_error',
+        role: 'receiver',
+        stage: 'stream',
+        errorCode: 'stream_transfer',
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
       setIsTransferring(false);
       throw error;
     }

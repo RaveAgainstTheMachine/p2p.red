@@ -58,10 +58,17 @@ Envoy routes `plausible.p2p.red` to the Plausible service and allows:
 - `script-src` `https://plausible.p2p.red`
 - `connect-src` `https://plausible.p2p.red`
 
+### First-party proxy (p2p.red)
+The app uses first-party proxy routes so browsers post to `https://p2p.red/api/event`.
+Ensure the Envoy route for `/api/event` is **before** the `/api/` catch-all so it
+does not get sent to the metadata API (which returns 404).
+
 ## Verification
 - `docker compose ps | grep plausible`
 - Open `https://plausible.p2p.red`
 - Confirm `/run/secrets/plausible.env` exists
+- Confirm first-party endpoint returns `202`:
+  - `curl -sS -X POST https://p2p.red/api/event -H 'Content-Type: application/json' -d '{"name":"pageview","url":"https://p2p.red/","domain":"p2p.red"}' -D -`
 
 ## Admin Bootstrap (first-time)
 Create the initial admin user and site ownership. Store the password in Bitwarden.

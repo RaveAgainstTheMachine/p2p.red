@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import Peer, { DataConnection } from 'peerjs';
 import { peerJsConfig } from '../config/environments';
+import { sendTelemetry } from '../services/telemetry';
 
 const TURN_HOSTS = ['turn1.p2p.red', 'turn2.p2p.red'];
 const TURN_TCP_PORT = 3478;
@@ -123,6 +124,13 @@ export const useWebRTC = () => {
         console.warn('⚠️ Peer disconnected from signaling server');
         setIsConnected(false);
         setConnectionState('disconnected');
+
+        void sendTelemetry({
+          eventType: 'peer_disconnected',
+          role: 'client',
+          stage: 'signal',
+          connectionType: 'signaling'
+        });
         
         // Attempt reconnection
         console.log('🔄 Attempting to reconnect...');
@@ -136,6 +144,13 @@ export const useWebRTC = () => {
 
       newPeer.on('error', (err) => {
         console.error('❌ Peer error:', err.type, err.message);
+        void sendTelemetry({
+          eventType: 'peer_error',
+          role: 'client',
+          stage: 'signal',
+          errorCode: err.type,
+          errorMessage: err.message
+        });
         if (err.type === 'network' || err.type === 'server-error') {
           setIsConnected(false);
           setConnectionState('failed');

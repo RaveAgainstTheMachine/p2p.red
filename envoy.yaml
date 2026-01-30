@@ -201,6 +201,16 @@ static_resources:
                                 value: "SAMEORIGIN"
                               append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - match:
+                            path: "/js/script.js"
+                          route:
+                            cluster: plausible
+                            host_rewrite_literal: plausible.p2p.red
+                        - match:
+                            path: "/api/event"
+                          route:
+                            cluster: plausible
+                            host_rewrite_literal: plausible.p2p.red
+                        - match:
                             prefix: "/api/"
                           route:
                             cluster: metadata_api
@@ -215,16 +225,6 @@ static_resources:
                                   weight: 0
                               total_weight: 100
                               runtime_key_prefix: traffic_split
-                        - match:
-                            path: "/js/script.js"
-                          route:
-                            cluster: plausible
-                            host_rewrite_literal: plausible.p2p.red
-                        - match:
-                            path: "/api/event"
-                          route:
-                            cluster: plausible
-                            host_rewrite_literal: plausible.p2p.red
                         - match:
                             prefix: "/peerjs"
                           route:

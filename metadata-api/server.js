@@ -32,6 +32,8 @@ const logRequests = isProduction
   : logRequestsEnv
     ? !['0', 'false', 'off', 'no'].includes(logRequestsEnv)
     : true;
+const TELEMETRY_RETENTION_DAYS = parseInt(process.env.TELEMETRY_RETENTION_DAYS || '7', 10);
+const TELEMETRY_DAILY_LIMIT = parseInt(process.env.TELEMETRY_DAILY_LIMIT || '10000', 10);
 
 // ============================================================================
 // Database & Cache Configuration
@@ -97,6 +99,40 @@ const checkTcp = (host, port) =>
 
 redisClient.on('error', (err) => console.error('Redis Client Error:', err));
 redisClient.on('connect', () => console.log('✅ Redis connected'));
+
+const sanitizeTelemetryString = (value, maxLength = 240) => {
+  if (!value) return '';
+  const raw = String(value);
+  const trimmed = raw.slice(0, maxLength);
+  return trimmed
+    .replace(/https?:\/\/\S+/gi, '[redacted-url]')
+    .replace(/(#|share\/)[A-Za-z0-9]{16,}/g, '[redacted-key]')
+    .replace(/(pin=)[^&\s]+/gi, '$1[redacted]')
+    .replace(/peerId[:=]\s*[A-Za-z0-9_-]+/gi, 'peerId=[redacted]');
+};
+
+const buildTelemetryPayload = (body) => {
+  if (!body || typeof body !== 'object') return null;
+
+  const payload = {
+    eventType: sanitizeTelemetryString(body.eventType, 40),
+    role: sanitizeTelemetryString(body.role, 24),
+    sessionId: sanitizeTelemetryString(body.sessionId, 80),
+    buildVersion: sanitizeTelemetryString(body.buildVersion, 80),
+    buildVariant: sanitizeTelemetryString(body.buildVariant, 40),
+    errorCode: sanitizeTelemetryString(body.errorCode, 80),
+    errorMessage: sanitizeTelemetryString(body.errorMessage, 400),
+    connectionType: sanitizeTelemetryString(body.connectionType, 20),
+    stage: sanitizeTelemetryString(body.stage, 60),
+    browser: sanitizeTelemetryString(body.browser, 60),
+    os: sanitizeTelemetryString(body.os, 60),
+    timestamp: sanitizeTelemetryString(body.timestamp, 40)
+  };
+
+  if (!payload.eventType) return null;
+  payload.receivedAt = new Date().toISOString();
+  return payload;
+};
 
 // Connect to Redis
 (async () => {
@@ -325,6 +361,36 @@ app.get('/api/status', async (req, res) => {
       }
     }
   });
+});
+
+app.post('/api/telemetry/transfer', async (req, res) => {
+  try {
+    const payload = buildTelemetryPayload(req.body);
+    if (!payload) {
+      return res.status(400).json({ error: 'Invalid telemetry payload' });
+    }
+
+    const dayKey = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const countKey = `telemetry:transfer:count:${dayKey}`;
+    const listKey = `telemetry:transfer:${dayKey}`;
+
+    const count = await redisClient.incr(countKey);
+    if (count === 1) {
+      await redisClient.expire(countKey, 60 * 60 * 48);
+    }
+    if (count > TELEMETRY_DAILY_LIMIT) {
+      return res.status(429).json({ error: 'Daily telemetry limit reached' });
+    }
+
+    await redisClient.lPush(listKey, JSON.stringify(payload));
+    await redisClient.lTrim(listKey, 0, TELEMETRY_DAILY_LIMIT - 1);
+    await redisClient.expire(listKey, TELEMETRY_RETENTION_DAYS * 86400);
+
+    return res.json({ status: 'ok' });
+  } catch (error) {
+    console.error('Telemetry ingest error:', error);
+    return res.status(500).json({ error: 'Telemetry ingest failed' });
+  }
 });
 
 // Health check

@@ -126,7 +126,11 @@ docker run -d --name dev-peerjs -p 5174:9000 dev-peerjs
 
 ## Prod Workflow (OVH VPS)
 
-**Latest release notes (2026-01-29) - v1.1.0**
+**Latest release notes (2026-01-30) - v1.1.1**
+- Fixed Plausible first-party proxy routing so `/api/event` hits Plausible (not metadata API).
+- Added privacy-safe telemetry logging (Redis, 7-day retention, 10k/day cap).
+
+**Previous release notes (2026-01-29) - v1.1.0**
 - Added optional passphrase protection (4-digit PIN or custom passphrase up to 128 chars).
 - Fixed passphrase verification to reject truncated inputs.
 - Added contact emails in the footer (webmaster@p2p.red, legal@p2p.red).

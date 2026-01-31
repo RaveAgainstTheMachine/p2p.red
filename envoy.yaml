@@ -357,7 +357,9 @@ static_resources:
                         - match:
                             path: "/js/script.js"
                           direct_response:
-                            status: 204
+                            status: 200
+                            body:
+                              inline_string: "/* plausible disabled on dash */"
                           response_headers_to_add:
                             - header:
                                 key: Content-Type

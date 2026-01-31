@@ -102,6 +102,7 @@ services:
       SIGNAL_STATUS_URL: http://p2p-peerjs:9000/peerjs/id
       ANALYTICS_STATUS_URL: http://p2p-plausible:8000/js/script.js
       OPENBAO_STATUS_URL: https://bao.p2p.red:8200/v1/sys/health
+      OPENBAO_ADDR: https://bao.p2p.red:8200
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: p2p_metadata

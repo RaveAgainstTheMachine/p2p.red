@@ -7,6 +7,9 @@ This guide covers dev and prod build/deploy flows. Dev uses external Nginx Proxy
 - OpenBao Agent running and rendering `/run/secrets/metadata.env` for metadata services.
 - Dev reverse proxy is external NginxPM; do **not** edit prod Envoy for dev.
 - Dev deploy scripts use `envoy.dev.yaml` (HTTP-only) when `DEPLOY_ENV=dev`.
+- Repository remotes (origin):
+  - `ssh://git@10.10.10.147:2222/frosty/p2p.red.git`
+  - `https://git.mcfrosty.com/frosty/p2p.red.git`
 
 ## Release Versioning Policy
 - We follow **SemVer**: `MAJOR.MINOR.PATCH`.

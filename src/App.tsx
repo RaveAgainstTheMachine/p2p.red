@@ -4,7 +4,9 @@ import { useWebRTC } from './hooks/useWebRTC';
 import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
 import { useAdaptiveMultiStreamTransfer } from './hooks/useAdaptiveMultiStreamTransfer';
+import BubbleBackground from './components/BubbleBackground';
 import { DropZone } from './components/DropZone';
+import SplashCursor from './components/SplashCursor';
 import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { FileTypeWarning } from './components/FileTypeWarning';
@@ -15,7 +17,7 @@ import { Logo } from './components/Logo';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, Share2, Shield, CheckCircle, File, Check, Sun, Moon, Monitor, ChevronDown } from 'lucide-react';
+import { Download, CheckCircle, File, Check, Sun, Moon, Monitor } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
@@ -176,11 +178,7 @@ function App() {
   const { isEncrypting } = useEncryption();
   const { transferProgress, isTransferring, resumeTransfer } = useFileTransfer();
   const { transferProgress: adaptiveProgress, transferFileAdaptive, prepareDownloadBridge } = useAdaptiveMultiStreamTransfer();
- 
-  const isAssistedConnection = (() => {
-    const ct = (adaptiveProgress as any)?.candidateType;
-    return typeof ct === 'string' && ct.toLowerCase().includes('relay');
-  })();
+
   const [mode, setMode] = useState<'share' | 'receive'>('share');
   const [shareLink, setShareLink] = useState<string>('');
   const [status, setStatus] = useState<'idle' | 'encrypting' | 'waiting' | 'connecting' | 'transferring' | 'complete' | 'error'>('idle');
@@ -190,6 +188,8 @@ function App() {
   const [senderPeerId, setSenderPeerId] = useState<string | null>(null);
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [pendingReceive, setPendingReceive] = useState<boolean>(false);
+  const [incomingFilesList, setIncomingFilesList] = useState<any[] | null>(null);
+  const [relayLimitWarning, setRelayLimitWarning] = useState<{ totalSize: number; isRelay: boolean } | null>(null);
   const [incomingFileInfo, setIncomingFileInfo] = useState<{name: string; size: number; expiresAt?: string; fileType?: string} | null>(null);
   const [downloadKey, setDownloadKey] = useState<string | null>(null);
   const [resumeSessions, setResumeSessions] = useState<ResumeSession[]>(() => normalizeResumeSessions(loadResumeSessionMap()));
@@ -199,12 +199,34 @@ function App() {
   const [showEncryptionIndicator, setShowEncryptionIndicator] = useState<boolean>(false);
   const [requiresPin, setRequiresPin] = useState<boolean>(false);
   const [pinModeOverride, setPinModeOverride] = useState<'pin' | 'passphrase' | null>(null);
+
+  // Sender: Handle preview connections
+  useEffect(() => {
+    if (!peer || status !== 'waiting' || !selectedFiles || selectedFiles.length === 0) return;
+    
+    const handleConnection = (conn: any) => {
+      if (conn.metadata?.type === 'preview') {
+        console.log('Sender: Incoming preview connection from', conn.peer);
+        conn.on('open', () => {
+          conn.send({
+            type: 'FILE_LIST',
+            files: selectedFiles.map(f => ({ name: f.name, size: f.size, type: f.type }))
+          });
+          setTimeout(() => conn.close(), 2000);
+        });
+      }
+    };
+    
+    peer.on('connection', handleConnection);
+    return () => {
+      peer.off('connection', handleConnection);
+    };
+  }, [peer, status, selectedFiles]);
+
   const [pinError, setPinError] = useState<string>('');
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
-  const [currentPage, setCurrentPage] = useState<'landing' | 'home' | 'legal' | 'info'>(
-    window.location.hash ? 'home' : 'landing'
-  );
+  const [currentPage, setCurrentPage] = useState<'landing' | 'home' | 'legal' | 'info'>('home');
   const [themePreference, setThemePreference] = useState<'system' | 'light' | 'dark'>(() => {
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') {
@@ -219,7 +241,7 @@ function App() {
   const [anubisStatusMessage, setAnubisStatusMessage] = useState<string | null>(null);
   const [humanToastMessage, setHumanToastMessage] = useState<string | null>(null);
   const [transferErrorMessage, setTransferErrorMessage] = useState<string>('');
-  const [isFaqExpanded, setIsFaqExpanded] = useState<boolean>(false);
+
   const [anubisChallenge, setAnubisChallenge] = useState<{ active: boolean; url?: string }>({
     active: false
   });
@@ -390,20 +412,14 @@ function App() {
     if (!isRelay) return true;
 
     if (totalSize > RELAY_SIZE_LIMIT_BYTES) {
-      setTransferErrorMessage(`Relay transfers are limited to ${formatFileSize(RELAY_SIZE_LIMIT_BYTES)}. Your selection is ${formatFileSize(totalSize)}. Try a direct connection or reduce size.`);
-      setStatus('error');
+      // Signal the receiver about the relay limit so both sides see the warning
+      try { conn.send({ type: 'relay_limit_warning', totalSize }); } catch {}
+      setRelayLimitWarning({ totalSize, isRelay: true });
       conn.close();
       return false;
     }
 
-    const confirmMessage = `This connection requires a relay and is limited to ${formatFileSize(RELAY_SIZE_LIMIT_BYTES)}. Your transfer is ${formatFileSize(totalSize)}. Continue?`;
-    if (!window.confirm(confirmMessage)) {
-      setTransferErrorMessage('Relay transfer cancelled before starting.');
-      setStatus('error');
-      conn.close();
-      return false;
-    }
-
+    // Relay ≤100GB — proceed silently, no popup
     return true;
   };
 
@@ -588,9 +604,36 @@ function App() {
     }
   }, [currentHash, peer, isConnected]);
 
+  // Receiver: Fetch preview when metadata is ready
+  useEffect(() => {
+    if (pendingReceive && senderPeerId && peer && isConnected && !incomingFilesList) {
+      console.log('Fetching file list preview...');
+      try {
+        const previewConn = peer.connect(senderPeerId, { metadata: { type: 'preview' } });
+        
+        previewConn.on('data', (data: any) => {
+          if (data?.type === 'FILE_LIST') {
+            console.log('Received file list preview:', data.files);
+            setIncomingFilesList(data.files);
+            previewConn.close();
+          }
+        });
+        
+        previewConn.on('error', () => previewConn.close());
+        setTimeout(() => previewConn.close(), 10000);
+      } catch (err) {
+        console.error('Preview connection failed:', err);
+      }
+    }
+  }, [pendingReceive, senderPeerId, peer, isConnected, incomingFilesList]);
+
   const handleFileSelect = (files: File[]) => {
     setSelectedFiles(files);
   };
+
+
+
+
 
   const handlePinVerification = async (enteredPin: string) => {
     setIsVerifyingPin(true);
@@ -718,6 +761,7 @@ function App() {
           if (peer) {
             let connectionHandled = false;
             peer.on('connection', async (conn) => {
+              if (conn.metadata?.type === 'preview') return;
               console.log('Sender: Incoming connection from receiver:', conn.peer);
               conn.on('open', async () => {
                 if (!(await confirmRelayTransfer(conn, totalSize))) {
@@ -794,6 +838,7 @@ function App() {
         if (peer) {
           let connectionHandled = false;
           peer.on('connection', async (conn) => {
+            if (conn.metadata?.type === 'preview') return;
             console.log('Sender: Incoming connection from receiver:', conn.peer);
             conn.on('open', async () => {
               if (!(await confirmRelayTransfer(conn, file.size))) {
@@ -1015,6 +1060,9 @@ function App() {
               
               // Send acknowledgment
               conn.send({ type: 'file_ready', transferId: data.transferId });
+              if (data.type === 'relay_limit_warning') {
+                setRelayLimitWarning({ totalSize: data.totalSize, isRelay: true });
+              }
             } else if (data.type === 'chunk' && currentWritable) {
               // Write chunk to current file
               await currentWritable.write(data.data);
@@ -1110,7 +1158,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen app-shell flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {anubisChallenge.active && anubisChallenge.url && (
         <iframe
           title="Anubis Challenge"
@@ -1119,8 +1167,9 @@ function App() {
         />
       )}
       {/* Animated background */}
-      <div className="fixed inset-0 app-overlay-base" />
-      <div className="fixed inset-0 app-overlay-accent animate-gradient-shift" />
+      <BubbleBackground className="fixed inset-0 -z-10 app-shell" />
+      <div className="fixed inset-0 app-overlay-base pointer-events-none" />
+      <SplashCursor SPLAT_RADIUS={0.1} SPLAT_FORCE={2500} DENSITY_DISSIPATION={6.0} CURL={8.0} RAINBOW_MODE={false} COLOR="#a855f7" />
       
       <div ref={themeToggleRef} className="fixed top-4 right-4 z-30">
         <div
@@ -1182,59 +1231,62 @@ function App() {
         </div>
       </div>
 
-      <div className="relative z-10 mx-auto px-4 py-6 max-w-7xl flex-1">
+      <div className="relative z-10 flex flex-col min-h-screen">
+
+        {/* Slim top nav */}
+        <nav className="flex items-center justify-between px-6 pt-5 pb-3">
+          <a
+            href="https://p2p.red"
+            className="flex items-center opacity-80 hover:opacity-100 transition-opacity"
+            title="p2p.red"
+          >
+            <Logo size="small" />
+          </a>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setCurrentPage('info')}
+              className="text-sm text-white/50 hover:text-white transition-colors px-3 py-1.5 rounded-full hover:bg-white/10"
+            >
+              How it works
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage('legal')}
+              className="text-sm text-white/50 hover:text-white transition-colors px-3 py-1.5 rounded-full hover:bg-white/10"
+            >
+              Legal
+            </button>
+          </div>
+        </nav>
+
         <input
           ref={resumeFileInputRef}
           type="file"
           className="hidden"
           onChange={handleResumeFilePicked}
         />
-        {/* Header */}
-        <header className="text-center mb-8">
-          <div className="flex justify-center mb-3">
-            <Logo size="medium" />
+
+        {/* Connection status banners */}
+        {(!isOnline || connectionState === 'failed' || (connectionState === 'reconnecting' && isOnline)) && (
+          <div className="mx-auto w-full max-w-2xl px-4 mt-2">
+            {!isOnline && (
+              <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300 text-center">
+                No internet — give your Wi-Fi a nudge.
+              </div>
+            )}
+            {connectionState === 'reconnecting' && isOnline && (
+              <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300 text-center">
+                Reconnecting…
+              </div>
+            )}
+            {connectionState === 'failed' && (
+              <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300 text-center">
+                Connection failed — refresh to retry.
+              </div>
+            )}
           </div>
-          <p className="text-white/80 text-base">
-            Privacy-first file sharing with direct P2P and a polite relay backup.
-          </p>
-          <p className="text-white/60 text-sm mt-1">
-            We don’t take ourselves too seriously — it’s a file sharing service, not rocket surgery.
-          </p>
-          
-          {/* Connection Status Alerts */}
-          {!isOnline && (
-            <div className="mt-4 bg-red-500/20 border-2 border-red-500 rounded-lg p-4 max-w-md mx-auto">
-              <p className="text-red-400 font-semibold text-center">
-                🌐 Internet’s gone for a skate
-              </p>
-              <p className="text-red-300 text-sm text-center mt-1">
-                Give your Wi‑Fi a polite nudge and try again.
-              </p>
-            </div>
-          )}
-          
-          {connectionState === 'reconnecting' && isOnline && (
-            <div className="mt-4 bg-yellow-500/20 border-2 border-yellow-500 rounded-lg p-4 max-w-md mx-auto">
-              <p className="text-yellow-400 font-semibold text-center">
-                🔄 Reconnecting... one sec, bud
-              </p>
-              <p className="text-yellow-300 text-sm text-center mt-1">
-                Tapping the wire politely.
-              </p>
-            </div>
-          )}
-          
-          {connectionState === 'failed' && (
-            <div className="mt-4 bg-red-500/20 border-2 border-red-500 rounded-lg p-4 max-w-md mx-auto">
-              <p className="text-red-400 font-semibold text-center">
-                ❌ Connection didn’t stick
-              </p>
-              <p className="text-red-300 text-sm text-center mt-1">
-                Refresh and we’ll give it another go.
-              </p>
-            </div>
-          )}
-        </header>
+        )}
 
         {/* Encryption Indicator */}
         <EncryptionIndicator
@@ -1242,9 +1294,15 @@ function App() {
           isVisible={showEncryptionIndicator}
         />
 
+        {/* Hero — centered, WeTransfer-style */}
+        <main className="flex flex-1 flex-col items-center justify-center px-4 py-6 relative">
+
+
+
+
         {/* Main Content */}
         {requiresPin ? (
-          <div className="glass-card" style={{ minHeight: '200px' }}>
+          <div className="glass-card w-full max-w-2xl mx-auto" style={{ minHeight: '200px' }}>
             <PinVerification 
               onVerify={handlePinVerification}
               error={pinError}
@@ -1254,9 +1312,18 @@ function App() {
             />
           </div>
         ) : mode === 'share' ? (
-          <div className="glass-card p-8" style={{ minHeight: '200px' }}>
-            {!shareLink ? (
-              <>
+          <>
+            {/* Idle: DropZone fills entire main */}
+            {!shareLink && !selectedFiles && (
+              <DropZone
+                onFileSelect={handleFileSelect}
+                isProcessing={isEncrypting || status === 'encrypting'}
+              />
+            )}
+
+            {/* File selected: card with details + actions */}
+            {!shareLink && selectedFiles && (
+              <div className="glass-card p-8 w-full max-w-2xl mx-auto">
                 {resumeSessions.some((session) => session.role === 'sender') && (
                   <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
                     <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1264,153 +1331,116 @@ function App() {
                         <div className="text-white font-semibold">Resume a paused send</div>
                         <div className="text-sm text-white/60">Pick up where you left off by selecting the original file.</div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={refreshResumeSessions}
-                        className="text-sm text-white/60 hover:text-white"
-                      >
-                        Refresh
-                      </button>
+                      <button type="button" onClick={refreshResumeSessions} className="text-sm text-white/60 hover:text-white">Refresh</button>
                     </div>
                     <div className="mt-4 grid gap-3">
                       {resumeSessions.filter((session) => session.role === 'sender').map((session) => (
                         <div key={session.transferId} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="min-w-0">
-                            <div className="text-white/90 font-medium truncate" title={session.fileName}>
-                              {session.fileName}
-                            </div>
-                            <div className="text-xs text-white/60">
-                              {formatFileSize(session.fileSize)} • {Math.round((session.completedShardIds.length / Math.max(1, session.shardCount)) * 100)}% cached
-                            </div>
+                            <div className="text-white/90 font-medium truncate" title={session.fileName}>{session.fileName}</div>
+                            <div className="text-xs text-white/60">{formatFileSize(session.fileSize)} • {Math.round((session.completedShardIds.length / Math.max(1, session.shardCount)) * 100)}% cached</div>
                           </div>
                           <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleResumeSenderSession(session)}
-                              className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm"
-                            >
-                              Resume
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleClearResumeSession(session)}
-                              className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm"
-                            >
-                              Clear
-                            </button>
+                            <button type="button" onClick={() => handleResumeSenderSession(session)} className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm">Resume</button>
+                            <button type="button" onClick={() => handleClearResumeSession(session)} className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm">Clear</button>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-                <DropZone 
-                  onFileSelect={handleFileSelect} 
-                  isProcessing={isEncrypting || status === 'encrypting'}
-                />
-                {selectedFiles && (
-                  <div className="flex flex-col gap-6 mt-6">
-                    {/* File Details */}
-                    {selectedFiles.length === 1 ? (
-                      <div className="flex items-center justify-center gap-3 text-white/80">
-                        <File size={20} className="text-blue-400" />
-                        <div className="text-center">
-                          <p className="font-medium">{selectedFiles[0].name}</p>
-                          <p className="text-sm text-white/60">
-                            {formatFileSize(selectedFiles[0].size)}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <FileStructure files={selectedFiles} />
-                    )}
-
-
-                    {/* PIN Toggle */}
-                    <PinToggle onPinChange={setPin} />
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-3 justify-center">
-                      <button
-                        onClick={() => { setSelectedFiles(null); setPin(''); }}
-                        className="btn-secondary"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => handleProceedWithTransfer()}
-                        className="btn-primary"
-                        disabled={status === 'encrypting'}
-                      >
-                        {status === 'encrypting' ? (
-                          <div className="flex items-center gap-2">
-                            <span>Warming up the moose...</span>
-                          </div>
-                        ) : 'Make me a share link, eh?'}
-                      </button>
+                {selectedFiles.length === 1 ? (
+                  <div className="flex items-center justify-center gap-3 text-white/80 mb-6">
+                    <File size={20} className="text-blue-400" />
+                    <div className="text-center">
+                      <p className="font-medium">{selectedFiles[0].name}</p>
+                      <p className="text-sm text-white/60">{formatFileSize(selectedFiles[0].size)}</p>
                     </div>
                   </div>
+                ) : (
+                  <div className="mb-6"><FileStructure files={selectedFiles} /></div>
                 )}
-              </>
-            ) : (
-              <div className="flex flex-col gap-6">
-                <ShareLink shareLink={shareLink} />
-                
-                {status === 'waiting' && (
-                  <div className="text-center">
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="inline-flex items-center gap-2 text-white/60">
-                        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                        <span>Waiting for the other human to show up...</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {status === 'transferring' && (
-                  <div className="w-full">
-                    {isAssistedConnection && (
-                      <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4 text-white/80">
-                        <div className="text-white/90 font-medium">Connection assist: engaged</div>
-                        <div className="mt-1 text-sm text-white/70">
-                          Still end‑to‑end encrypted. We can’t read your files and we never store them.
-                          This mode can be a bit slower on some networks.
-                        </div>
-                        <details className="mt-3">
-                          <summary className="cursor-pointer text-sm text-white/70 hover:text-white/90 transition-colors">
-                            Speed tips (polite but effective)
-                          </summary>
-                          <div className="mt-2 space-y-1 text-sm text-white/70">
-                            <div>Turn off VPN/proxy and retry</div>
-                            <div>Try a different network (home Wi‑Fi vs hotspot)</div>
-                            <div>UPnP can help direct connections (enable only if you’re comfy with it)</div>
-                            <div>Make sure UDP/WebRTC isn’t blocked by your firewall/router</div>
-                          </div>
-                        </details>
-                      </div>
-                    )}
-                    <EnhancedProgressBar 
-                      progress={adaptiveProgress} 
-                      label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`} 
-                      showETA={true}
-                      showSpeed={true}
-                    />
-                  </div>
-                )}
-                
-                {status === 'complete' && (
-                  <div className="text-center">
-                    <CheckCircle size={64} className="text-green-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-white">
-                      Transfer complete. No rocket science harmed.
-                    </h3>
-                  </div>
-                )}
+                <PinToggle onPinChange={setPin} />
+                <div className="flex gap-3 justify-center mt-6">
+                  <button onClick={() => { setSelectedFiles(null); setPin(''); }} className="btn-secondary">Cancel</button>
+                  <button onClick={() => handleProceedWithTransfer()} className="btn-primary" disabled={status === 'encrypting'}>
+                    {status === 'encrypting' ? <span>Warming up the moose...</span> : 'Make me a share link, eh?'}
+                  </button>
+                </div>
               </div>
             )}
-          </div>
+
+            {/* Link generated: ShareLink + transfer status */}
+            {shareLink && (
+              <div className="glass-card p-8 w-full max-w-2xl mx-auto">
+                <div className="flex flex-col gap-6">
+                  {relayLimitWarning && (
+                    <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
+                      <div className="flex items-start gap-3">
+                        <div className="text-amber-400 text-xl flex-shrink-0">⚠️</div>
+                        <div className="flex-1">
+                          <p className="text-amber-200 font-semibold">Relay size limit exceeded</p>
+                          <p className="text-amber-200/70 text-sm mt-1">
+                            Your transfer ({formatFileSize(relayLimitWarning.totalSize)}) is over the 100 GB relay cap.
+                            The recipient has been notified. Improve your connection or reduce file size and start a new share.
+                          </p>
+                          <details className="mt-3">
+                            <summary className="cursor-pointer text-sm text-amber-300/80 hover:text-amber-200 transition-colors">Tips to get a direct connection</summary>
+                            <ul className="mt-2 space-y-1 text-sm text-amber-200/60 list-disc list-inside">
+                              <li>Disable VPN/proxy and refresh</li>
+                              <li>Try home Wi-Fi instead of corporate/mobile network</li>
+                              <li>Enable UPnP on your router (if comfortable)</li>
+                              <li>Ensure UDP/WebRTC is not blocked by your firewall</li>
+                            </ul>
+                          </details>
+                          <button type="button" onClick={() => window.location.reload()} className="mt-3 px-4 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-200 text-sm hover:bg-amber-500/25 transition-colors">
+                            Refresh &amp; create new share
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <ShareLink shareLink={shareLink} />
+                  {status === 'waiting' && (
+                    <div className="text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="inline-flex items-center gap-2 text-white/60">
+                          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                          <span>Waiting for the other human to show up...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {status === 'transferring' && (
+                    <div className="w-full">
+
+                      <EnhancedProgressBar
+                        progress={adaptiveProgress}
+                        label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}
+                        showETA={true}
+                        showSpeed={true}
+                      />
+                    </div>
+                  )}
+                  {status === 'complete' && (
+                    <div className="text-center">
+                      <CheckCircle size={64} className="text-green-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-white">Transfer complete. No rocket science harmed.</h3>
+                    </div>
+                  )}
+                  {status === 'error' && (
+                    <div>
+                      <div className="text-6xl mb-4">❌</div>
+                      <h3 className="text-xl font-semibold text-white mb-2">Transfer bailed</h3>
+                      <p className="text-white/80">{transferErrorMessage || 'We hit a snag. Give it another go.'}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         ) : (
-          <div className="glass-card p-8">
+          <div className="glass-card p-8 w-full max-w-2xl mx-auto">
             <div>
               {resumeSessions.some((session) => session.role === 'receiver') && !pendingReceive && (
                 <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -1448,26 +1478,6 @@ function App() {
               
               {status === 'transferring' && (
                 <div className="mt-8 max-w-5xl mx-auto">
-                  {isAssistedConnection && (
-                    <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4 text-white/80">
-                      <div className="text-white/90 font-medium">Connection assistance enabled</div>
-                      <div className="mt-1 text-sm text-white/70">
-                        Your transfer is still end-to-end encrypted. We cannot read your files and we never store them.
-                        This mode can be slower on some networks.
-                      </div>
-                      <details className="mt-3">
-                        <summary className="cursor-pointer text-sm text-white/70 hover:text-white/90 transition-colors">
-                          Tips to improve speed
-                        </summary>
-                          <div className="mt-2 space-y-1 text-sm text-white/70">
-                            <div>Disable VPN/proxy and retry</div>
-                            <div>Try a different network (home Wi-Fi vs mobile hotspot)</div>
-                            <div>On home routers, UPnP can help direct connections (only enable if you understand the risks)</div>
-                            <div>Ensure UDP/WebRTC is allowed by firewall/router</div>
-                          </div>
-                        </details>
-                    </div>
-                  )}
                   <EnhancedProgressBar 
                     progress={adaptiveProgress} 
                     label={`Receiving file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}
@@ -1501,73 +1511,103 @@ function App() {
               )}
               
               {pendingReceive && incomingFileInfo && (
-                <div className="text-center py-12">
-                  <Download size={64} className="text-blue-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-white mb-2">
-                    Ready to receive file
-                  </h3>
-                  
-                  <div className="bg-white/5 rounded-lg p-4 mb-6 max-w-md mx-auto">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-medium truncate" title={incomingFileInfo.name}>
-                          {incomingFileInfo.name}
-                        </p>
-                        <p className="text-white/60 text-sm mt-1">
-                          {(incomingFileInfo.size / (1024 * 1024)).toFixed(2)} MB
-                        </p>
-                        {incomingFileInfo.expiresAt && (
-                          <p className="text-white/60 text-sm mt-1">
-                            {formatExpirationTime(incomingFileInfo.expiresAt)}
+                <div className="animate-fade-up">
+                  {/* Relay limit warning — only when relay AND >100GB */}
+                  {relayLimitWarning && (
+                    <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-left">
+                      <div className="flex items-start gap-3">
+                        <span className="text-amber-400 text-xl flex-shrink-0">⚠️</span>
+                        <div className="flex-1">
+                          <p className="text-amber-200 font-semibold">Relay size limit exceeded</p>
+                          <p className="text-amber-200/70 text-sm mt-1">
+                            This transfer ({formatFileSize(relayLimitWarning.totalSize)}) exceeds the 100 GB relay cap.
+                            Ask the sender to improve their connection, then create a new share.
                           </p>
-                        )}
+                          <details className="mt-3">
+                            <summary className="cursor-pointer text-sm text-amber-300/80 hover:text-amber-200 transition-colors">Tips for the sender</summary>
+                            <ul className="mt-2 space-y-1 text-sm text-amber-200/60 list-disc list-inside">
+                              <li>Disable VPN/proxy and refresh</li>
+                              <li>Try home Wi-Fi instead of corporate/mobile network</li>
+                              <li>Enable UPnP on router (if comfortable)</li>
+                              <li>Ensure UDP/WebRTC is not blocked by firewall</li>
+                            </ul>
+                          </details>
+                          <button type="button" onClick={() => window.location.reload()}
+                            className="mt-3 px-4 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-200 text-sm hover:bg-amber-500/25 transition-colors">
+                            Refresh to try again
+                          </button>
+                        </div>
                       </div>
                     </div>
+                  )}
+
+                  {/* File preview card */}
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-6 mb-6 text-left">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/15 border border-blue-500/20 text-2xl select-none">
+                        {incomingFileInfo.fileType?.startsWith('image/') ? '🖼️' :
+                         incomingFileInfo.fileType?.startsWith('video/') ? '🎬' :
+                         incomingFileInfo.fileType?.startsWith('audio/') ? '🎵' :
+                         incomingFileInfo.fileType?.includes('zip') || incomingFileInfo.fileType?.includes('tar') || incomingFileInfo.fileType?.includes('gzip') ? '📦' :
+                         incomingFileInfo.fileType?.includes('pdf') ? '📄' :
+                         incomingFileInfo.fileType?.includes('text') ? '📝' : '📁'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-semibold text-lg leading-tight truncate" title={incomingFileInfo.name}>
+                          {incomingFileInfo.name}
+                        </p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                          <span className="text-white/50 text-sm">{formatFileSize(incomingFileInfo.size)}</span>
+                          {incomingFileInfo.fileType && <span className="text-white/30 text-sm">{incomingFileInfo.fileType}</span>}
+                          {incomingFileInfo.expiresAt && <span className="text-white/40 text-sm">🕐 {formatExpirationTime(incomingFileInfo.expiresAt)}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 rounded-xl border border-white/8 bg-white/5 px-4 py-3 text-xs text-white/40">
+                      🔒 End-to-end encrypted · Not stored on servers · Direct from sender's browser
+                    </div>
+                    {incomingFilesList && (
+                      <div className="mt-4 max-h-48 overflow-y-auto custom-scrollbar rounded-xl border border-white/10 bg-black/20 p-3">
+                        <div className="text-sm font-semibold text-white/70 mb-2 px-1">Files ({incomingFilesList.length}):</div>
+                        <ul className="space-y-1">
+                          {incomingFilesList.map((f, i) => (
+                            <li key={i} className="flex justify-between text-sm text-white/60 px-1">
+                              <span className="truncate pr-2">{f.name}</span>
+                              <span className="flex-shrink-0">{formatFileSize(f.size)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                  
-                  <div className="max-w-md mx-auto mb-6">
+
+                  <div className="max-w-md mx-auto mb-4">
                     <FileTypeWarning fileName={incomingFileInfo.name} />
                   </div>
 
                   {resumeSessions.some((session) => session.role === 'receiver' && matchesIncomingResume(session)) && (
-                    <div className="max-w-md mx-auto mb-6 rounded-xl border border-white/10 bg-white/5 p-4 text-left">
+                    <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-4 text-left">
                       <div className="text-white/90 font-medium">Resume detected</div>
-                      <div className="text-sm text-white/60 mt-1">
-                        We found cached shards for this file. Resume to skip the verified parts.
-                      </div>
+                      <div className="text-sm text-white/60 mt-1">Cached shards found — resume to skip verified parts.</div>
                       <div className="mt-3 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handleChooseSaveLocation}
-                          className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm"
-                        >
-                          Resume download
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const match = resumeSessions.find((session) => session.role === 'receiver' && matchesIncomingResume(session));
-                            if (match) {
-                              void handleClearResumeSession(match);
-                            }
-                          }}
-                          className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm"
-                        >
-                          Start fresh
-                        </button>
+                        <button type="button" onClick={handleChooseSaveLocation} className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm">Resume download</button>
+                        <button type="button" onClick={() => {
+                          const match = resumeSessions.find((s) => s.role === 'receiver' && matchesIncomingResume(s));
+                          if (match) void handleClearResumeSession(match);
+                        }} className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm">Start fresh</button>
                       </div>
                     </div>
                   )}
-                  
+
                   <button
                     onClick={handleChooseSaveLocation}
-                    className="px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors shadow-lg"
+                    disabled={!!relayLimitWarning}
+                    className="w-full py-4 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-semibold transition-colors shadow-lg text-lg"
                   >
-                    Start the download, eh?
+                    <Download size={20} className="inline mr-2 -mt-0.5" />
+                    Download
                   </button>
-                  <p className="text-white/60 mt-4 text-sm">
-                    Pick a save spot when your browser asks nicely.
-                  </p>
+                  <p className="text-white/30 mt-3 text-sm text-center">Your browser will ask where to save it.</p>
                 </div>
               )}
               
@@ -1607,84 +1647,8 @@ function App() {
           </div>
         )}
 
-        {/* Features */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
-          <div className="glass-card p-6 text-center">
-            <Shield className="text-blue-400 mx-auto mb-4" size={32} />
-            <h3 className="text-lg font-semibold text-white mb-2">Direct P2P, no detours</h3>
-            <p className="text-white/60 text-sm">
-              Browser-to-browser transfer, with a relay only when needed.
-            </p>
-          </div>
-          
-          <div className="glass-card p-6 text-center">
-            <Shield className="text-purple-400 mx-auto mb-4" size={32} />
-            <h3 className="text-lg font-semibold text-white mb-2">End-to-end encrypted</h3>
-            <p className="text-white/60 text-sm">
-              Your files get encrypted in your browser before they go anywhere.
-            </p>
-          </div>
-          
-          <div className="glass-card p-6 text-center">
-            <Share2 className="text-pink-400 mx-auto mb-4" size={32} />
-            <h3 className="text-lg font-semibold text-white mb-2">Simple sharing</h3>
-            <p className="text-white/60 text-sm">
-              Share a link. No signup, no drama.
-            </p>
-          </div>
-        </div>
 
-        {/* FAQ */}
-        <div className="mt-12">
-          <div className="glass-card p-6">
-            <button
-              type="button"
-              onClick={() => setIsFaqExpanded((prev) => !prev)}
-              className="group mx-auto mb-3 flex items-center gap-2 text-center text-xl font-semibold text-white"
-              aria-expanded={isFaqExpanded}
-            >
-              <span>FAQ</span>
-              <ChevronDown
-                size={16}
-                className={`text-white/60 transition-transform ${isFaqExpanded ? 'rotate-180' : ''}`}
-              />
-            </button>
-            <div
-              className={`space-y-4 overflow-hidden text-sm text-white/70 text-left transition-[max-height] duration-300 ease-out ${
-                isFaqExpanded ? 'max-h-[760px]' : 'max-h-0'
-              }`}
-            >
-              <div>
-                <h3 className="text-white font-semibold">Is this actually peer-to-peer?</h3>
-                <p>Yep. Files go browser-to-browser via WebRTC DataChannels. If a direct path fails, a TURN relay may carry encrypted data.</p>
-              </div>
-              <div>
-                <h3 className="text-white font-semibold">How do you protect my privacy?</h3>
-                <p>Files are encrypted in your browser with AES-GCM. Signaling/metadata services coordinate connections and never see file contents. Links expire after 24 hours (optional PIN).</p>
-              </div>
-              <div>
-                <h3 className="text-white font-semibold">How do you avoid corrupted transfers?</h3>
-                <p>WebRTC uses reliable, ordered DataChannels plus AES-GCM authentication. If integrity checks fail, the transfer stops so you can retry.</p>
-              </div>
-              <div>
-                <h3 className="text-white font-semibold">Do session IDs stick around?</h3>
-                <p>Nope. Each page load gets a fresh PeerJS ID that only exists for this session.</p>
-              </div>
-              <div>
-                <h3 className="text-white font-semibold">Do I need an account?</h3>
-                <p>No account required. Make a link and send it.</p>
-              </div>
-              <div>
-                <h3 className="text-white font-semibold">How long do links last?</h3>
-                <p>Links expire after 24 hours to keep things tidy.</p>
-              </div>
-              <div>
-                <h3 className="text-white font-semibold">Will it work on restricted networks?</h3>
-                <p>Some work/school networks block WebRTC or force relays. If it’s grumpy, try another network.</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        </main>
       </div>
 
       {/* Footer */}

@@ -1,0 +1,14 @@
+---
+name: verify_changes
+description: Enforces visual verification of UI changes using the browser subagent before claiming success.
+---
+
+## Visual Verification Required
+
+Before reporting back to the user that a UI change, styling fix, or visual bug has been resolved, you MUST:
+1. Launch the `browser_subagent`.
+2. Instruct the subagent to visually inspect the exact component or page modified.
+3. explicitly verify that the intended visual state is actually present on the screen (not just in the DOM).
+4. Do not rely on assumptions about CSS or React rendering behavior. Only claim success if the subagent confirms the visual output is correct.
+
+If the subagent reports that the visual change is missing, broken, or not rendering as expected, you must investigate and fix the issue BEFORE replying to the user. Do not tell the user it is fixed until you have proven it to yourself via the subagent.

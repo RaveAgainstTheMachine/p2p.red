@@ -37,13 +37,33 @@
   -webkit-tap-highlight-color: rgba(59, 130, 246, 0.3);
 }
 
-/* Smooth scrolling */
+/* Smooth scrolling and dark scrollbar */
 html {
   scroll-behavior: smooth;
+  color-scheme: dark;
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(0, 0, 0, 0.3);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 html[data-theme='light'] {
-  color-scheme: light;
+  color-scheme: dark; /* Force dark scrollbars even on 'light' theme since UI is dark */
   --app-bg: linear-gradient(135deg, #0b1c3f 0%, #2b0b5c 50%, #5a0a3a 100%);
   --app-overlay-base: rgba(0, 0, 0, 0.2);
   --app-overlay-accent: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(168, 85, 247, 0.2), rgba(236, 72, 153, 0.2));

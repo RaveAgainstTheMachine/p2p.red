@@ -1157,6 +1157,9 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Animated background */}
+      <div className="fixed inset-0 app-overlay-base" />
+      <div className="fixed inset-0 app-overlay-accent animate-gradient-shift" />
       {anubisChallenge.active && anubisChallenge.url && (
         <iframe
           title="Anubis Challenge"

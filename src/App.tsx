@@ -4,9 +4,7 @@ import { useWebRTC } from './hooks/useWebRTC';
 import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
 import { useAdaptiveMultiStreamTransfer } from './hooks/useAdaptiveMultiStreamTransfer';
-import BubbleBackground from './components/BubbleBackground';
 import { DropZone } from './components/DropZone';
-import SplashCursor from './components/SplashCursor';
 import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { FileTypeWarning } from './components/FileTypeWarning';
@@ -1166,10 +1164,6 @@ function App() {
           className="fixed left-0 top-0 h-px w-px opacity-0 pointer-events-none"
         />
       )}
-      {/* Animated background */}
-      <BubbleBackground className="fixed inset-0 -z-10 app-shell" />
-      <div className="fixed inset-0 app-overlay-base pointer-events-none" />
-      <SplashCursor SPLAT_RADIUS={0.1} SPLAT_FORCE={2500} DENSITY_DISSIPATION={6.0} CURL={8.0} RAINBOW_MODE={false} COLOR="#a855f7" />
       
       <div ref={themeToggleRef} className="fixed top-4 right-4 z-30">
         <div

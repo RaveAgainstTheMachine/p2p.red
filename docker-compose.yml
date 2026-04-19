@@ -117,6 +117,8 @@ services:
       RATE_LIMIT_MAX_REQUESTS: 100
       CORS_ORIGIN: https://p2p.red,https://dash.p2p.red
       METADATA_API_LOG_REQUESTS: "off"
+    extra_hosts:
+      - "bao.p2p.red:10.88.0.1"
     ports:
       - "${METADATA_API_PUBLISH:-127.0.0.1:3001}:3001"
     networks:
@@ -130,9 +132,6 @@ services:
       start_period: 40s
     volumes:
       - /run/secrets:/run/secrets:ro
-    extra_hosts:
-      - "bao.p2p.red:10.88.0.1"
-
   # Anubis PoW filter for metadata API
   anubis:
     image: ghcr.io/techarohq/anubis:latest

@@ -15,11 +15,11 @@ import { Logo } from './components/Logo';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, CheckCircle, File, Check, Sun, Moon, Monitor } from 'lucide-react';
+import { Download, CheckCircle, File, Check, Sun, Moon, Monitor, Loader2, Search } from 'lucide-react';
 import { TransferArt } from './components/TransferArt';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
-import { Info } from './pages/Info';
+import { Info as InfoPage } from './pages/Info';
 import { Legal } from './pages/Legal';
 import { Landing } from './pages/Landing';
 import { clearTransfer } from './utils/shardStore';
@@ -1153,7 +1153,7 @@ function App() {
   }
   
   if (currentPage === 'info') {
-    return <Info onBack={() => setCurrentPage('home')} />;
+    return <InfoPage onBack={() => setCurrentPage('home')} />;
   }
 
   return (
@@ -1360,11 +1360,31 @@ function App() {
                 )}
                 <PinToggle onPinChange={setPin} />
                 <div className="flex gap-3 justify-center mt-6">
-                  <button onClick={() => { setSelectedFiles(null); setPin(''); }} className="btn-secondary">Cancel</button>
+                  <button onClick={() => { setSelectedFiles(null); setPin(''); }} className="btn-secondary" disabled={status === 'encrypting'}>Cancel</button>
                   <button onClick={() => handleProceedWithTransfer()} className="btn-primary" disabled={status === 'encrypting'}>
-                    {status === 'encrypting' ? <span>Warming up the moose...</span> : 'Make me a share link, eh?'}
+                    {status === 'encrypting' ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Warming up the moose...</span>
+                      </div>
+                    ) : 'Make me a share link, eh?'}
                   </button>
                 </div>
+                
+                {status === 'encrypting' && (
+                  <div className="mt-8 pt-6 border-t border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex items-center gap-4 p-4 rounded-xl bg-red-500/5 border border-red-500/20">
+                      <div className="relative">
+                        <div className="w-10 h-10 rounded-full border-2 border-red-500/20 border-t-red-500 animate-spin" />
+                        <Search className="absolute inset-0 m-auto w-4 h-4 text-red-500 animate-pulse" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-white font-bold text-sm tracking-tight uppercase">Preparing Secure Tunnel</span>
+                        <span className="text-red-200/40 text-[11px] font-medium leading-none">Generating ephemeral keys and metadata...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

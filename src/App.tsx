@@ -16,6 +16,7 @@ import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
 import { Download, CheckCircle, File, Check, Sun, Moon, Monitor } from 'lucide-react';
+import { TransferArt } from './components/TransferArt';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
@@ -1410,7 +1411,10 @@ function App() {
                   )}
                   {status === 'transferring' && (
                     <div className="w-full">
-
+                      <TransferArt 
+                        progress={adaptiveProgress.percentage} 
+                        speed={adaptiveProgress.speed} 
+                      />
                       <EnhancedProgressBar
                         progress={adaptiveProgress}
                         label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}
@@ -1475,6 +1479,10 @@ function App() {
               
               {status === 'transferring' && (
                 <div className="mt-8 max-w-5xl mx-auto">
+                  <TransferArt 
+                    progress={adaptiveProgress.percentage} 
+                    speed={adaptiveProgress.speed} 
+                  />
                   <EnhancedProgressBar 
                     progress={adaptiveProgress} 
                     label={`Receiving file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}

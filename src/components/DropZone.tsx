@@ -124,33 +124,43 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
 
   return (
     <>
-      {/* Redesigned Drag Overlay (P2P.RED style) */}
+      {/* Refined Drag Overlay (Dark Glass with Crimson Glow) */}
       {dragActive && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center gap-6 bg-red-950/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="relative group">
-            <div className="absolute inset-0 bg-red-500/20 rounded-[2.5rem] blur-2xl animate-pulse"></div>
-            <div className="relative flex h-24 w-24 items-center justify-center rounded-[2.5rem] border-2 border-red-500/40 bg-red-500/10 shadow-[0_0_40px_-10px_rgba(239,68,68,0.3)]">
-              <Upload size={40} className="text-red-500 animate-bounce" />
+        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center gap-6 bg-zinc-950/80 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="relative">
+            {/* Soft Ambient Glow */}
+            <div className="absolute inset-0 bg-red-500/10 rounded-[3rem] blur-3xl animate-pulse"></div>
+            
+            <div className="relative flex h-28 w-28 items-center justify-center rounded-[3rem] border border-white/10 bg-white/[0.03] shadow-[0_0_50px_-10px_rgba(239,68,68,0.15)] overflow-hidden">
+              {/* Subtle glass reflection */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none"></div>
+              <Upload size={44} className="text-red-500 relative z-10" />
             </div>
           </div>
-          <div className="text-center space-y-2">
-            <p className="text-3xl font-bold tracking-tight text-white uppercase">Drop to Securely Share</p>
-            <p className="text-red-200/60 font-medium">Encrypted · Peer-to-Peer · Private</p>
+          <div className="text-center space-y-3">
+            <h2 className="text-4xl font-black tracking-tight text-white uppercase italic">READY TO SHARE?</h2>
+            <div className="flex items-center gap-3 justify-center">
+              <span className="h-px w-8 bg-red-500/30"></span>
+              <p className="text-white/40 font-bold text-xs uppercase tracking-[0.3em]">End-to-End Encrypted</p>
+              <span className="h-px w-8 bg-red-500/30"></span>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Analyzing State Badge */}
+      {/* Modern Analyzing State Badge */}
       {isAnalyzing && (
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-top-12 duration-500 ease-out">
-          <div className="flex items-center gap-4 px-6 py-3 rounded-full bg-red-950/40 backdrop-blur-2xl border border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
-            <div className="relative">
-              <Search className="w-4 h-4 text-red-500 animate-pulse" />
-              <Loader2 className="absolute -inset-1.5 w-7 h-7 text-red-500/40 animate-spin" strokeWidth={1} />
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-top-8 duration-700 ease-out">
+          <div className="flex items-center gap-5 px-6 py-3.5 rounded-2xl bg-zinc-900/60 backdrop-blur-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+            <div className="relative flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                <Search className="w-4 h-4 text-red-500 animate-pulse" />
+              </div>
+              <div className="absolute inset-0 rounded-xl border border-red-500/40 animate-ping opacity-20"></div>
             </div>
-            <div className="flex flex-col">
-              <span className="text-[13px] font-bold text-white uppercase tracking-wider">Analyzing Structure</span>
-              <span className="text-[10px] font-medium text-red-200/60 leading-none">Mapping your files for secure transfer...</span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[12px] font-black text-white uppercase tracking-[0.1em]">Analyzing Structure</span>
+              <span className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Mapping nodes for P2P tunnel...</span>
             </div>
           </div>
         </div>
@@ -177,12 +187,15 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
         <div className="flex flex-col items-center gap-6">
           <div className={`
             flex h-16 w-16 items-center justify-center rounded-2xl border transition-all duration-500
-            ${isLoading ? 'bg-red-500/10 border-red-500/30 animate-pulse' : 'bg-white/5 border-white/10 group-hover:border-white/20'}
+            ${isLoading ? 'bg-red-500/10 border-red-500/30 shadow-[0_0_20px_rgba(239,68,68,0.1)]' : 'bg-white/5 border-white/10 group-hover:border-white/20'}
           `}>
             {isLoading ? (
-              <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
+              <div className="relative">
+                <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
+                <div className="absolute inset-0 bg-red-500/20 blur-lg rounded-full animate-pulse"></div>
+              </div>
             ) : (
-              <Upload size={28} className="text-white/30" />
+              <Upload size={28} className="text-white/20 group-hover:text-white/40 transition-colors" />
             )}
           </div>
 

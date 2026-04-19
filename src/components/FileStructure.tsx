@@ -222,58 +222,59 @@ export const FileStructure: React.FC<FileStructureProps> = ({ files, maxFiles = 
 
   return (
     <div
-      className="bg-red-950/5 border border-white/5 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-sm"
+      className="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md"
       style={{ height: maxHeightPx }}
     >
       <div className="h-14 border-b border-white/5 px-6 py-3 bg-white/[0.02]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/20">
-               <Folder size={16} className="text-red-500" />
+            <div className="w-8 h-8 rounded-lg bg-red-500/5 flex items-center justify-center border border-red-500/10">
+               <Folder size={16} className="text-red-500/60" />
             </div>
             <div className="flex flex-col">
-              <span className="text-white font-bold text-sm tracking-tight">
+              <span className="text-white/90 font-bold text-sm tracking-tight">
                 {totalFiles} {totalFiles === 1 ? 'File' : 'Files'} Selected
               </span>
-              <span className="text-white/30 text-[10px] font-bold uppercase tracking-widest truncate max-w-[200px]">
+              <span className="text-white/20 text-[10px] font-bold uppercase tracking-widest truncate max-w-[200px]">
                 {rootFolder || 'Individual Files'}
               </span>
             </div>
           </div>
-          <div className="bg-white/5 px-3 py-1 rounded-full border border-white/5">
-            <span className="text-white/60 text-[11px] font-bold">{formatFileSize(totalSize)}</span>
+          <div className="bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
+            <span className="text-white/40 text-[11px] font-black">{formatFileSize(totalSize)}</span>
           </div>
         </div>
       </div>
 
       <div className="px-2 py-3 overflow-y-auto custom-scrollbar" style={{ height: maxHeightPx - 56 }}>
         {isLargeSet ? (
-          <div className="h-full flex flex-col items-center justify-center p-8 text-center gap-6">
-            <div className="relative">
-              <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center border border-red-500/20 rotate-3">
-                <Folder size={32} className="text-red-500/40" />
+          <div className="h-full flex flex-col items-center justify-center p-8 text-center gap-8">
+            <div className="relative group">
+              <div className="absolute inset-0 bg-red-500/5 rounded-3xl blur-2xl group-hover:bg-red-500/10 transition-all duration-1000"></div>
+              <div className="w-20 h-20 rounded-3xl bg-white/[0.03] flex items-center justify-center border border-white/10 relative z-10 shadow-inner">
+                <Folder size={40} className="text-red-500/30" />
               </div>
-              <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center border border-red-500/30 -rotate-6 backdrop-blur-md">
-                <Info size={20} className="text-red-500" />
+              <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-2xl bg-zinc-900 flex items-center justify-center border border-white/10 shadow-2xl z-20">
+                <Info size={18} className="text-white/20" />
               </div>
             </div>
             
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <h3 className="text-white font-bold text-base">Large File Set Detected</h3>
-                <p className="text-white/40 text-[11px] leading-relaxed max-w-[240px] mx-auto">
-                  For optimal speed, the detailed file tree is hidden for large transfers. All items remain queued for secure delivery.
+            <div className="space-y-6 w-full">
+              <div className="space-y-2">
+                <h3 className="text-white font-black text-lg tracking-tight uppercase italic">Large Data Set</h3>
+                <p className="text-white/30 text-[11px] leading-relaxed max-w-[260px] mx-auto font-medium">
+                  Detailed structure is hidden to prioritize transfer speed. Your secure tunnel is optimized for massive payloads.
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3 flex flex-col items-center gap-1">
-                  <span className="text-white/20 text-[9px] font-bold uppercase tracking-widest">Total Files</span>
-                  <span className="text-white font-bold text-lg leading-none">{totalFiles.toLocaleString()}</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col items-center gap-2 group hover:bg-white/[0.04] transition-colors">
+                  <span className="text-white/10 text-[9px] font-black uppercase tracking-[0.2em]">Files</span>
+                  <span className="text-white font-black text-2xl leading-none italic">{totalFiles.toLocaleString()}</span>
                 </div>
-                <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3 flex flex-col items-center gap-1">
-                  <span className="text-white/20 text-[9px] font-bold uppercase tracking-widest">Total Folders</span>
-                  <span className="text-white font-bold text-lg leading-none">{folderCount > 0 ? folderCount.toLocaleString() : '—'}</span>
+                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col items-center gap-2 group hover:bg-white/[0.04] transition-colors">
+                  <span className="text-white/10 text-[9px] font-black uppercase tracking-[0.2em]">Folders</span>
+                  <span className="text-white font-black text-2xl leading-none italic">{folderCount > 0 ? folderCount.toLocaleString() : '—'}</span>
                 </div>
               </div>
             </div>

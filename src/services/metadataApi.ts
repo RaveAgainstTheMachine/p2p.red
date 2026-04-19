@@ -26,43 +26,49 @@ export interface ShortLinkResponse {
   expiresAt: string;
 }
 
-const isJsonResponse = (response: Response) =>
-  response.headers.get('content-type')?.includes('application/json');
-
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const fetchWithChallenge = async (url: string, options: RequestInit, challengeUrl: string) => {
+const fetchWithChallenge = async (url: string, options: RequestInit): Promise<Response> => {
   let response = await fetch(url, options);
 
-  if (isJsonResponse(response)) {
-    return response;
-  }
+  if (response.headers.get('x-anubis-status') === 'challenge') {
+    console.warn('🛡️ Anubis challenge detected for:', url);
+    const resolvedChallengeUrl = `${new URL(url).origin}/challenge?target=${encodeURIComponent(url)}`;
+    
+    window.dispatchEvent(
+      new CustomEvent('anubis-challenge', {
+        detail: { active: true, url: resolvedChallengeUrl }
+      })
+    );
 
-  window.dispatchEvent(
-    new CustomEvent('anubis-challenge', {
-      detail: { active: true, url: challengeUrl }
-    })
-  );
-
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    await delay(500);
-    response = await fetch(url, options);
-    if (isJsonResponse(response)) {
-      window.dispatchEvent(
-        new CustomEvent('anubis-challenge', {
-          detail: { active: false }
-        })
-      );
-      return response;
+    // Exponential backoff or just wait for challenge to be solved
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      console.log(`⏳ Waiting for challenge solution (attempt ${attempt + 1})...`);
+      await delay(2000); // Wait longer between attempts
+      response = await fetch(url, options);
+      if (response.headers.get('x-anubis-status') !== 'challenge') {
+        console.log('✅ Challenge cleared!');
+        window.dispatchEvent(
+          new CustomEvent('anubis-challenge', {
+            detail: { active: false }
+          })
+        );
+        break;
+      }
     }
   }
 
-  window.dispatchEvent(
-    new CustomEvent('anubis-challenge', {
-      detail: { active: false }
-    })
-  );
-  throw new Error('Anubis challenge required. Complete it, then retry.');
+  // Final check
+  if (response.headers.get('x-anubis-status') === 'challenge') {
+    window.dispatchEvent(
+      new CustomEvent('anubis-challenge', {
+        detail: { active: false }
+      })
+    );
+    throw new Error('Anubis challenge required. Please refresh and try again.');
+  }
+
+  return response;
 };
 
 /**
@@ -88,7 +94,7 @@ export async function createShortLink(metadata: TransferMetadata, pin?: string):
       },
       credentials: 'include',
       body: JSON.stringify(payload),
-    }, `${API_BASE_URL}/metadata`);
+    });
 
     if (!response.ok) {
       const error = await response.json();
@@ -117,7 +123,7 @@ export async function getMetadata(key: string, pin?: string): Promise<TransferMe
     const response = await fetchWithChallenge(url, {
       headers: pin ? { 'x-p2p-pin': pin } : undefined,
       credentials: 'include',
-    }, url);
+    });
 
     if (!response.ok) {
       const error = await response.json();

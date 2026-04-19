@@ -4,6 +4,7 @@ import { useWebRTC } from './hooks/useWebRTC';
 import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
 import { useAdaptiveMultiStreamTransfer } from './hooks/useAdaptiveMultiStreamTransfer';
+import { makeZip } from 'client-zip';
 import { DropZone } from './components/DropZone';
 import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
@@ -723,7 +724,6 @@ function App() {
           }
           
           // Create ZIP stream using client-zip
-          const { makeZip } = await import('client-zip');
           const filesToZip = [];
           for (let i = 0; i < files.length; i++) {
             filesToZip.push({
@@ -740,6 +740,7 @@ function App() {
           
           // Create short link via metadata API
           try {
+            console.log('📡 Calling createShortLink...');
             const shortKey = await createShortLink({
               peerId: peerId!,
               fileName: zipFileName,
@@ -754,6 +755,7 @@ function App() {
           } catch (error) {
             console.error('Failed to create short link:', error);
             setTransferErrorMessage('Failed to create short link. Please try again.');
+            setStatus('error');
           }
           
           // Wait for receiver connection
@@ -805,7 +807,6 @@ function App() {
         // Single file with ZIP enabled - create streaming ZIP
         console.log('Single file with ZIP enabled, creating streaming ZIP...');
         const file = files[0];
-        const { makeZip } = await import('client-zip');
         const zipStream = makeZip([{
           name: file.name,
           lastModified: file.lastModified,
@@ -817,6 +818,7 @@ function App() {
         
         // Create short link via metadata API
         try {
+          console.log('📡 Calling createShortLink for single file...');
           const shortKey = await createShortLink({
             peerId: peerId!,
             fileName: zipFileName,
@@ -831,6 +833,7 @@ function App() {
         } catch (error) {
           console.error('Failed to create short link:', error);
           setTransferErrorMessage('Failed to create short link. Please try again.');
+          setStatus('error');
         }
         
         // Wait for receiver connection

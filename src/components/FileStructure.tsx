@@ -196,6 +196,30 @@ export const FileStructure: React.FC<FileStructureProps> = ({ files, maxFiles = 
     );
   };
 
+  const folderCount = useMemo(() => {
+    if (!isLargeSet) return 0;
+    const folders = new Set<string>();
+    for (const f of filesArray) {
+      if (f.webkitRelativePath) {
+        const path = f.webkitRelativePath;
+        const lastSlash = path.lastIndexOf('/');
+        if (lastSlash !== -1) {
+          const dir = path.substring(0, lastSlash);
+          folders.add(dir);
+          // Also add parent folders
+          let parentSlash = dir.lastIndexOf('/');
+          let currentDir = dir;
+          while (parentSlash !== -1) {
+            currentDir = currentDir.substring(0, parentSlash);
+            folders.add(currentDir);
+            parentSlash = currentDir.lastIndexOf('/');
+          }
+        }
+      }
+    }
+    return folders.size;
+  }, [filesArray, isLargeSet]);
+
   return (
     <div
       className="bg-red-950/5 border border-white/5 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-sm"
@@ -224,15 +248,34 @@ export const FileStructure: React.FC<FileStructureProps> = ({ files, maxFiles = 
 
       <div className="px-2 py-3 overflow-y-auto custom-scrollbar" style={{ height: maxHeightPx - 56 }}>
         {isLargeSet ? (
-          <div className="h-full flex flex-col items-center justify-center p-8 text-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
-              <Info size={24} className="text-red-500/60" />
+          <div className="h-full flex flex-col items-center justify-center p-8 text-center gap-6">
+            <div className="relative">
+              <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center border border-red-500/20 rotate-3">
+                <Folder size={32} className="text-red-500/40" />
+              </div>
+              <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center border border-red-500/30 -rotate-6 backdrop-blur-md">
+                <Info size={20} className="text-red-500" />
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="text-white/80 font-bold text-sm">Large Structure Detected</p>
-              <p className="text-white/30 text-[11px] leading-relaxed max-w-[200px]">
-                To maintain peak performance, deep browsing is disabled for sets over 500 files. All {totalFiles} files will be transferred.
-              </p>
+            
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-white font-bold text-base">Large File Set Detected</h3>
+                <p className="text-white/40 text-[11px] leading-relaxed max-w-[240px] mx-auto">
+                  For optimal speed, the detailed file tree is hidden for large transfers. All items remain queued for secure delivery.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3 flex flex-col items-center gap-1">
+                  <span className="text-white/20 text-[9px] font-bold uppercase tracking-widest">Total Files</span>
+                  <span className="text-white font-bold text-lg leading-none">{totalFiles.toLocaleString()}</span>
+                </div>
+                <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3 flex flex-col items-center gap-1">
+                  <span className="text-white/20 text-[9px] font-bold uppercase tracking-widest">Total Folders</span>
+                  <span className="text-white font-bold text-lg leading-none">{folderCount > 0 ? folderCount.toLocaleString() : '—'}</span>
+                </div>
+              </div>
             </div>
           </div>
         ) : treeRoot ? (

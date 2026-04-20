@@ -237,7 +237,6 @@ function App() {
   const themeToggleRef = useRef<HTMLDivElement | null>(null);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
   const [anubisStatusMessage, setAnubisStatusMessage] = useState<string | null>(null);
-  const [humanToastMessage, setHumanToastMessage] = useState<string | null>(null);
   const [transferErrorMessage, setTransferErrorMessage] = useState<string>('');
   const [isProcessingFiles, setIsProcessingFiles] = useState<boolean>(false);
 
@@ -245,20 +244,29 @@ function App() {
     active: false
   });
   const anubisStatusTimeout = useRef<number | null>(null);
-  const humanToastTimeout = useRef<number | null>(null);
   const antiBotMessages = [
     'Quick bot check — please hold, carbon-based lifeform.',
     'Verifying you’re human. Sorry, robots ruined it for everyone.',
     'Anti-bot scan running. If you’re a toaster, now’s the time to confess.',
     'Confirming you’re not a swarm of polite Canadian geese.',
-    'Bot-detector warming up. Please sip maple syrup and wait.'
+    'Bot-detector warming up. Please sip maple syrup and wait.',
+    'Asking the security moose for clearance...',
+    'Tuning the moose-dar to detect silicon brain waves...',
+    'Distracting the bots with virtual pizza...',
+    'Convincing the cloud that you are indeed a real person...',
+    'Checking if you have a favorite hockey team (classic human test)...'
   ];
   const humanMessages = [
     'Well done being a human! Share link ready.',
     'Certified organic human ✅ Your link is ready.',
     'Humans 1, bots 0. Share link created.',
     'Thanks for proving you’re not a Roomba. Link generated.',
-    'You passed the Turing, eh? Share link ready.'
+    'You passed the Turing, eh? Share link ready.',
+    'Moose approved! Your secure link is ready to go.',
+    'The bots are crying oil. You win! Link ready.',
+    'Human detected! Access granted. Grab your link below.',
+    'No robot detected. You’re the boss. Link ready.',
+    'Security moose bows to you. Link created!'
   ];
   const buildVariantRaw = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
   const buildVariant = buildVariantRaw || 'dev';
@@ -309,14 +317,14 @@ function App() {
   const pickMessage = (messages: string[]) => messages[Math.floor(Math.random() * messages.length)];
 
   const showHumanToast = () => {
-    if (humanToastTimeout.current !== null) {
-      window.clearTimeout(humanToastTimeout.current);
+    if (anubisStatusTimeout.current !== null) {
+      window.clearTimeout(anubisStatusTimeout.current);
     }
-    setHumanToastMessage(pickMessage(humanMessages));
-    humanToastTimeout.current = window.setTimeout(() => {
-      setHumanToastMessage(null);
-      humanToastTimeout.current = null;
-    }, 9000);
+    setAnubisStatusMessage(pickMessage(humanMessages));
+    anubisStatusTimeout.current = window.setTimeout(() => {
+      setAnubisStatusMessage(null);
+      anubisStatusTimeout.current = null;
+    }, 12000); // Show for 12 seconds so they can read the quirkiness
   };
 
   const matchesResumeSessionFile = (session: ResumeSession, file: File) => {
@@ -1389,6 +1397,11 @@ function App() {
             {shareLink && (
               <div className="glass-card p-8 w-full max-w-2xl mx-auto">
                 <div className="flex flex-col gap-6">
+                  {anubisStatusMessage && (
+                    <div className="text-center py-3 px-4 rounded-xl bg-green-500/10 border border-green-500/20 animate-pulse">
+                      <p className="text-green-300 text-sm font-medium">✨ {anubisStatusMessage}</p>
+                    </div>
+                  )}
                   {relayLimitWarning && (
                     <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
                       <div className="flex items-start gap-3">
@@ -1742,18 +1755,8 @@ function App() {
         <div className="fixed bottom-8 right-8 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out z-50">
           <div className="flex items-center gap-3">
             <Check size={20} />
-            <span className="font-medium">Link copied. You’re basically a wizard.</span>
+            <span className="font-medium">Link copied! You're basically a wizard, eh?</span>
           </div>
-        </div>
-      )}
-      {humanToastMessage && (
-        <div className="fixed bottom-24 right-8 bg-white/10 text-white/90 px-5 py-3 rounded-lg shadow-lg backdrop-blur border border-white/10 transform transition-all duration-300 ease-in-out z-50 max-w-xs">
-          <div className="text-sm font-medium">{humanToastMessage}</div>
-        </div>
-      )}
-      {anubisStatusMessage && (
-        <div className="fixed bottom-24 left-8 bg-white/5 text-white/70 px-4 py-2 rounded-full shadow-lg backdrop-blur border border-white/10 transform transition-all duration-300 ease-in-out z-50">
-          <div className="text-xs font-medium">{anubisStatusMessage}</div>
         </div>
       )}
       

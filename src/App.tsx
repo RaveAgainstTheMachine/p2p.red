@@ -21,6 +21,7 @@ import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
 import { Legal } from './pages/Legal';
 import { Landing } from './pages/Landing';
+import { Changelog } from './pages/Changelog';
 import { clearTransfer } from './utils/shardStore';
 
 // Meta tag management for rich link previews
@@ -224,7 +225,7 @@ function App() {
   const [pinError, setPinError] = useState<string>('');
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
-  const [currentPage, setCurrentPage] = useState<'landing' | 'home' | 'legal' | 'info'>('home');
+  const [currentPage, setCurrentPage] = useState<'landing' | 'home' | 'legal' | 'info' | 'changelog'>('home');
   const [themePreference, setThemePreference] = useState<'system' | 'light' | 'dark'>(() => {
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') {
@@ -1167,6 +1168,10 @@ function App() {
     return <Info onBack={() => setCurrentPage('home')} />;
   }
 
+  if (currentPage === 'changelog') {
+    return <Changelog onBack={() => setCurrentPage('home')} />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Animated background */}
@@ -1724,17 +1729,20 @@ function App() {
             <div className="flex items-end justify-between gap-3">
               <div className="flex items-end">
                 {buildIndicatorClass && buildIndicatorLabel && (
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 shadow-lg shadow-black/20 backdrop-blur">
+                  <button
+                    onClick={() => setCurrentPage('changelog')}
+                    className="group rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 shadow-lg shadow-black/20 backdrop-blur transition-all hover:bg-white/10 hover:border-white/20 active:scale-95"
+                  >
                     <div className="inline-flex items-center gap-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
+                      <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)] group-hover:shadow-[0_0_12px_rgba(255,255,255,0.5)]`} />
                       <span>{buildIndicatorLabel}</span>
                     </div>
                     {buildVersionLabel && (
-                      <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50">
+                      <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50 group-hover:text-white/70">
                         {buildVersionLabel}
                       </div>
                     )}
-                  </div>
+                  </button>
                 )}
               </div>
               <div className="flex items-end">

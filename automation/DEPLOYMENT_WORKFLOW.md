@@ -3,10 +3,12 @@
 Follow this workflow to release changes to production safely. **Do not run production release scripts on a dev host.**
 
 ## 1. Prepare Version (Local Dev)
-Bump the version in `package.json` according to SemVer rules.
+- Bump the version in `package.json` according to SemVer rules.
+- Update `src/data/changelog.ts` with the new version, date, and user-facing changes.
 ```bash
-# Example: 1.3.8 -> 1.3.9
+# Example: 1.3.14 -> 1.3.15
 vi package.json
+vi src/data/changelog.ts
 ```
 
 ## 2. Build Production Images (Local Dev)

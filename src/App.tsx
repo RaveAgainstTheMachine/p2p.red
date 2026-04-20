@@ -1719,7 +1719,7 @@ function App() {
               >
                 Legal
               </button>
-              <span className="inline-flex items-center whitespace-nowrap leading-none text-white/60">© 2026 Stevem Frost</span>
+              <span className="inline-flex items-center whitespace-nowrap leading-none text-white/60">© 2026 Steven Frost</span>
               <a
                 href="https://cv.tee215.com/"
                 target="_blank"

@@ -90,7 +90,7 @@ export const Changelog: React.FC<ChangelogProps> = ({ onBack }) => {
                 Proudly made in Canada
               </span>
             </span>
-            <span>© 2026 Stevem Frost</span>
+            <span>© 2026 Steven Frost</span>
             <a
               href="https://cv.tee215.com/"
               target="_blank"

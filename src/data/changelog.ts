@@ -16,7 +16,7 @@ export const changelog: ChangelogEntry[] = [
       { category: 'Added', description: 'New Feedback form! Tell us what you think (or just say hi, bud).' },
       { category: 'Improved', description: 'Cleaned up the top navigation for a more focused "drop and go" experience.' },
       { category: 'Improved', description: 'Footer refinements: "Info" is now "About", and Support is a shiny new coffee badge.' },
-      { category: 'Improved', description: 'Repositioned the Canadian flag and updated the footer branding for Stevem Frost.' },
+      { category: 'Improved', description: 'Repositioned the Canadian flag and updated the footer branding for Steven Frost.' },
       { category: 'Added', description: 'Interactive "Anubis" anti-bot challenges that actually look good.' }
     ]
   },

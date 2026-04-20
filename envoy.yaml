@@ -122,7 +122,7 @@ static_resources:
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - header:
                             key: Content-Security-Policy
-                            value: "default-src 'self'; script-src 'self' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; style-src 'self'; connect-src 'self' wss://p2p.red https://signal.p2p.red wss://signal.p2p.red; font-src 'self'; object-src 'none';"
+                            value: "default-src 'self'; script-src 'self' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; style-src 'self' 'unsafe-inline'; connect-src 'self' wss://p2p.red https://signal.p2p.red wss://signal.p2p.red; font-src 'self'; object-src 'none';"
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - header:
                             key: X-Frame-Options

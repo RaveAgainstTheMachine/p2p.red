@@ -614,6 +614,8 @@ function App() {
   }, [pendingReceive, senderPeerId, peer, isConnected, incomingFilesList]);
 
   const handleFileSelect = (files: File[]) => {
+    if (!files || files.length === 0) return;
+    
     if (files.length > 50) {
       setIsProcessingFiles(true);
       // Brief delay to allow UI to show processing state before heavy setSelectedFiles call
@@ -656,7 +658,10 @@ function App() {
 
   const handleProceedWithTransfer = async (overrideFiles?: File[]) => {
     const files = overrideFiles ?? selectedFiles;
-    if (!files) return;
+    if (!files || files.length === 0) {
+      console.warn('Attempted to proceed with 0 files');
+      return;
+    }
     setStatus('encrypting');
     const effectivePin = (import.meta as any).env?.VITE_E2E && e2ePinOverride !== null
       ? e2ePinOverride

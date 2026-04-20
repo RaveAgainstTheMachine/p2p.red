@@ -81,8 +81,17 @@ export const Changelog: React.FC<ChangelogProps> = ({ onBack }) => {
           ))}
         </main>
 
-        <footer className="mt-auto py-8 text-center text-xs text-white/30 border-t border-white/5">
-          © {new Date().getFullYear()} p2p.red · No trackers, no drama, just files.
+        <footer className="mt-auto py-8 text-center flex flex-col items-center gap-3 text-xs text-white/30 border-t border-white/5">
+          <div className="flex items-center gap-4">
+            <span>© {new Date().getFullYear()} Stevem Frost</span>
+            <span className="group relative inline-flex items-center leading-none text-white/40">
+              <span className="text-sm" role="img" aria-label="Canada">🇨🇦</span>
+              <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                Proudly made in Canada
+              </span>
+            </span>
+          </div>
+          <p>No trackers, no drama, just files. 🍁</p>
         </footer>
       </div>
     </div>

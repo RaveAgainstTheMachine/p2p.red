@@ -145,7 +145,15 @@ export const Legal: React.FC<LegalProps> = ({ onBack }) => {
         </div>
 
         <footer className="mt-auto pt-10 text-xs text-white/30 flex items-center justify-between">
-          <span>© {new Date().getFullYear()} p2p.red</span>
+          <div className="flex items-center gap-4">
+            <span>© {new Date().getFullYear()} Stevem Frost</span>
+            <span className="group relative inline-flex items-center leading-none text-white/40">
+              <span className="text-sm" role="img" aria-label="Canada">🇨🇦</span>
+              <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                Proudly made in Canada
+              </span>
+            </span>
+          </div>
           <button onClick={onBack} className="hover:text-white transition-colors">Return to home base</button>
         </footer>
       </div>

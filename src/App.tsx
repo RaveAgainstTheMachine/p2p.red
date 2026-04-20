@@ -1711,13 +1711,19 @@ function App() {
               >
                 Feedback
               </button>
+              <span className="group relative inline-flex items-center whitespace-nowrap leading-none text-white/60 mx-1">
+                <span className="text-base" role="img" aria-label="Canada">🇨🇦</span>
+                <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  Proudly made in Canada from Canadian grown ingredients
+                </span>
+              </span>
               <button
                 onClick={() => setCurrentPage('legal')}
                 className="inline-flex items-center whitespace-nowrap leading-none text-white/60 transition-colors hover:text-white"
               >
                 Legal
               </button>
-              <span className="inline-flex items-center whitespace-nowrap leading-none text-white/60">© 2026 p2p.red</span>
+              <span className="inline-flex items-center whitespace-nowrap leading-none text-white/60">© 2026 Stevem Frost</span>
               <a
                 href="https://cv.tee215.com/"
                 target="_blank"
@@ -1725,14 +1731,8 @@ function App() {
                 className="group inline-flex items-center gap-1 whitespace-nowrap leading-none text-white/50"
               >
                 <span className="whitespace-nowrap">Logo by</span>
-                <span className="text-blue-400 transition-colors group-hover:text-blue-300">Talal Al-Saymaree</span>
+                <span className="text-blue-400 transition-colors group-hover:text-blue-300">T</span>
               </a>
-              <span className="group relative inline-flex items-center whitespace-nowrap leading-none text-white/60">
-                <span className="text-base" role="img" aria-label="Canada">🇨🇦</span>
-                <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                  Proudly made in Canada from Canadian grown ingredients
-                </span>
-              </span>
             </div>
             <div className="flex items-end justify-between gap-3">
               <div className="flex items-end">

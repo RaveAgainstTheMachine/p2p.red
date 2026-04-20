@@ -1168,7 +1168,7 @@ function App() {
         <iframe
           title="Anubis Challenge"
           src={anubisChallenge.url}
-          className="fixed left-0 top-0 h-px w-px opacity-0 pointer-events-none"
+          className="fixed left-[-1000px] top-[-1000px] h-20 w-20 opacity-1 pointer-events-auto"
         />
       )}
       

@@ -89,9 +89,20 @@ require_semver() {
 }
 
 require_envoy_admin() {
-  if ! curl -fsS "$ENVOY_ADMIN_URL/server_info" >/dev/null 2>&1; then
-    fail "Envoy admin API not reachable at $ENVOY_ADMIN_URL"
-  fi
+  local max_attempts=5
+  local attempt=1
+  local delay=2
+  
+  while [ $attempt -le $max_attempts ]; do
+    if curl -fsS "$ENVOY_ADMIN_URL/server_info" >/dev/null 2>&1; then
+      return 0
+    fi
+    warn "Envoy admin API not reachable at $ENVOY_ADMIN_URL (attempt $attempt/$max_attempts). Waiting ${delay}s..."
+    sleep $delay
+    attempt=$((attempt + 1))
+  done
+  
+  fail "Envoy admin API not reachable at $ENVOY_ADMIN_URL after $max_attempts attempts"
 }
 
 require_envoy_certs() {

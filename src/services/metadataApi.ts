@@ -39,9 +39,8 @@ const fetchWithChallenge = async (url: string, options: RequestInit): Promise<Re
   if (isLikelyChallenge) {
     console.warn('🛡️ Bot challenge detected for:', url, 'Header:', isAnubisHeader, 'HTML:', contentType.includes('text/html'));
     
-    // Default challenge URL is the root of the API or a specific /challenge endpoint
-    const urlObj = new URL(url);
-    const challengeUrl = `${urlObj.origin}/challenge?target=${encodeURIComponent(url)}`;
+    // Use the target URL itself for the challenge - Anubis will intercept the GET request and serve the challenge HTML
+    const challengeUrl = url;
     
     window.dispatchEvent(
       new CustomEvent('anubis-challenge', {

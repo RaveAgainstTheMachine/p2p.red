@@ -15,7 +15,7 @@ import { Logo } from './components/Logo';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, CheckCircle, File, Check, Sun, Moon, Monitor, Coffee } from 'lucide-react';
+import { Download, CheckCircle, File, Check, Sun, Moon, Monitor, Coffee, Palette, Shuffle } from 'lucide-react';
 import { createShortLink, getMetadata, API_BASE_URL } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
@@ -24,6 +24,36 @@ import { Landing } from './pages/Landing';
 import { Changelog } from './pages/Changelog';
 import { Feedback } from './pages/Feedback';
 import { clearTransfer } from './utils/shardStore';
+
+const getCookie = (name: string) => {
+  if (typeof document === 'undefined') return undefined;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(';').shift();
+  return undefined;
+};
+
+const setCookie = (name: string, value: string, days = 365) => {
+  if (typeof document === 'undefined') return;
+  const date = new Date();
+  date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+  const expires = `; expires=${date.toUTCString()}`;
+  document.cookie = `${name}=${value || ""}${expires}; path=/; SameSite=Lax`;
+};
+
+const THEMES = [
+  { id: 'random', name: 'Random', colors: ['#ffffff', '#000000'] },
+  { id: 'indigo', name: 'Indigo (Ocean)', colors: ['#6366f1', '#a855f7'] },
+  { id: 'emerald', name: 'Emerald (Forest)', colors: ['#10b981', '#0d9488'] },
+  { id: 'rose', name: 'Rose (Sunset)', colors: ['#f43f5e', '#e11d48'] },
+  { id: 'amber', name: 'Amber (Sahara)', colors: ['#f59e0b', '#d97706'] },
+  { id: 'cyan', name: 'Cyan (Atmosphere)', colors: ['#06b6d4', '#0891b2'] },
+  { id: 'slate', name: 'Slate (Monolith)', colors: ['#64748b', '#475569'] },
+  { id: 'crimson', name: 'Crimson (Magma)', colors: ['#dc2626', '#991b1b'] },
+  { id: 'violet', name: 'Violet (Nebula)', colors: ['#8b5cf6', '#7c3aed'] },
+  { id: 'lime', name: 'Lime (Electric)', colors: ['#84cc16', '#65a30d'] },
+  { id: 'ebony', name: 'Ebony (Void)', colors: ['#1e293b', '#0f172a'] },
+] as const;
 
 // Meta tag management for rich link previews
 const updateMetaTags = (metadata: any) => {
@@ -234,6 +264,25 @@ function App() {
     }
     return 'system';
   });
+  const [variantPreference, setVariantPreference] = useState<string>(() => {
+    return getCookie('p2p_variant') || 'random';
+  });
+  const [activeVariant, setActiveVariant] = useState<string>('indigo');
+
+  useEffect(() => {
+    if (variantPreference === 'random') {
+      const realThemes = THEMES.filter(t => t.id !== 'random');
+      const randomTheme = realThemes[Math.floor(Math.random() * realThemes.length)].id;
+      setActiveVariant(randomTheme);
+    } else {
+      setActiveVariant(variantPreference);
+    }
+  }, [variantPreference]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-variant', activeVariant);
+  }, [activeVariant]);
+
   const [currentHash, setCurrentHash] = useState<string>(window.location.hash);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const themeToggleRef = useRef<HTMLDivElement | null>(null);
@@ -1170,7 +1219,7 @@ function App() {
       
       <div ref={themeToggleRef} className="fixed top-4 right-4 z-30">
         <div
-          className={`flex h-10 items-center justify-center gap-1 overflow-hidden border border-white/10 bg-white/5 text-white/80 shadow-lg shadow-black/20 backdrop-blur transition-[width,border-radius,padding] duration-200 ease-out ${isThemeMenuOpen ? 'w-28 rounded-2xl px-2' : 'w-10 rounded-full'}`}
+          className="flex flex-col items-end gap-2"
           onMouseEnter={() => setIsThemeMenuOpen(true)}
           onMouseLeave={(event) => {
             if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
@@ -1179,51 +1228,71 @@ function App() {
             setIsThemeMenuOpen(false);
           }}
         >
-          {isThemeMenuOpen ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setThemePreference('system');
-                  setIsThemeMenuOpen(false);
-                }}
-                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${themePreference === 'system' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
-                title="System"
-              >
-                <Monitor size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setThemePreference('light');
-                  setIsThemeMenuOpen(false);
-                }}
-                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${themePreference === 'light' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
-                title="Light"
-              >
-                <Sun size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setThemePreference('dark');
-                  setIsThemeMenuOpen(false);
-                }}
-                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${themePreference === 'dark' ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`}
-                title="Dark"
-              >
-                <Moon size={16} />
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setIsThemeMenuOpen(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-white/80 transition-colors hover:text-white"
-              title="Theme"
-            >
-              {themePreference === 'dark' ? <Moon size={16} /> : themePreference === 'light' ? <Sun size={16} /> : <Monitor size={16} />}
-            </button>
+          <button
+            type="button"
+            className={`flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 shadow-lg shadow-black/20 backdrop-blur-xl transition-all duration-200 hover:text-white hover:scale-110 active:scale-95 ${isThemeMenuOpen ? 'border-white/30 bg-white/15' : ''}`}
+            onClick={() => setIsThemeMenuOpen(!isThemeMenuOpen)}
+          >
+            <Palette size={20} className={isThemeMenuOpen ? 'rotate-12 scale-110' : ''} />
+          </button>
+
+          {isThemeMenuOpen && (
+            <div className="flex w-48 flex-col gap-4 rounded-3xl border border-white/15 bg-black/40 p-4 shadow-2xl backdrop-blur-2xl animate-fade-up">
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">Brightness</span>
+                <div className="flex gap-1 justify-between bg-white/5 rounded-2xl p-1">
+                  {[
+                    { id: 'system', icon: Monitor, label: 'System' },
+                    { id: 'light', icon: Sun, label: 'Light' },
+                    { id: 'dark', icon: Moon, label: 'Dark' },
+                  ].map(({ id, icon: Icon, label }) => (
+                    <button
+                      key={id}
+                      onClick={() => setThemePreference(id as any)}
+                      className={`flex h-8 flex-1 items-center justify-center rounded-xl transition-all ${themePreference === id ? 'bg-white/20 text-white shadow-lg' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}
+                      title={label}
+                    >
+                      <Icon size={16} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">Color Palette</span>
+                <div className="grid grid-cols-4 gap-2">
+                  {THEMES.map((theme) => (
+                    <button
+                      key={theme.id}
+                      onClick={() => {
+                        setVariantPreference(theme.id);
+                        setCookie('p2p_variant', theme.id);
+                      }}
+                      className={`group relative flex h-8 w-8 items-center justify-center rounded-xl transition-all ${variantPreference === theme.id ? 'ring-2 ring-white/50 ring-offset-2 ring-offset-black/50' : 'hover:scale-110'}`}
+                      title={theme.name}
+                    >
+                      {theme.id === 'random' ? (
+                        <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/10 text-white/70 group-hover:text-white">
+                          <Shuffle size={14} />
+                        </div>
+                      ) : (
+                        <div 
+                          className="h-full w-full rounded-xl border border-white/10"
+                          style={{ 
+                            background: `linear-gradient(135deg, ${theme.colors[0]}, ${theme.colors[1]})` 
+                          }}
+                        />
+                      )}
+                      {variantPreference === theme.id && (
+                        <div className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-white text-black shadow-sm">
+                          <Check size={8} strokeWidth={4} />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

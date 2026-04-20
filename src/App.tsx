@@ -329,7 +329,7 @@ function App() {
       : 'bg-slate-400';
   const buildIndicatorLabel = buildVariant;
   const commitId = buildVersion ? buildVersion.split('-')[1] : '';
-  const shortVersion = buildVersion ? buildVersion.split('-')[0] : '1.4.0';
+  const shortVersion = buildVersion ? buildVersion.split('-')[0] : '1.5.0';
   const displayVersion = commitId ? `${shortVersion}-${commitId}` : shortVersion;
 
   const copyShareLinkToClipboard = async (link: string) => {

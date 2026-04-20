@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.3.17',
+    date: '2026-04-20',
+    changes: [
+      { category: 'Improved', description: 'Redesigned the version badge into an interactive, expanding pill.' },
+      { category: 'Improved', description: 'Simplified footer by hiding deployment color and timestamp until hover.' }
+    ]
+  },
+  {
     version: '1.3.16',
     date: '2026-04-20',
     changes: [

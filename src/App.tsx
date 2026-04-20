@@ -303,6 +303,7 @@ function App() {
       ? 'bg-emerald-400'
       : 'bg-slate-400';
   const buildIndicatorLabel = buildVariant;
+  const shortVersion = buildVersion ? buildVersion.split('-')[0] : '1.3.17';
 
   const copyShareLinkToClipboard = async (link: string) => {
     try {
@@ -1731,17 +1732,22 @@ function App() {
                 {buildIndicatorClass && buildIndicatorLabel && (
                   <button
                     onClick={() => setCurrentPage('changelog')}
-                    className="group rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 shadow-lg shadow-black/20 backdrop-blur transition-all hover:bg-white/10 hover:border-white/20 active:scale-95"
+                    className="group flex flex-col items-start rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 shadow-lg shadow-black/20 backdrop-blur transition-all duration-300 hover:bg-white/10 hover:border-white/20 active:scale-95"
                   >
-                    <div className="inline-flex items-center gap-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)] group-hover:shadow-[0_0_12px_rgba(255,255,255,0.5)]`} />
-                      <span>{buildIndicatorLabel}</span>
-                    </div>
-                    {buildVersionLabel && (
-                      <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50 group-hover:text-white/70">
-                        {buildVersionLabel}
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)] group-hover:shadow-[0_0_12px_rgba(255,255,255,0.5)] transition-shadow`} />
+                      <span className="font-bold">{shortVersion}</span>
+                      <div className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 ease-in-out group-hover:max-w-[300px] group-hover:opacity-100 flex items-center">
+                        <span className="text-white/30 mx-2">•</span>
+                        <span className="text-white/60 lowercase tracking-normal">{buildIndicatorLabel}</span>
+                        {buildVersionLabel && buildVersionLabel.includes('-') && (
+                          <>
+                            <span className="text-white/30 mx-2">•</span>
+                            <span className="text-white/40 font-normal tracking-tight">{buildVersionLabel.split('-').pop()}</span>
+                          </>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </button>
                 )}
               </div>

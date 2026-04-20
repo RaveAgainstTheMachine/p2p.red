@@ -172,7 +172,7 @@ const normalizeResumeSessions = (sessions: Record<string, ResumeSession>) => {
 };
 
 function App() {
-  const { peer, peerId, isConnected, connectionState, isOnline, initializePeer, connectToPeer } = useWebRTC();
+  const { peer, peerId, isConnected, connectionState, isOnline, connectToPeer } = useWebRTC();
   const { isEncrypting } = useEncryption();
   const { transferProgress, isTransferring, resumeTransfer } = useFileTransfer();
   const { transferProgress: adaptiveProgress, transferFileAdaptive, prepareDownloadBridge } = useAdaptiveMultiStreamTransfer();
@@ -239,6 +239,7 @@ function App() {
   const [anubisStatusMessage, setAnubisStatusMessage] = useState<string | null>(null);
   const [humanToastMessage, setHumanToastMessage] = useState<string | null>(null);
   const [transferErrorMessage, setTransferErrorMessage] = useState<string>('');
+  const [isProcessingFiles, setIsProcessingFiles] = useState<boolean>(false);
 
   const [anubisChallenge, setAnubisChallenge] = useState<{ active: boolean; url?: string }>({
     active: false
@@ -421,9 +422,7 @@ function App() {
     return true;
   };
 
-  useEffect(() => {
-    initializePeer();
-  }, [initializePeer]);
+
 
   useEffect(() => {
     if ((import.meta as any).env?.VITE_E2E) {
@@ -544,63 +543,52 @@ function App() {
       anubisStatusTimeout.current = window.setTimeout(() => {
         setAnubisStatusMessage(null);
         anubisStatusTimeout.current = null;
-      }, 3000);
+      }, 5000); // Show for 5 seconds
     }
-  }, [anubisChallenge.active, anubisStatusMessage]);
+  }, [anubisChallenge.active]);
 
   useEffect(() => {
-    console.log('🔍 Mode detection useEffect running:', {
-      hasHash: !!currentHash,
-      hash: currentHash,
-      hasPeer: !!peer,
-      isConnected,
-      connectionState,
-    });
-    
-    // Auto-detect mode: receive if hash present, otherwise share
-    if (currentHash && peer && isConnected) {
-      console.log('📥 Hash detected and peer ready, fetching metadata...');
-      setMode('receive');
-      
-      const shortKey = currentHash.substring(1);
-      console.log('Short key:', shortKey);
-      
-      // Fetch metadata from API
-      getMetadata(shortKey)
-        .then((metadata) => {
-          console.log('📄 Metadata received:', metadata);
-          setSenderPeerId(metadata.peerId);
-          setIncomingFileInfo({
-            name: metadata.fileName,
-            size: metadata.fileSize,
-            expiresAt: metadata.expiresAt,
-            fileType: metadata.fileType
-          });
-          setPendingReceive(true);
-          setStatus('idle');
-          
-          // Update meta tags for rich link preview
-          updateMetaTags(metadata);
-        })
-        .catch((error) => {
-          console.error('❌ Failed to fetch metadata:', error);
-          if (error.message === 'PIN_REQUIRED' || error.response?.status === 401) {
-            setRequiresPin(true);
-            setPinModeOverride(error.pinType || null);
-            setStatus('idle');
-          } else {
-            setStatus('error');
-          }
-        });
-    } else if (!currentHash) {
-      console.log('No hash present, setting share mode');
-      setMode('share');
-      // Reset meta tags to default
-      resetMetaTags();
-    } else {
-      console.log('Hash present but peer not ready, waiting...');
+    if (!currentHash) {
+      if (mode !== 'share') {
+        console.log('No hash present, setting share mode');
+        setMode('share');
+        resetMetaTags();
+      }
+      return;
     }
-  }, [currentHash, peer, isConnected]);
+
+    if (peer && isConnected) {
+      if (mode !== 'receive') {
+        console.log('Hash present and peer ready, setting receive mode');
+        setMode('receive');
+        
+        const shortKey = currentHash.substring(1);
+        getMetadata(shortKey)
+          .then((metadata) => {
+            setSenderPeerId(metadata.peerId);
+            setIncomingFileInfo({
+              name: metadata.fileName,
+              size: metadata.fileSize,
+              expiresAt: metadata.expiresAt,
+              fileType: metadata.fileType
+            });
+            setPendingReceive(true);
+            setStatus('idle');
+            updateMetaTags(metadata);
+          })
+          .catch((error) => {
+            console.error('❌ Failed to fetch metadata:', error);
+            if (error.message === 'PIN_REQUIRED') {
+              setRequiresPin(true);
+              setPinModeOverride(error.pinType || null);
+              setStatus('idle');
+            } else {
+              setStatus('error');
+            }
+          });
+      }
+    }
+  }, [currentHash, peer, isConnected, mode]);
 
   // Receiver: Fetch preview when metadata is ready
   useEffect(() => {
@@ -626,7 +614,16 @@ function App() {
   }, [pendingReceive, senderPeerId, peer, isConnected, incomingFilesList]);
 
   const handleFileSelect = (files: File[]) => {
-    setSelectedFiles(files);
+    if (files.length > 50) {
+      setIsProcessingFiles(true);
+      // Brief delay to allow UI to show processing state before heavy setSelectedFiles call
+      setTimeout(() => {
+        setSelectedFiles(files);
+        setIsProcessingFiles(false);
+      }, 100);
+    } else {
+      setSelectedFiles(files);
+    }
   };
 
 
@@ -1316,8 +1313,14 @@ function App() {
             {!shareLink && !selectedFiles && (
               <DropZone
                 onFileSelect={handleFileSelect}
-                isProcessing={isEncrypting || status === 'encrypting'}
+                isProcessing={isEncrypting || status === 'encrypting' || isProcessingFiles}
               />
+            )}
+            
+            {isProcessingFiles && (
+              <div className="mt-4 text-center animate-pulse">
+                <p className="text-blue-300 font-medium">Processing large file set...</p>
+              </div>
             )}
 
             {/* File selected: card with details + actions */}
@@ -1360,11 +1363,19 @@ function App() {
                   <div className="mb-6"><FileStructure files={selectedFiles} /></div>
                 )}
                 <PinToggle onPinChange={setPin} />
-                <div className="flex gap-3 justify-center mt-6">
-                  <button onClick={() => { setSelectedFiles(null); setPin(''); }} className="btn-secondary">Cancel</button>
-                  <button onClick={() => handleProceedWithTransfer()} className="btn-primary" disabled={status === 'encrypting'}>
-                    {status === 'encrypting' ? <span>Warming up the moose...</span> : 'Make me a share link, eh?'}
-                  </button>
+                <div className="flex flex-col gap-4 mt-6">
+                  {anubisStatusMessage && (
+                    <div className="text-center py-2 px-4 rounded-xl bg-blue-500/10 border border-blue-500/20 animate-pulse">
+                      <p className="text-blue-300 text-sm font-medium">{anubisStatusMessage}</p>
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-3 justify-center">
+                    <button onClick={() => { setSelectedFiles(null); setPin(''); }} className="btn-secondary" disabled={status === 'encrypting'}>Cancel</button>
+                    <button onClick={() => handleProceedWithTransfer()} className="btn-primary" disabled={status === 'encrypting'}>
+                      {status === 'encrypting' ? <span>Warming up the moose...</span> : 'Make me a share link, eh?'}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

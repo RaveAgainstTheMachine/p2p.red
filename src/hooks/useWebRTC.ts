@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import Peer, { DataConnection } from 'peerjs';
 import { peerJsConfig } from '../config/environments';
 import { sendTelemetry } from '../services/telemetry';
@@ -76,7 +76,27 @@ export const useWebRTC = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const peerRef = useRef<Peer | null>(null);
 
-  const initializePeer = useCallback(() => {
+  const handleConnection = useCallback((conn: DataConnection) => {
+    conn.on('open', () => {
+      console.log('Connection opened with:', conn.peer);
+      setConnections(prev => new Map(prev.set(conn.peer, conn)));
+    });
+
+    conn.on('close', () => {
+      console.log('Connection closed with:', conn.peer);
+      setConnections(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(conn.peer);
+        return newMap;
+      });
+    });
+
+    conn.on('error', (err) => {
+      console.error('Connection error:', err);
+    });
+  }, []);
+
+  useEffect(() => {
     let cleanup: (() => void) | undefined;
 
     const setupPeer = async () => {
@@ -91,6 +111,8 @@ export const useWebRTC = () => {
       } catch (error) {
         console.warn('⚠️ TURN credentials unavailable, using STUN only.', error);
       }
+
+      if (peerRef.current) return; // Already initialized
 
       const newPeer = new Peer({
         host: peerJsConfig.host,
@@ -192,28 +214,12 @@ export const useWebRTC = () => {
 
     return () => {
       cleanup?.();
+      if (peerRef.current) {
+        peerRef.current.destroy();
+        peerRef.current = null;
+      }
     };
-  }, []);
-
-  const handleConnection = useCallback((conn: DataConnection) => {
-    conn.on('open', () => {
-      console.log('Connection opened with:', conn.peer);
-      setConnections(prev => new Map(prev.set(conn.peer, conn)));
-    });
-
-    conn.on('close', () => {
-      console.log('Connection closed with:', conn.peer);
-      setConnections(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(conn.peer);
-        return newMap;
-      });
-    });
-
-    conn.on('error', (err) => {
-      console.error('Connection error:', err);
-    });
-  }, []);
+  }, [handleConnection]);
 
   const connectToPeer = useCallback((remotePeerId: string) => {
     if (!peerRef.current) {
@@ -300,7 +306,6 @@ export const useWebRTC = () => {
     isConnected,
     connectionState,
     isOnline,
-    initializePeer,
     connectToPeer,
     disconnect
   };

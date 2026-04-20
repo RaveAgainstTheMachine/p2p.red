@@ -4,7 +4,6 @@ import { useWebRTC } from './hooks/useWebRTC';
 import { useEncryption } from './hooks/useEncryption';
 import { useFileTransfer } from './hooks/useFileTransfer';
 import { useAdaptiveMultiStreamTransfer } from './hooks/useAdaptiveMultiStreamTransfer';
-import { makeZip } from 'client-zip';
 import { DropZone } from './components/DropZone';
 import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
@@ -16,11 +15,10 @@ import { Logo } from './components/Logo';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, File, AlertCircle, CheckCircle, Loader2, Sun, Moon, Monitor } from 'lucide-react';
-import { TransferArt } from './components/TransferArt';
+import { Download, CheckCircle, File, Check, Sun, Moon, Monitor } from 'lucide-react';
 import { createShortLink, getMetadata } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
-import { Info as InfoPage } from './pages/Info';
+import { Info } from './pages/Info';
 import { Legal } from './pages/Legal';
 import { Landing } from './pages/Landing';
 import { clearTransfer } from './utils/shardStore';
@@ -31,6 +29,7 @@ const updateMetaTags = (metadata: any) => {
   
   // Update title
   document.title = `${metadata.fileName} - P2P File Share`;
+  console.log('📝 Updated title:', document.title);
   
   // Update or create Open Graph meta tags
   const updateMetaTag = (property: string, content: string) => {
@@ -39,8 +38,10 @@ const updateMetaTags = (metadata: any) => {
       tag = document.createElement('meta');
       tag.setAttribute('property', property);
       document.head.appendChild(tag);
+      console.log('➕ Created meta tag:', property);
     }
     tag.content = content;
+    console.log('🏷️ Updated meta tag:', property, '=', content);
   };
 
   const updateMetaName = (name: string, content: string) => {
@@ -287,10 +288,10 @@ function App() {
   };
   const buildVersionLabel = formatBuildVersion(buildVersion);
   const buildIndicatorClass = buildVariant === 'blue'
-    ? 'bg-zinc-500'
+    ? 'bg-blue-400'
     : buildVariant === 'green'
-      ? 'bg-red-500'
-      : 'bg-zinc-800';
+      ? 'bg-emerald-400'
+      : 'bg-slate-400';
   const buildIndicatorLabel = buildVariant;
 
   const copyShareLinkToClipboard = async (link: string) => {
@@ -721,6 +722,7 @@ function App() {
           }
           
           // Create ZIP stream using client-zip
+          const { makeZip } = await import('client-zip');
           const filesToZip = [];
           for (let i = 0; i < files.length; i++) {
             filesToZip.push({
@@ -737,7 +739,6 @@ function App() {
           
           // Create short link via metadata API
           try {
-            console.log('📡 Calling createShortLink...');
             const shortKey = await createShortLink({
               peerId: peerId!,
               fileName: zipFileName,
@@ -752,7 +753,6 @@ function App() {
           } catch (error) {
             console.error('Failed to create short link:', error);
             setTransferErrorMessage('Failed to create short link. Please try again.');
-            setStatus('error');
           }
           
           // Wait for receiver connection
@@ -804,6 +804,7 @@ function App() {
         // Single file with ZIP enabled - create streaming ZIP
         console.log('Single file with ZIP enabled, creating streaming ZIP...');
         const file = files[0];
+        const { makeZip } = await import('client-zip');
         const zipStream = makeZip([{
           name: file.name,
           lastModified: file.lastModified,
@@ -815,7 +816,6 @@ function App() {
         
         // Create short link via metadata API
         try {
-          console.log('📡 Calling createShortLink for single file...');
           const shortKey = await createShortLink({
             peerId: peerId!,
             fileName: zipFileName,
@@ -830,7 +830,6 @@ function App() {
         } catch (error) {
           console.error('Failed to create short link:', error);
           setTransferErrorMessage('Failed to create short link. Please try again.');
-          setStatus('error');
         }
         
         // Wait for receiver connection
@@ -1153,7 +1152,7 @@ function App() {
   }
   
   if (currentPage === 'info') {
-    return <InfoPage onBack={() => setCurrentPage('home')} />;
+    return <Info onBack={() => setCurrentPage('home')} />;
   }
 
   return (
@@ -1339,7 +1338,7 @@ function App() {
                             <div className="text-xs text-white/60">{formatFileSize(session.fileSize)} • {Math.round((session.completedShardIds.length / Math.max(1, session.shardCount)) * 100)}% cached</div>
                           </div>
                           <div className="flex gap-2">
-                            <button type="button" onClick={() => handleResumeSenderSession(session)} className="btn-secondary py-2">RESUME</button>
+                            <button type="button" onClick={() => handleResumeSenderSession(session)} className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm">Resume</button>
                             <button type="button" onClick={() => handleClearResumeSession(session)} className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm">Clear</button>
                           </div>
                         </div>
@@ -1360,32 +1359,11 @@ function App() {
                 )}
                 <PinToggle onPinChange={setPin} />
                 <div className="flex gap-3 justify-center mt-6">
-                  <button onClick={() => { setSelectedFiles(null); setPin(''); }} className="btn-secondary" disabled={status === 'encrypting'}>Cancel</button>
+                  <button onClick={() => { setSelectedFiles(null); setPin(''); }} className="btn-secondary">Cancel</button>
                   <button onClick={() => handleProceedWithTransfer()} className="btn-primary" disabled={status === 'encrypting'}>
-                    {status === 'encrypting' ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Warming up the moose...</span>
-                      </div>
-                    ) : 'Make me a share link, eh?'}
+                    {status === 'encrypting' ? <span>Warming up the moose...</span> : 'Make me a share link, eh?'}
                   </button>
                 </div>
-                
-                {status === 'encrypting' && (
-            <div className="flex flex-col items-center gap-8 py-16 animate-in fade-in zoom-in duration-700">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-3xl bg-white/[0.03] flex items-center justify-center border border-white/10 shadow-2xl overflow-hidden group">
-                  <div className="absolute inset-0 bg-gradient-to-t from-red-500/10 to-transparent"></div>
-                  <Loader2 className="w-10 h-10 text-red-500 animate-spin relative z-10" strokeWidth={3} />
-                </div>
-                <div className="absolute inset-0 bg-red-500/5 blur-3xl rounded-full animate-pulse"></div>
-              </div>
-              <div className="text-center space-y-2">
-                <h3 className="text-white font-black text-2xl uppercase tracking-tighter italic">Securing Tunnel</h3>
-                <p className="text-white/20 text-[11px] font-bold uppercase tracking-[0.2em]">Metadata generation in progress...</p>
-              </div>
-            </div>
-          )}
               </div>
             )}
 
@@ -1394,24 +1372,27 @@ function App() {
               <div className="glass-card p-8 w-full max-w-2xl mx-auto">
                 <div className="flex flex-col gap-6">
                   {relayLimitWarning && (
-                    <div className="mb-4 rounded-3xl border border-white/5 bg-zinc-950/40 p-6 backdrop-blur-2xl">
-                      <div className="flex items-start gap-4">
-                        <div className="p-2 rounded-xl bg-red-500/10 text-red-500">
-                          <AlertCircle size={24} />
-                        </div>
+                    <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
+                      <div className="flex items-start gap-3">
+                        <div className="text-amber-400 text-xl flex-shrink-0">⚠️</div>
                         <div className="flex-1">
-                          <h3 className="text-white font-black uppercase tracking-tighter italic mb-1">TUNNEL LIMIT REACHED</h3>
-                          <p className="text-white/40 text-xs font-bold uppercase tracking-widest leading-relaxed">
+                          <p className="text-amber-200 font-semibold">Relay size limit exceeded</p>
+                          <p className="text-amber-200/70 text-sm mt-1">
                             Your transfer ({formatFileSize(relayLimitWarning.totalSize)}) is over the 100 GB relay cap.
+                            The recipient has been notified. Improve your connection or reduce file size and start a new share.
                           </p>
-                          <details className="mt-4 group">
-                            <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-white/20 hover:text-red-500 transition-colors">ESTABLISH DIRECT CONNECTION</summary>
-                            <ul className="mt-3 space-y-2 text-[10px] text-white/30 font-bold uppercase tracking-wider list-none">
-                              <li>• Enable UPnP on your router</li>
-                              <li>• Check firewall permissions</li>
-                              <li>• Try a different network interface</li>
+                          <details className="mt-3">
+                            <summary className="cursor-pointer text-sm text-amber-300/80 hover:text-amber-200 transition-colors">Tips to get a direct connection</summary>
+                            <ul className="mt-2 space-y-1 text-sm text-amber-200/60 list-disc list-inside">
+                              <li>Disable VPN/proxy and refresh</li>
+                              <li>Try home Wi-Fi instead of corporate/mobile network</li>
+                              <li>Enable UPnP on your router (if comfortable)</li>
+                              <li>Ensure UDP/WebRTC is not blocked by your firewall</li>
                             </ul>
                           </details>
+                          <button type="button" onClick={() => window.location.reload()} className="mt-3 px-4 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-200 text-sm hover:bg-amber-500/25 transition-colors">
+                            Refresh &amp; create new share
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1421,7 +1402,7 @@ function App() {
                     <div className="text-center">
                       <div className="flex flex-col items-center gap-4">
                         <div className="inline-flex items-center gap-2 text-white/60">
-                          <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                           <span>Waiting for the other human to show up...</span>
                         </div>
                       </div>
@@ -1429,10 +1410,7 @@ function App() {
                   )}
                   {status === 'transferring' && (
                     <div className="w-full">
-                      <TransferArt 
-                        progress={adaptiveProgress.percentage} 
-                        speed={adaptiveProgress.speed} 
-                      />
+
                       <EnhancedProgressBar
                         progress={adaptiveProgress}
                         label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}
@@ -1443,7 +1421,7 @@ function App() {
                   )}
                   {status === 'complete' && (
                     <div className="text-center">
-                      <CheckCircle size={64} className="text-emerald-400 mx-auto mb-4" />
+                      <CheckCircle size={64} className="text-green-400 mx-auto mb-4" />
                       <h3 className="text-xl font-semibold text-white">Transfer complete. No rocket science harmed.</h3>
                     </div>
                   )}
@@ -1490,17 +1468,13 @@ function App() {
               )}
               {status === 'connecting' && (
                 <div className="text-center py-12">
-                  <div className="w-12 h-12 border-4 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                  <div className="w-12 h-12 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                   <p className="text-white/80">Calling the other human...</p>
                 </div>
               )}
               
               {status === 'transferring' && (
                 <div className="mt-8 max-w-5xl mx-auto">
-                  <TransferArt 
-                    progress={adaptiveProgress.percentage} 
-                    speed={adaptiveProgress.speed} 
-                  />
                   <EnhancedProgressBar 
                     progress={adaptiveProgress} 
                     label={`Receiving file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}
@@ -1526,7 +1500,7 @@ function App() {
               
               {status === 'complete' && (
                 <div className="text-center mt-8">
-                  <CheckCircle size={64} className="text-emerald-400 mx-auto mb-4" />
+                  <CheckCircle size={64} className="text-green-400 mx-auto mb-4" />
                   <h3 className="text-xl font-semibold text-white">
                     File downloaded successfully!
                   </h3>
@@ -1537,24 +1511,28 @@ function App() {
                 <div className="animate-fade-up">
                   {/* Relay limit warning — only when relay AND >100GB */}
                   {relayLimitWarning && (
-                    <div className="mb-6 rounded-3xl border border-white/5 bg-zinc-950/40 p-6 backdrop-blur-2xl text-left">
-                      <div className="flex items-start gap-4">
-                        <div className="p-2 rounded-xl bg-red-500/10 text-red-500">
-                          <AlertCircle size={24} />
-                        </div>
+                    <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-left">
+                      <div className="flex items-start gap-3">
+                        <span className="text-amber-400 text-xl flex-shrink-0">⚠️</span>
                         <div className="flex-1">
-                          <h3 className="text-white font-black uppercase tracking-tighter italic mb-1">TUNNEL LIMIT</h3>
-                          <p className="text-white/40 text-xs font-bold uppercase tracking-widest leading-relaxed">
+                          <p className="text-amber-200 font-semibold">Relay size limit exceeded</p>
+                          <p className="text-amber-200/70 text-sm mt-1">
                             This transfer ({formatFileSize(relayLimitWarning.totalSize)}) exceeds the 100 GB relay cap.
+                            Ask the sender to improve their connection, then create a new share.
                           </p>
-                          <details className="mt-4 group">
-                            <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-white/20 hover:text-red-500 transition-colors">SENDER OPTIMIZATION</summary>
-                            <ul className="mt-3 space-y-2 text-[10px] text-white/30 font-bold uppercase tracking-wider list-none">
-                              <li>• Use a wired connection</li>
-                              <li>• Disable VPN if active</li>
-                              <li>• Keep browser tab focused</li>
+                          <details className="mt-3">
+                            <summary className="cursor-pointer text-sm text-amber-300/80 hover:text-amber-200 transition-colors">Tips for the sender</summary>
+                            <ul className="mt-2 space-y-1 text-sm text-amber-200/60 list-disc list-inside">
+                              <li>Disable VPN/proxy and refresh</li>
+                              <li>Try home Wi-Fi instead of corporate/mobile network</li>
+                              <li>Enable UPnP on router (if comfortable)</li>
+                              <li>Ensure UDP/WebRTC is not blocked by firewall</li>
                             </ul>
                           </details>
+                          <button type="button" onClick={() => window.location.reload()}
+                            className="mt-3 px-4 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-200 text-sm hover:bg-amber-500/25 transition-colors">
+                            Refresh to try again
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1563,16 +1541,13 @@ function App() {
                   {/* File preview card */}
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-6 mb-6 text-left">
                     <div className="flex items-start gap-4">
-                      <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-white/[0.03] border border-white/10 text-2xl select-none shadow-inner relative group">
-                        <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <span className="relative z-10">
-                          {incomingFileInfo.fileType?.startsWith('image/') ? '🖼️' :
-                           incomingFileInfo.fileType?.startsWith('video/') ? '🎬' :
-                           incomingFileInfo.fileType?.startsWith('audio/') ? '🎵' :
-                           incomingFileInfo.fileType?.includes('zip') || incomingFileInfo.fileType?.includes('tar') || incomingFileInfo.fileType?.includes('gzip') ? '📦' :
-                           incomingFileInfo.fileType?.includes('pdf') ? '📄' :
-                           incomingFileInfo.fileType?.includes('text') ? '📝' : '📁'}
-                        </span>
+                      <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/15 border border-blue-500/20 text-2xl select-none">
+                        {incomingFileInfo.fileType?.startsWith('image/') ? '🖼️' :
+                         incomingFileInfo.fileType?.startsWith('video/') ? '🎬' :
+                         incomingFileInfo.fileType?.startsWith('audio/') ? '🎵' :
+                         incomingFileInfo.fileType?.includes('zip') || incomingFileInfo.fileType?.includes('tar') || incomingFileInfo.fileType?.includes('gzip') ? '📦' :
+                         incomingFileInfo.fileType?.includes('pdf') ? '📄' :
+                         incomingFileInfo.fileType?.includes('text') ? '📝' : '📁'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-semibold text-lg leading-tight truncate" title={incomingFileInfo.name}>
@@ -1585,11 +1560,8 @@ function App() {
                         </div>
                       </div>
                     </div>
-                    <div className="mt-6 flex items-center gap-3 px-4 py-2.5 rounded-xl bg-zinc-950/40 border border-white/5">
-                      <div className="flex h-2 w-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]"></div>
-                      <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.15em]">
-                        Zero Server Retention · End-to-End Encrypted
-                      </span>
+                    <div className="mt-4 rounded-xl border border-white/8 bg-white/5 px-4 py-3 text-xs text-white/40">
+                      🔒 End-to-end encrypted · Not stored on servers · Direct from sender's browser
                     </div>
                     {incomingFilesList && (
                       <div className="mt-4 max-h-48 overflow-y-auto custom-scrollbar rounded-xl border border-white/10 bg-black/20 p-3">
@@ -1615,7 +1587,7 @@ function App() {
                       <div className="text-white/90 font-medium">Resume detected</div>
                       <div className="text-sm text-white/60 mt-1">Cached shards found — resume to skip verified parts.</div>
                       <div className="mt-3 flex gap-2">
-                        <button type="button" onClick={handleChooseSaveLocation} className="btn-secondary py-2">RESUME DOWNLOAD</button>
+                        <button type="button" onClick={handleChooseSaveLocation} className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm">Resume download</button>
                         <button type="button" onClick={() => {
                           const match = resumeSessions.find((s) => s.role === 'receiver' && matchesIncomingResume(s));
                           if (match) void handleClearResumeSession(match);
@@ -1627,7 +1599,7 @@ function App() {
                   <button
                     onClick={handleChooseSaveLocation}
                     disabled={!!relayLimitWarning}
-                    className="w-full py-4 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-semibold transition-colors shadow-lg text-lg"
+                    className="w-full py-4 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-semibold transition-colors shadow-lg text-lg"
                   >
                     <Download size={20} className="inline mr-2 -mt-0.5" />
                     Download
@@ -1709,7 +1681,7 @@ function App() {
                 className="group inline-flex items-center gap-1 whitespace-nowrap leading-none text-white/50"
               >
                 <span className="whitespace-nowrap">Logo by</span>
-                <span className="text-white/40 transition-colors group-hover:text-red-500">Talal Al-Saymaree</span>
+                <span className="text-blue-400 transition-colors group-hover:text-blue-300">Talal Al-Saymaree</span>
               </a>
               <span className="group relative inline-flex items-center whitespace-nowrap leading-none text-white/60">
                 <span className="text-base" role="img" aria-label="Canada">🇨🇦</span>
@@ -1721,13 +1693,13 @@ function App() {
             <div className="flex items-end justify-between gap-3">
               <div className="flex items-end">
                 {buildIndicatorClass && buildIndicatorLabel && (
-                  <div className="rounded-2xl border border-white/5 bg-zinc-950/40 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/20 shadow-2xl backdrop-blur-3xl group hover:border-white/10 transition-colors">
-                    <div className="inline-flex items-center gap-3">
-                      <span className={`h-1.5 w-1.5 rounded-full ${buildIndicatorClass} shadow-[0_0_10px_rgba(255,255,255,0.2)] group-hover:scale-125 transition-transform`} />
-                      <span className="text-white/40 italic">{buildIndicatorLabel}</span>
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 shadow-lg shadow-black/20 backdrop-blur">
+                    <div className="inline-flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)]`} />
+                      <span>{buildIndicatorLabel}</span>
                     </div>
                     {buildVersionLabel && (
-                      <div className="mt-1 opacity-50 font-medium tracking-widest">
+                      <div className="mt-1 text-[9px] font-normal uppercase tracking-[0.2em] text-white/50">
                         {buildVersionLabel}
                       </div>
                     )}
@@ -1749,9 +1721,11 @@ function App() {
 
       {/* Clipboard Notification */}
       {showClipboardNotification && (
-        <div className="fixed bottom-8 right-8 bg-zinc-950 border border-white/10 text-white px-8 py-4 rounded-2xl shadow-2xl backdrop-blur-3xl transform transition-all duration-300 ease-in-out z-50 flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-          <span className="text-[10px] font-black uppercase tracking-widest italic">Action Complete</span>
+        <div className="fixed bottom-8 right-8 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out z-50">
+          <div className="flex items-center gap-3">
+            <Check size={20} />
+            <span className="font-medium">Link copied. You’re basically a wizard.</span>
+          </div>
         </div>
       )}
       {humanToastMessage && (

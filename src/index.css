@@ -64,20 +64,20 @@ html {
 
 html[data-theme='light'] {
   color-scheme: dark; /* Force dark scrollbars even on 'light' theme since UI is dark */
-  --app-bg: linear-gradient(135deg, #09090b 0%, #111114 50%, #18181b 100%);
-  --app-overlay-base: rgba(0, 0, 0, 0.1);
-  --app-overlay-accent: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(239, 68, 68, 0.03), rgba(0, 0, 0, 0.1));
-  --card-bg: rgba(255, 255, 255, 0.03);
-  --card-border: rgba(255, 255, 255, 0.08);
+  --app-bg: linear-gradient(135deg, #0b1c3f 0%, #2b0b5c 50%, #5a0a3a 100%);
+  --app-overlay-base: rgba(0, 0, 0, 0.2);
+  --app-overlay-accent: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(168, 85, 247, 0.2), rgba(236, 72, 153, 0.2));
+  --card-bg: rgba(255, 255, 255, 0.1);
+  --card-border: rgba(255, 255, 255, 0.2);
 }
 
 html[data-theme='dark'] {
   color-scheme: dark;
-  --app-bg: radial-gradient(circle at 50% 50%, #0c0c0e 0%, #050505 100%);
-  --app-overlay-base: rgba(0, 0, 0, 0.6);
-  --app-overlay-accent: linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(239, 68, 68, 0.02), rgba(0, 0, 0, 0.2));
-  --card-bg: rgba(9, 9, 11, 0.7);
-  --card-border: rgba(255, 255, 255, 0.05);
+  --app-bg: linear-gradient(135deg, #050913 0%, #120620 50%, #1a0913 100%);
+  --app-overlay-base: rgba(0, 0, 0, 0.45);
+  --app-overlay-accent: linear-gradient(135deg, rgba(30, 64, 175, 0.25), rgba(88, 28, 135, 0.25), rgba(136, 19, 55, 0.25));
+  --card-bg: rgba(8, 8, 12, 0.6);
+  --card-border: rgba(255, 255, 255, 0.08);
 }
 
 .app-shell {
@@ -94,21 +94,21 @@ html[data-theme='dark'] {
 
 @layer components {
   .glass-card {
-    @apply bg-zinc-900/60 backdrop-blur-3xl border border-white/5 rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)];
+    @apply bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl;
   }
   
   .btn-primary {
-    @apply bg-white text-zinc-950 font-black uppercase tracking-tighter italic
-           px-8 py-4 rounded-2xl transition-all duration-300
-           hover:bg-red-500 hover:text-white
-           hover:shadow-[0_0_40px_rgba(239,68,68,0.3)]
-           active:scale-[0.98];
+    @apply bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold
+           px-6 py-3 rounded-xl transition-all duration-200
+           hover:from-blue-600 hover:to-purple-600
+           hover:shadow-lg hover:shadow-blue-500/25
+           active:scale-95;
   }
   
   .btn-secondary {
-    @apply bg-white/[0.03] text-white/60 font-bold uppercase tracking-widest text-[10px]
-           px-6 py-3 rounded-2xl border border-white/5 transition-all duration-300
-           hover:bg-white/[0.06] hover:text-white hover:border-white/10;
+    @apply bg-white/10 text-white font-semibold
+           px-6 py-3 rounded-xl transition-all duration-200
+           hover:bg-white/20 hover:shadow-lg;
   }
 }
 
@@ -199,19 +199,4 @@ html[data-theme='dark'] {
 
 .animate-glow-pulse {
   animation: glow-pulse 6s ease-in-out infinite;
-}
-
-@keyframes pulse-slow {
-  0%, 100% {
-    opacity: 0.1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.2;
-    transform: scale(1.05);
-  }
-}
-
-.animate-pulse-slow {
-  animation: pulse-slow 4s ease-in-out infinite;
 }

@@ -9,74 +9,54 @@ export function EncryptionIndicator({ isEncrypted, isVisible }: EncryptionIndica
   if (!isVisible) return null;
 
   return (
-    <div className="flex items-center justify-center mb-8">
+    <div className="flex items-center justify-center mb-6">
       <div className={`
-        relative flex items-center gap-4 px-6 py-3.5 rounded-full
-        backdrop-blur-2xl border transition-all duration-700 ease-out
+        relative flex items-center gap-3 px-6 py-3 rounded-2xl
+        backdrop-blur-xl border transition-all duration-500
         ${isEncrypted 
-          ? 'bg-red-950/20 border-red-500/30 shadow-[0_0_25px_-5px_rgba(239,68,68,0.2)]' 
-          : 'bg-white/5 border-white/10 shadow-none'
+          ? 'bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-cyan-500/20 border-purple-500/50 shadow-lg shadow-purple-500/20' 
+          : 'bg-white/5 border-white/10'
         }
-        animate-in fade-in slide-in-from-top-6
+        animate-in fade-in slide-in-from-top-4
       `}>
-        {/* Subtle red ambient glow for encrypted state */}
+        {/* Animated gradient background for encrypted state */}
         {isEncrypted && (
-          <div className="absolute inset-0 rounded-full bg-red-500/5 animate-pulse-slow"></div>
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-cyan-500/10 animate-pulse"></div>
         )}
         
-        <div className="relative z-10 flex items-center gap-4">
-          <div className="relative flex items-center justify-center">
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="relative">
             {isEncrypted ? (
-              <div className="relative group">
-                {/* Layered glow effects */}
-                <div className="absolute inset-0 bg-red-500/40 rounded-full blur-xl opacity-40 group-hover:opacity-60 transition-opacity"></div>
-                <div className="absolute inset-0 bg-red-400/20 rounded-full blur-sm opacity-80"></div>
-                
-                <div className="relative bg-red-500/10 p-2 rounded-full border border-red-500/20">
-                  <Shield className="w-5 h-5 text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+              <>
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-400 to-cyan-400 rounded-full blur-md opacity-50 animate-pulse"></div>
+                <Shield className="relative w-6 h-6 text-purple-300" />
+                <div className="absolute -top-1 -right-1 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full p-0.5 shadow-lg">
+                  <Check className="w-3 h-3 text-white" strokeWidth={3} />
                 </div>
-                
-                <div className="absolute -top-0.5 -right-0.5 bg-green-500 rounded-full p-0.5 shadow-[0_0_10px_rgba(34,197,94,0.5)] border border-black/20">
-                  <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
-                </div>
-              </div>
+              </>
             ) : (
-              <div className="bg-white/5 p-2 rounded-full border border-white/10">
-                <Lock className="w-5 h-5 text-white/30 animate-pulse" />
-              </div>
+              <>
+                <Lock className="w-6 h-6 text-white/40 animate-pulse" />
+              </>
             )}
           </div>
           
           <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className={`text-[13px] tracking-wide font-bold uppercase ${isEncrypted ? 'text-white' : 'text-white/50'}`}>
-                {isEncrypted ? 'End-to-End Encrypted' : 'Establishing Channel'}
-              </span>
-              {isEncrypted && (
-                <span className="flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
-                </span>
-              )}
-            </div>
-            <span className={`text-[11px] font-medium tracking-tight ${isEncrypted ? 'text-red-200/60' : 'text-white/30'}`}>
-              {isEncrypted ? 'Secure direct-transfer active' : 'Securing WebRTC handshake...'}
+            <span className={`text-sm font-semibold ${isEncrypted ? 'text-white' : 'text-white/60'}`}>
+              {isEncrypted ? 'End-to-End Encrypted' : 'Establishing Encryption...'}
+            </span>
+            <span className={`text-xs ${isEncrypted ? 'text-purple-200/80' : 'text-white/40'}`}>
+              {isEncrypted ? 'Secure P2P connection active' : 'Connecting...'}
             </span>
           </div>
-
+          
           {isEncrypted && (
-            <div className="hidden sm:flex ml-2 items-center gap-3 pl-4 border-l border-white/5">
-              <div className="flex flex-col items-center">
-                <Zap className="w-3.5 h-3.5 text-red-400 opacity-80 animate-pulse" fill="currentColor" />
-              </div>
-              <div className="flex gap-1.5">
-                {[0, 0.2, 0.4].map((delay) => (
-                  <div 
-                    key={delay}
-                    className="w-1 h-1 bg-red-500/40 rounded-full animate-pulse" 
-                    style={{ animationDelay: `${delay}s` }}
-                  ></div>
-                ))}
+            <div className="ml-2 flex items-center gap-1.5">
+              <Zap className="w-4 h-4 text-cyan-400 animate-pulse" fill="currentColor" />
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 bg-gradient-to-r from-purple-400 to-cyan-400 rounded-full animate-pulse"></div>
+                <div className="w-1.5 h-1.5 bg-gradient-to-r from-purple-400 to-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-1.5 h-1.5 bg-gradient-to-r from-purple-400 to-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
               </div>
             </div>
           )}

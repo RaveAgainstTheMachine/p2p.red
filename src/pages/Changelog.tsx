@@ -81,17 +81,26 @@ export const Changelog: React.FC<ChangelogProps> = ({ onBack }) => {
           ))}
         </main>
 
-        <footer className="mt-auto py-8 text-center flex flex-col items-center gap-3 text-xs text-white/30 border-t border-white/5">
-          <div className="flex items-center gap-4">
-            <span>© {new Date().getFullYear()} Stevem Frost</span>
+        <footer className="mt-auto border-t border-white/10 py-6 text-xs text-white/40 flex flex-col items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            <button onClick={onBack} className="hover:text-white transition-colors">Back to home</button>
             <span className="group relative inline-flex items-center leading-none text-white/40">
               <span className="text-sm" role="img" aria-label="Canada">🇨🇦</span>
               <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                 Proudly made in Canada
               </span>
             </span>
+            <span>© 2026 Stevem Frost</span>
+            <a
+              href="https://cv.tee215.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group inline-flex items-center gap-1 whitespace-nowrap leading-none text-white/40"
+            >
+              <span>Logo by</span>
+              <span className="text-blue-400 transition-colors group-hover:text-blue-300">T</span>
+            </a>
           </div>
-          <p>No trackers, no drama, just files. 🍁</p>
         </footer>
       </div>
     </div>

@@ -273,38 +273,15 @@ function App() {
   const buildVariantRaw = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
   const buildVariant = buildVariantRaw || 'dev';
   const buildVersion = (import.meta as any)?.env?.VITE_BUILD_VERSION;
-  const formatBuildVersion = (version?: string) => {
-    if (!version) return version;
-    const parts = version.split('-');
-    const timestamp = parts[parts.length - 1];
-    if (!/^[0-9]{14}$/.test(timestamp)) return version;
-    const year = Number(timestamp.slice(0, 4));
-    const month = Number(timestamp.slice(4, 6)) - 1;
-    const day = Number(timestamp.slice(6, 8));
-    const hour = Number(timestamp.slice(8, 10));
-    const minute = Number(timestamp.slice(10, 12));
-    const second = Number(timestamp.slice(12, 14));
-    const utcDate = new Date(Date.UTC(year, month, day, hour, minute, second));
-    const estTimestamp = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    }).format(utcDate);
-    return `${parts.slice(0, -1).join('-')}-${estTimestamp}`;
-  };
-  const buildVersionLabel = formatBuildVersion(buildVersion);
   const buildIndicatorClass = buildVariant === 'blue'
     ? 'bg-blue-400'
     : buildVariant === 'green'
       ? 'bg-emerald-400'
       : 'bg-slate-400';
   const buildIndicatorLabel = buildVariant;
+  const commitId = buildVersion ? buildVersion.split('-')[1] : '';
   const shortVersion = buildVersion ? buildVersion.split('-')[0] : '1.4.0';
+  const displayVersion = commitId ? `${shortVersion}-${commitId}` : shortVersion;
 
   const copyShareLinkToClipboard = async (link: string) => {
     try {
@@ -1687,9 +1664,28 @@ function App() {
 
       {/* Footer */}
       <footer className="relative z-10 mt-auto border-t border-white/10">
-        <div className="mx-auto w-full max-w-none px-[15px] py-1">
-          <div className="grid gap-0.5">
-            <div className="flex flex-wrap items-center justify-center gap-x-[clamp(6px,1.8vw,14px)] gap-y-1 text-center text-[clamp(10px,2.2vw,14px)] text-white/60 max-[640px]:w-full max-[640px]:flex-nowrap max-[640px]:justify-between max-[640px]:gap-x-0 max-[640px]:text-[9px]">
+        <div className="mx-auto w-full max-w-none px-[15px] py-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 w-full text-[clamp(10px,2vw,13px)] text-white/60">
+            {/* Left: Version */}
+            <div className="flex items-center">
+              {buildIndicatorClass && buildIndicatorLabel && (
+                <button
+                  onClick={() => setCurrentPage('changelog')}
+                  title="Click to view changelog"
+                  className="group relative flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/70 transition-all hover:bg-white/10 hover:border-white/20 active:scale-95"
+                >
+                  <span className={`h-2 w-2 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.3)]`} />
+                  <span>{displayVersion}</span>
+                  <div className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 group-hover:max-w-[200px] group-hover:opacity-100 flex items-center">
+                    <span className="text-white/30 mx-2">•</span>
+                    <span className="text-white/40 tracking-normal font-medium lowercase">{buildIndicatorLabel}</span>
+                  </div>
+                </button>
+              )}
+            </div>
+
+            {/* Center: Links */}
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
               <a
                 href="https://buymeacoffee.com/p2p.red"
                 target="_blank"
@@ -1711,10 +1707,10 @@ function App() {
               >
                 Feedback
               </button>
-              <span className="group relative inline-flex items-center whitespace-nowrap leading-none text-white/60 mx-1">
+              <span className="group relative inline-flex items-center whitespace-nowrap leading-none text-white/60">
                 <span className="text-base" role="img" aria-label="Canada">🇨🇦</span>
                 <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                  Proudly made in Canada from Canadian grown ingredients
+                  Proudly made in Canada
                 </span>
               </span>
               <button
@@ -1734,33 +1730,10 @@ function App() {
                 <span className="text-blue-400 transition-colors group-hover:text-blue-300">T</span>
               </a>
             </div>
-            <div className="flex items-end justify-between gap-3">
-              <div className="flex items-end">
-                {buildIndicatorClass && buildIndicatorLabel && (
-                  <button
-                    onClick={() => setCurrentPage('changelog')}
-                    className="group flex flex-col items-start rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 shadow-lg shadow-black/20 backdrop-blur transition-all duration-300 hover:bg-white/10 hover:border-white/20 active:scale-95"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.35)] group-hover:shadow-[0_0_12px_rgba(255,255,255,0.5)] transition-shadow`} />
-                      <span className="font-bold">{shortVersion}</span>
-                      <div className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 ease-in-out group-hover:max-w-[300px] group-hover:opacity-100 flex items-center">
-                        <span className="text-white/30 mx-2">•</span>
-                        <span className="text-white/60 lowercase tracking-normal">{buildIndicatorLabel}</span>
-                        {buildVersionLabel && buildVersionLabel.includes('-') && (
-                          <>
-                            <span className="text-white/30 mx-2">•</span>
-                            <span className="text-white/40 font-normal tracking-tight">{buildVersionLabel.split('-').pop()}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                )}
-              </div>
-              <div className="flex items-end">
-                <Monitoring placement="footer" />
-              </div>
+
+            {/* Right: Status */}
+            <div className="flex items-center">
+              <Monitoring placement="footer" />
             </div>
           </div>
         </div>

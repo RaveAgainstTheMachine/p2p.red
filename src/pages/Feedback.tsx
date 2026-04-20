@@ -121,12 +121,12 @@ export const Feedback: React.FC<FeedbackProps> = ({ onBack, apiBaseUrl }) => {
                     type="button"
                     onClick={() => setRating(star)}
                     className={`h-12 w-12 rounded-xl border flex items-center justify-center transition-all ${
-                      rating === star
+                      rating !== null && rating >= star
                         ? 'bg-blue-500/20 border-blue-400 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)] scale-110'
                         : 'bg-white/5 border-white/10 text-white/30 hover:border-white/30 hover:text-white/60'
                     }`}
                   >
-                    <Star size={24} fill={rating === star ? 'currentColor' : 'none'} />
+                    <Star size={24} fill={rating !== null && rating >= star ? 'currentColor' : 'none'} />
                   </button>
                 ))}
               </div>

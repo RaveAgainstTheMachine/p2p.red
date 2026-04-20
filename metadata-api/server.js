@@ -721,6 +721,30 @@ app.post('/api/admin/telemetry/toggle', requireAdmin, (req, res) => {
   res.json({ enabled: telemetryIngestEnabled });
 });
 
+app.get('/api/admin/feedback', requireAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+    
+    const result = await pool.query(
+      'SELECT id, content, rating, email, metadata, created_at FROM feedback ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    
+    const countResult = await pool.query('SELECT COUNT(*) FROM feedback');
+    
+    res.json({
+      feedback: result.rows,
+      total: parseInt(countResult.rows[0].count),
+      limit,
+      offset
+    });
+  } catch (error) {
+    console.error('Feedback fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch feedback' });
+  }
+});
+
 app.post('/api/admin/logging/toggle', requireAdmin, (req, res) => {
   const { enabled } = req.body || {};
   if (typeof enabled !== 'boolean') {

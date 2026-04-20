@@ -54,9 +54,36 @@ html {
   --theme-glow-hover: rgba(99, 102, 241, 0.6);
   
   /* Common variables */
-  --app-overlay-base: rgba(0, 0, 0, 0.2);
-  --card-bg: rgba(255, 255, 255, 0.03);
-  --card-border: rgba(255, 255, 255, 0.1);
+  --app-overlay-base: rgba(0, 0, 0, 0.25);
+  --card-bg: rgba(255, 255, 255, 0.035);
+  --card-border: rgba(255, 255, 255, 0.12);
+}
+
+.app-overlay-base {
+  position: relative;
+  background-color: var(--theme-bg-1);
+  background-image: 
+    radial-gradient(at 0% 0%, var(--theme-bg-2) 0, transparent 50%),
+    radial-gradient(at 50% 0%, var(--theme-bg-3) 0, transparent 50%),
+    radial-gradient(at 100% 0%, var(--theme-bg-2) 0, transparent 50%);
+}
+
+.app-overlay-base::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+  z-index: 1;
+}
+
+.app-overlay-accent {
+  background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-accent) 100%);
+  opacity: 0.12;
+  filter: blur(120px);
+  z-index: 0;
 }
 
 /* Emerald (Forest) */
@@ -308,8 +335,8 @@ html[data-theme='light'] {
 }
 
 .animate-gradient-shift {
-  animation: gradient-shift 8s ease infinite;
-  background-size: 200% 200%;
+  animation: gradient-shift 40s ease-in-out infinite;
+  background-size: 150% 150%;
 }
 
 .animate-shine {

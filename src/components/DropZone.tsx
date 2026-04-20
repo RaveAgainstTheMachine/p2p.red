@@ -38,6 +38,7 @@ const readDirEntry = async (entry: any, prefix = ''): Promise<File[]> => {
 
 export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing = false }) => {
   const [dragActive, setDragActive] = useState(false);
+  const [internalProcessing, setInternalProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
 
@@ -46,32 +47,42 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
     e.stopPropagation();
     dragCounter.current = 0;
     setDragActive(false);
-    if (isProcessing) return;
+    if (isProcessing || internalProcessing) return;
 
-    // Collect entries SYNCHRONOUSLY before any await — dataTransfer neutered after first yield
-    const collected: Array<{ entry: any; fallbackFile: File | null }> = [];
+    // Set internal processing if we suspect this might take a moment
+    // (e.g. any directory or multiple items)
     const { items } = e.dataTransfer;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind !== 'file') continue;
-      const entry = (item as any).webkitGetAsEntry?.();
-      collected.push({ entry: entry ?? null, fallbackFile: entry ? null : item.getAsFile() });
+    if (items.length > 5 || Array.from(items).some(item => (item as any).webkitGetAsEntry?.()?.isDirectory)) {
+      setInternalProcessing(true);
     }
 
-    const allFiles: File[] = [];
-    for (const { entry, fallbackFile } of collected) {
-      if (entry?.isDirectory) {
-        allFiles.push(...await readDirEntry(entry, entry.name + '/'));
-      } else if (entry?.isFile) {
-        const file: File = await new Promise((res, rej) => entry.file(res, rej));
-        allFiles.push(file);
-      } else if (fallbackFile) {
-        allFiles.push(fallbackFile);
+    try {
+      // Collect entries SYNCHRONOUSLY before any await — dataTransfer neutered after first yield
+      const collected: Array<{ entry: any; fallbackFile: File | null }> = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind !== 'file') continue;
+        const entry = (item as any).webkitGetAsEntry?.();
+        collected.push({ entry: entry ?? null, fallbackFile: entry ? null : item.getAsFile() });
       }
-    }
 
-    if (allFiles.length > 0) onFileSelect(allFiles);
-  }, [onFileSelect, isProcessing]);
+      const allFiles: File[] = [];
+      for (const { entry, fallbackFile } of collected) {
+        if (entry?.isDirectory) {
+          allFiles.push(...await readDirEntry(entry, entry.name + '/'));
+        } else if (entry?.isFile) {
+          const file: File = await new Promise((res, rej) => entry.file(res, rej));
+          allFiles.push(file);
+        } else if (fallbackFile) {
+          allFiles.push(fallbackFile);
+        }
+      }
+
+      if (allFiles.length > 0) onFileSelect(allFiles);
+    } finally {
+      setInternalProcessing(false);
+    }
+  }, [onFileSelect, isProcessing, internalProcessing]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -90,15 +101,23 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
   }, []);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
-    if (isProcessing) return;
+    if (isProcessing || internalProcessing) return;
     // Don't open picker if user clicked a button/link inside
     if ((e.target as HTMLElement).closest('button,a,input,select')) return;
     fileInputRef.current?.click();
-  }, [isProcessing]);
+  }, [isProcessing, internalProcessing]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files && files.length > 0) onFileSelect(Array.from(files));
+    if (files && files.length > 0) {
+      if (files.length > 50) setInternalProcessing(true);
+      
+      // Use setImmediate/setTimeout to allow UI to update before heavy array conversion/callback
+      setTimeout(() => {
+        onFileSelect(Array.from(files));
+        setInternalProcessing(false);
+      }, 10);
+    }
     e.target.value = '';
   }, [onFileSelect]);
 
@@ -126,7 +145,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
       {/* Full-area clickable drop surface */}
       <div
         className={`flex flex-1 w-full flex-col items-center justify-center gap-5 select-none
-          ${!isProcessing ? 'cursor-pointer' : 'cursor-default'}
+          ${!(isProcessing || internalProcessing) ? 'cursor-pointer' : 'cursor-default'}
         `}
         onDrop={handleDrop}
         onDragEnter={handleDragEnter}
@@ -139,7 +158,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
             <Upload size={24} className="text-white/30" />
           </div>
 
-          {isProcessing ? (
+          {(isProcessing || internalProcessing) ? (
             <div className="text-center">
               <p className="text-white/70 font-medium">Processing…</p>
               <p className="text-white/30 text-sm mt-1">Hang tight.</p>

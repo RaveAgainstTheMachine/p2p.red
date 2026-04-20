@@ -97,13 +97,27 @@ export async function createShortLink(metadata: TransferMetadata, pin?: string):
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
+      } else {
+        const text = await response.text();
+        console.error('📡 Non-JSON error response from metadata API:', text);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}. Server returned non-JSON response.`);
+      }
     }
 
-    const data: ShortLinkResponse = await response.json();
-    console.log(`✅ Short link created: ${data.key}, expires: ${data.expiresAt}`);
-    return data.key;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const data: ShortLinkResponse = await response.json();
+      console.log(`✅ Short link created: ${data.key}, expires: ${data.expiresAt}`);
+      return data.key;
+    } else {
+      const text = await response.text();
+      console.error('📡 Unexpected non-JSON success response:', text);
+      throw new Error('Server returned invalid response format (not JSON)');
+    }
   } catch (error) {
     console.error('Failed to create short link:', error);
     throw new Error(`Failed to create short link: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -126,7 +140,16 @@ export async function getMetadata(key: string, pin?: string): Promise<TransferMe
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const contentType = response.headers.get('content-type');
+      let error: any = {};
+      
+      if (contentType && contentType.includes('application/json')) {
+        error = await response.json();
+      } else {
+        const text = await response.text();
+        console.error('📡 Non-JSON error response from getMetadata:', text);
+        error = { error: `HTTP ${response.status}: ${response.statusText}`, message: text };
+      }
       
       if (response.status === 404) {
         throw new Error('Link not found or has expired');
@@ -151,9 +174,16 @@ export async function getMetadata(key: string, pin?: string): Promise<TransferMe
       throw new Error(error.error || error.message || `HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const metadata: TransferMetadata = await response.json();
-    console.log(`📥 Retrieved metadata for key: ${key}`, metadata);
-    return metadata;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const metadata: TransferMetadata = await response.json();
+      console.log(`📥 Retrieved metadata for key: ${key}`, metadata);
+      return metadata;
+    } else {
+      const text = await response.text();
+      console.error('📡 Unexpected non-JSON success response from getMetadata:', text);
+      throw new Error('Server returned invalid response format (not JSON)');
+    }
   } catch (error) {
     console.error('Failed to retrieve metadata:', error);
     // Re-throw the original error to preserve requiresPin and remainingAttempts properties

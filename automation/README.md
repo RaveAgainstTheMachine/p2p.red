@@ -4,11 +4,13 @@
 Automation helpers for deploys and public-repo sync/redaction.
 
 ## Scripts
-### Full Deploy (metadata + app)
-```bash
-chmod +x automation/deploy-all.sh
-./automation/deploy-all.sh
-```
+## 🚀 Deployment (Authoritative)
+**[Read DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md) before deploying.**
+
+### Full Deploy (Local Dev -> Prod VPS)
+1. **Build images locally**: `./automation/build-prod-images.sh`
+2. **Transfer to prod**: `scp images/*.tar prod-vps:/tmp/`
+3. **Deploy on prod**: SSH to vps and run `./automation/release-prod.sh`
 **Requires:**
 - `metadata-api/.env`
 - `turnserver.conf`

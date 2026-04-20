@@ -76,8 +76,10 @@ html[data-theme='dark'] {
   --app-bg: linear-gradient(135deg, #050913 0%, #120620 50%, #1a0913 100%);
   --app-overlay-base: rgba(0, 0, 0, 0.45);
   --app-overlay-accent: linear-gradient(135deg, rgba(30, 64, 175, 0.25), rgba(88, 28, 135, 0.25), rgba(136, 19, 55, 0.25));
-  --card-bg: rgba(8, 8, 12, 0.6);
-  --card-border: rgba(255, 255, 255, 0.08);
+  --card-bg: rgba(15, 10, 25, 0.5);
+  --card-border: rgba(255, 255, 255, 0.12);
+  --accent-primary: #8b5cf6;
+  --accent-secondary: #d946ef;
 }
 
 .app-shell {
@@ -94,21 +96,40 @@ html[data-theme='dark'] {
 
 @layer components {
   .glass-card {
-    @apply bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl;
+    @apply backdrop-blur-3xl bg-white/[0.03] border border-white/10 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)];
+    background-image: radial-gradient(circle at top left, rgba(255,255,255,0.08), transparent 40%);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.1), 0 20px 50px rgba(0,0,0,0.5);
+    backdrop-filter: blur(40px) saturate(180%);
   }
   
   .btn-primary {
-    @apply bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold
-           px-6 py-3 rounded-xl transition-all duration-200
-           hover:from-blue-600 hover:to-purple-600
-           hover:shadow-lg hover:shadow-blue-500/25
-           active:scale-95;
+    @apply relative overflow-hidden text-white font-bold
+           px-8 py-4 rounded-[1.5rem] transition-all duration-300
+           bg-gradient-to-br from-indigo-600/90 via-purple-600/90 to-fuchsia-600/90
+           border border-white/20 backdrop-blur-md
+           shadow-[0_0_20px_rgba(99,102,241,0.3)]
+           hover:shadow-[0_0_35px_rgba(99,102,241,0.6)]
+           hover:scale-[1.03] active:scale-[0.97]
+           hover:border-white/50;
+    backdrop-filter: blur(12px) saturate(200%);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 
+                0 15px 30px -5px rgba(0,0,0,0.5),
+                0 0 20px rgba(99,102,241,0.25);
+  }
+
+  .btn-primary::after {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-t from-white/15 to-transparent pointer-events-none;
   }
   
   .btn-secondary {
-    @apply bg-white/10 text-white font-semibold
-           px-6 py-3 rounded-xl transition-all duration-200
-           hover:bg-white/20 hover:shadow-lg;
+    @apply bg-white/5 text-white/90 font-semibold
+           px-8 py-4 rounded-[1.5rem] transition-all duration-300
+           border border-white/10 backdrop-blur-2xl
+           hover:bg-white/10 hover:border-white/30
+           hover:shadow-xl active:scale-[0.97];
+    backdrop-filter: blur(25px) saturate(160%);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.1), 0 10px 20px rgba(0,0,0,0.3);
   }
 }
 

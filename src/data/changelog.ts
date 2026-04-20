@@ -9,20 +9,34 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.3.19',
+    date: '2026-04-20',
+    changes: [
+      { category: 'Improved', description: 'Overhauled bot-challenge (Anubis) UI to match Liquid Glass aesthetic.' },
+      { category: 'Improved', description: 'Refactored Legal page for 100% design homogeneity across the site.' },
+      { category: 'Improved', description: 'Deeply populated the Evolution page with historical version data.' }
+    ]
+  },
+  {
+    version: '1.3.18',
+    date: '2026-04-20',
+    changes: [
+      { category: 'Improved', description: 'Interactive expanding version pill added to the footer.' }
+    ]
+  },
+  {
     version: '1.3.17',
     date: '2026-04-20',
     changes: [
-      { category: 'Improved', description: 'Redesigned the version badge into an interactive, expanding pill.' },
-      { category: 'Improved', description: 'Simplified footer by hiding deployment color and timestamp until hover.' }
+      { category: 'Improved', description: 'Simplified footer by hiding deployment metadata until hover.' }
     ]
   },
   {
     version: '1.3.16',
     date: '2026-04-20',
     changes: [
-      { category: 'Added', description: 'Added interactive Change Log page accessible via the version badge.' },
-      { category: 'Improved', description: 'Formalized the release process to include mandatory changelog updates.' },
-      { category: 'Improved', description: 'Applied "Liquid Glass" styling to all secondary system pages (Info, Legal, Changelog).' }
+      { category: 'Added', description: 'Added interactive Change Log (Evolution) page.' },
+      { category: 'Improved', description: 'Applied "Liquid Glass" styling to all system pages.' }
     ]
   },
   {
@@ -30,33 +44,50 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-04-20',
     changes: [
       { category: 'Improved', description: 'Implemented premium "Liquid Glass" aesthetic across the entire UI.' },
-      { category: 'Improved', description: 'Updated color palette to vibrant Indigo-to-Purple gradients for better contrast and feel.' },
-      { category: 'Improved', description: 'Enhanced corner rounding with squircle-inspired 40px radii for a more fluid look.' }
+      { category: 'Improved', description: 'Enhanced corner rounding with squircle-inspired 40px radii.' }
     ]
   },
   {
     version: '1.3.14',
-    date: '2026-04-20',
+    date: '2026-04-19',
     changes: [
       { category: 'Improved', description: 'Integrated bot challenge status messages directly into the main UI container.' },
-      { category: 'Added', description: 'Added 10+ new quirky success and status messages (Security Moose approved).' },
-      { category: 'Improved', description: 'Removed distracting bottom-toast notifications for a cleaner experience.' }
+      { category: 'Added', description: 'Added 10+ new quirky success and status messages (Security Moose approved).' }
     ]
   },
   {
-    version: '1.3.13',
+    version: '1.3.8',
+    date: '2026-04-20',
+    changes: [
+      { category: 'Improved', description: 'Reverted UI changes back to the signature purple palette for brand consistency.' }
+    ]
+  },
+  {
+    version: '1.3.7',
+    date: '2026-04-19',
+    changes: [
+      { category: 'Improved', description: 'UI modernization: Night palette with ruby accents and refined typography.' }
+    ]
+  },
+  {
+    version: '1.3.5',
+    date: '2026-04-19',
+    changes: [
+      { category: 'Fixed', description: 'Resolved "Preparing Tunnel" hang and optimized large folder processing.' }
+    ]
+  },
+  {
+    version: '1.3.3',
+    date: '2026-04-19',
+    changes: [
+      { category: 'Added', description: 'Added generative art backgrounds to transfer screens for visual interest.' }
+    ]
+  },
+  {
+    version: '1.3.1',
     date: '2026-04-18',
     changes: [
-      { category: 'Fixed', description: 'Resolved an issue where bot challenges could block short-link generation.' },
-      { category: 'Improved', description: 'Optimized challenge execution to bypass browser-level throttling.' }
-    ]
-  },
-  {
-    version: '1.3.12',
-    date: '2026-04-15',
-    changes: [
-      { category: 'Improved', description: 'Hardened production deployment workflow with automated environment health checks.' },
-      { category: 'Fixed', description: 'Resolved transient network timeout issues during container initialization.' }
+      { category: 'Improved', description: 'Optimized performance by selectively disabling heavy background animations during active transfers.' }
     ]
   }
 ];

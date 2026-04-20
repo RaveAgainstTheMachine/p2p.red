@@ -303,7 +303,7 @@ function App() {
       ? 'bg-emerald-400'
       : 'bg-slate-400';
   const buildIndicatorLabel = buildVariant;
-  const shortVersion = buildVersion ? buildVersion.split('-')[0] : '1.3.17';
+  const shortVersion = buildVersion ? buildVersion.split('-')[0] : '1.3.19';
 
   const copyShareLinkToClipboard = async (link: string) => {
     try {
@@ -1384,8 +1384,11 @@ function App() {
                 <PinToggle onPinChange={setPin} />
                 <div className="flex flex-col gap-4 mt-6">
                   {anubisStatusMessage && (
-                    <div className="text-center py-2 px-4 rounded-xl bg-blue-500/10 border border-blue-500/20 animate-pulse">
-                      <p className="text-blue-300 text-sm font-medium">{anubisStatusMessage}</p>
+                    <div className="text-center py-3 px-5 rounded-2xl bg-white/5 border border-white/10 shadow-lg shadow-black/20 backdrop-blur-md animate-pulse">
+                      <div className="inline-flex items-center gap-3">
+                        <div className="h-1.5 w-1.5 rounded-full bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.8)]" />
+                        <p className="text-blue-100/90 text-xs font-semibold uppercase tracking-[0.1em]">{anubisStatusMessage}</p>
+                      </div>
                     </div>
                   )}
                   
@@ -1404,8 +1407,14 @@ function App() {
               <div className="glass-card p-8 w-full max-w-2xl mx-auto">
                 <div className="flex flex-col gap-6">
                   {anubisStatusMessage && (
-                    <div className="text-center py-3 px-4 rounded-xl bg-green-500/10 border border-green-500/20 animate-pulse">
-                      <p className="text-green-300 text-sm font-medium">✨ {anubisStatusMessage}</p>
+                    <div className="text-center py-4 px-6 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 shadow-xl shadow-black/40 backdrop-blur-lg animate-fade-in ring-1 ring-white/5">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
+                          <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,1)]" />
+                          <span className="text-[10px] font-bold text-emerald-400/90 uppercase tracking-widest">Security Moose Approved</span>
+                        </div>
+                        <p className="text-white/90 text-sm font-medium leading-relaxed italic">"{anubisStatusMessage}"</p>
+                      </div>
                     </div>
                   )}
                   {relayLimitWarning && (

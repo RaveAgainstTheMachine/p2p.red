@@ -753,6 +753,7 @@ function App() {
           } catch (error) {
             console.error('Failed to create short link:', error);
             setTransferErrorMessage('Failed to create short link. Please try again.');
+            setStatus('error');
           }
           
           // Wait for receiver connection
@@ -830,6 +831,7 @@ function App() {
         } catch (error) {
           console.error('Failed to create short link:', error);
           setTransferErrorMessage('Failed to create short link. Please try again.');
+          setStatus('error');
         }
         
         // Wait for receiver connection

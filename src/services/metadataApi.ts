@@ -30,42 +30,53 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const fetchWithChallenge = async (url: string, options: RequestInit): Promise<Response> => {
   let response = await fetch(url, options);
+  const contentType = response.headers.get('content-type') || '';
+  const isAnubisHeader = response.headers.get('x-anubis-status') === 'challenge';
+  
+  // If we get HTML when we expect JSON (metadata API), it's likely a challenge
+  const isLikelyChallenge = isAnubisHeader || (contentType.includes('text/html') && !url.includes('?html=true'));
 
-  if (response.headers.get('x-anubis-status') === 'challenge') {
-    console.warn('🛡️ Anubis challenge detected for:', url);
-    const resolvedChallengeUrl = `${new URL(url).origin}/challenge?target=${encodeURIComponent(url)}`;
+  if (isLikelyChallenge) {
+    console.warn('🛡️ Bot challenge detected for:', url, 'Header:', isAnubisHeader, 'HTML:', contentType.includes('text/html'));
+    
+    // Default challenge URL is the root of the API or a specific /challenge endpoint
+    const urlObj = new URL(url);
+    const challengeUrl = `${urlObj.origin}/challenge?target=${encodeURIComponent(url)}`;
     
     window.dispatchEvent(
       new CustomEvent('anubis-challenge', {
-        detail: { active: true, url: resolvedChallengeUrl }
+        detail: { active: true, url: challengeUrl }
       })
     );
 
-    // Exponential backoff or just wait for challenge to be solved
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    // Wait for challenge to be solved (cookie set)
+    for (let attempt = 0; attempt < 15; attempt += 1) {
       console.log(`⏳ Waiting for challenge solution (attempt ${attempt + 1})...`);
-      await delay(2000); // Wait longer between attempts
-      response = await fetch(url, options);
-      if (response.headers.get('x-anubis-status') !== 'challenge') {
+      await delay(2000); 
+      
+      const retryResponse = await fetch(url, options);
+      const retryContentType = retryResponse.headers.get('content-type') || '';
+      const retryAnubisHeader = retryResponse.headers.get('x-anubis-status') === 'challenge';
+      const stillChallenged = retryAnubisHeader || (retryContentType.includes('text/html') && !url.includes('?html=true'));
+      
+      if (!stillChallenged) {
         console.log('✅ Challenge cleared!');
         window.dispatchEvent(
           new CustomEvent('anubis-challenge', {
             detail: { active: false }
           })
         );
-        break;
+        return retryResponse;
       }
     }
-  }
-
-  // Final check
-  if (response.headers.get('x-anubis-status') === 'challenge') {
+    
+    // If we reach here, we failed to clear the challenge
     window.dispatchEvent(
       new CustomEvent('anubis-challenge', {
         detail: { active: false }
       })
     );
-    throw new Error('Anubis challenge required. Please refresh and try again.');
+    throw new Error('Bot challenge timed out. Please refresh and try again.');
   }
 
   return response;

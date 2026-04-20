@@ -54,3 +54,6 @@ Drop caveman for: security warnings, irreversible action confirmations, multi-st
 ## Boundaries
 
 Code/commits/PRs: write normal. "stop caveman" or "normal mode": revert. Level persist until changed or session end.
+
+## Documentation First Policy
+Search `PROJECT_DOCUMENTATION/` and `automation/` before action. Follow `BUILD_DEPLOY.md`, `VPS_DEPLOYMENT_GUIDE.md`, and `DEPLOYMENT_WORKFLOW.md`. No guess. Ask if confused.

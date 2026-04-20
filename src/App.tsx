@@ -15,13 +15,14 @@ import { Logo } from './components/Logo';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, CheckCircle, File, Check, Sun, Moon, Monitor } from 'lucide-react';
-import { createShortLink, getMetadata } from './services/metadataApi';
+import { Download, CheckCircle, File, Check, Sun, Moon, Monitor, Coffee } from 'lucide-react';
+import { createShortLink, getMetadata, API_BASE_URL } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
 import { Legal } from './pages/Legal';
 import { Landing } from './pages/Landing';
 import { Changelog } from './pages/Changelog';
+import { Feedback } from './pages/Feedback';
 import { clearTransfer } from './utils/shardStore';
 
 // Meta tag management for rich link previews
@@ -225,7 +226,7 @@ function App() {
   const [pinError, setPinError] = useState<string>('');
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
-  const [currentPage, setCurrentPage] = useState<'landing' | 'home' | 'legal' | 'info' | 'changelog'>('home');
+  const [currentPage, setCurrentPage] = useState<'landing' | 'home' | 'legal' | 'info' | 'changelog' | 'feedback'>('home');
   const [themePreference, setThemePreference] = useState<'system' | 'light' | 'dark'>(() => {
     const storedTheme = localStorage.getItem('theme');
     if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') {
@@ -303,7 +304,7 @@ function App() {
       ? 'bg-emerald-400'
       : 'bg-slate-400';
   const buildIndicatorLabel = buildVariant;
-  const shortVersion = buildVersion ? buildVersion.split('-')[0] : '1.3.19';
+  const shortVersion = buildVersion ? buildVersion.split('-')[0] : '1.4.0';
 
   const copyShareLinkToClipboard = async (link: string) => {
     try {
@@ -1173,6 +1174,10 @@ function App() {
     return <Changelog onBack={() => setCurrentPage('home')} />;
   }
 
+  if (currentPage === 'feedback') {
+    return <Feedback onBack={() => setCurrentPage('home')} apiBaseUrl={API_BASE_URL} />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Animated background */}
@@ -1258,20 +1263,6 @@ function App() {
             <Logo size="small" />
           </a>
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setCurrentPage('info')}
-              className="text-sm text-white/50 hover:text-white transition-colors px-3 py-1.5 rounded-full hover:bg-white/10"
-            >
-              How it works
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentPage('legal')}
-              className="text-sm text-white/50 hover:text-white transition-colors px-3 py-1.5 rounded-full hover:bg-white/10"
-            >
-              Legal
-            </button>
           </div>
         </nav>
 
@@ -1703,15 +1694,22 @@ function App() {
                 href="https://buymeacoffee.com/p2p.red"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center whitespace-nowrap leading-none text-yellow-400 transition-colors hover:text-yellow-300"
+                className="inline-flex items-center gap-1.5 whitespace-nowrap leading-none px-3 py-1.5 rounded-full bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 transition-all hover:bg-yellow-400/20 hover:scale-105 active:scale-95"
               >
-                Support
+                <Coffee size={14} />
+                <span className="font-semibold tracking-wide">Support</span>
               </a>
               <button
                 onClick={() => setCurrentPage('info')}
                 className="inline-flex items-center whitespace-nowrap leading-none text-white/60 transition-colors hover:text-white"
               >
-                Info
+                About
+              </button>
+              <button
+                onClick={() => setCurrentPage('feedback')}
+                className="inline-flex items-center whitespace-nowrap leading-none text-white/60 transition-colors hover:text-white"
+              >
+                Feedback
               </button>
               <button
                 onClick={() => setCurrentPage('legal')}

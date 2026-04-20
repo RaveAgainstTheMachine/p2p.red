@@ -70,6 +70,18 @@ FROM short_links sl
 LEFT JOIN link_analytics la ON sl.short_key = la.short_key
 GROUP BY sl.short_key, sl.file_name, sl.created_at, sl.expires_at, sl.access_count;
 
+-- Feedback table
+CREATE TABLE IF NOT EXISTS feedback (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    rating INTEGER,
+    email VARCHAR(255),
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at DESC);
+
 -- Grant permissions (adjust username as needed)
 -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO p2p_api_user;
 -- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO p2p_api_user;

@@ -4,7 +4,7 @@
  */
 
 const apiEnvBase = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
-const API_BASE_URL = apiEnvBase
+export const API_BASE_URL = apiEnvBase
   ? `${apiEnvBase}/api`
   : import.meta.env.PROD
     ? 'https://p2p.red/api'

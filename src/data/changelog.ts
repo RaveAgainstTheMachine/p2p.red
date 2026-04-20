@@ -9,85 +9,72 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.4.0',
+    date: '2026-04-20',
+    changes: [
+      { category: 'Improved', description: 'Gave the changelog a personality transplant. Less corporate jargon, more moose energy.' },
+      { category: 'Added', description: 'New Feedback form! Tell us what you think (or just say hi, bud).' },
+      { category: 'Improved', description: 'Cleaned up the top navigation for a more focused "drop and go" experience.' },
+      { category: 'Added', description: 'The Support link is now a cozy coffee pill. Fuel the moose.' }
+    ]
+  },
+  {
     version: '1.3.19',
     date: '2026-04-20',
     changes: [
-      { category: 'Improved', description: 'Overhauled bot-challenge (Anubis) UI to match Liquid Glass aesthetic.' },
-      { category: 'Improved', description: 'Refactored Legal page for 100% design homogeneity across the site.' },
-      { category: 'Improved', description: 'Deeply populated the Evolution page with historical version data.' }
+      { category: 'Improved', description: 'Fixed the bot challenge UI. It was looking a bit too "Default Green". Now it glows with Indigo pride.' },
+      { category: 'Improved', description: 'Legal pages now look like they actually belong to this site. Homogeneity, eh?' }
     ]
   },
   {
     version: '1.3.18',
     date: '2026-04-20',
     changes: [
-      { category: 'Improved', description: 'Interactive expanding version pill added to the footer.' }
-    ]
-  },
-  {
-    version: '1.3.17',
-    date: '2026-04-20',
-    changes: [
-      { category: 'Improved', description: 'Simplified footer by hiding deployment metadata until hover.' }
+      { category: 'Improved', description: 'That version number at the bottom? It expands now! Hover over it if you want the technical details.' }
     ]
   },
   {
     version: '1.3.16',
     date: '2026-04-20',
     changes: [
-      { category: 'Added', description: 'Added interactive Change Log (Evolution) page.' },
-      { category: 'Improved', description: 'Applied "Liquid Glass" styling to all system pages.' }
+      { category: 'Added', description: 'This very "Evolution" page! Watch the site grow in real-time.' },
+      { category: 'Improved', description: 'Liquid Glass everywhere. High blurs, squircle corners, and premium vibes.' }
     ]
   },
   {
     version: '1.3.15',
     date: '2026-04-20',
     changes: [
-      { category: 'Improved', description: 'Implemented premium "Liquid Glass" aesthetic across the entire UI.' },
-      { category: 'Improved', description: 'Enhanced corner rounding with squircle-inspired 40px radii.' }
+      { category: 'Improved', description: 'Aesthetic overhaul. We went full Apple-style Liquid Glass. It is quite shiny now.' }
     ]
   },
   {
     version: '1.3.14',
     date: '2026-04-19',
     changes: [
-      { category: 'Improved', description: 'Integrated bot challenge status messages directly into the main UI container.' },
-      { category: 'Added', description: 'Added 10+ new quirky success and status messages (Security Moose approved).' }
-    ]
-  },
-  {
-    version: '1.3.8',
-    date: '2026-04-20',
-    changes: [
-      { category: 'Improved', description: 'Reverted UI changes back to the signature purple palette for brand consistency.' }
-    ]
-  },
-  {
-    version: '1.3.7',
-    date: '2026-04-19',
-    changes: [
-      { category: 'Improved', description: 'UI modernization: Night palette with ruby accents and refined typography.' }
+      { category: 'Improved', description: 'Status messages are now front and center. No more squinting at toasts.' },
+      { category: 'Added', description: 'Security Moose joined the team. He approves your links and deters the robots.' }
     ]
   },
   {
     version: '1.3.5',
     date: '2026-04-19',
     changes: [
-      { category: 'Fixed', description: 'Resolved "Preparing Tunnel" hang and optimized large folder processing.' }
+      { category: 'Fixed', description: 'Killed a nasty bug where the tunnel would hang. Folders should fly now.' }
     ]
   },
   {
     version: '1.3.3',
     date: '2026-04-19',
     changes: [
-      { category: 'Added', description: 'Added generative art backgrounds to transfer screens for visual interest.' }
+      { category: 'Added', description: 'Generative art backgrounds. Why have a static site when it can be alive?' }
     ]
   },
   {
     version: '1.3.1',
     date: '2026-04-18',
     changes: [
-      { category: 'Improved', description: 'Optimized performance by selectively disabling heavy background animations during active transfers.' }
+      { category: 'Improved', description: 'Selective animation. We turn the fancy stuff down during big transfers so your CPU can breathe.' }
     ]
   }
 ];

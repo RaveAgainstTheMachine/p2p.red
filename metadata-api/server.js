@@ -145,9 +145,27 @@ const buildTelemetryPayload = (body) => {
   return payload;
 };
 
-// Connect to Redis
+// Connect to Redis & Initialize Database
 (async () => {
-  await redisClient.connect();
+  try {
+    await redisClient.connect();
+    
+    // Lazy migration for feedback table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id SERIAL PRIMARY KEY,
+        content TEXT NOT NULL,
+        rating INTEGER,
+        email VARCHAR(255),
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at DESC)');
+    console.log('✅ Feedback table verified');
+  } catch (error) {
+    console.error('Initialization error:', error);
+  }
 })();
 
 // ============================================================================
@@ -742,6 +760,31 @@ app.post('/api/telemetry/transfer', async (req, res) => {
   } catch (error) {
     console.error('Telemetry ingest error:', error);
     return res.status(500).json({ error: 'Telemetry ingest failed' });
+  }
+});
+
+app.post('/api/feedback', async (req, res) => {
+  const { content, rating, email, metadata } = req.body || {};
+  
+  if (!content || typeof content !== 'string' || content.trim().length === 0) {
+    return res.status(400).json({ error: 'Feedback content is required' });
+  }
+
+  try {
+    const result = await pool.query(
+      'INSERT INTO feedback (content, rating, email, metadata) VALUES ($1, $2, $3, $4) RETURNING id',
+      [
+        content.slice(0, 10000), // Limit size
+        Number.isInteger(rating) ? Math.min(Math.max(rating, 1), 5) : null,
+        email ? String(email).slice(0, 255) : null,
+        metadata && typeof metadata === 'object' ? metadata : {}
+      ]
+    );
+    
+    res.json({ id: result.rows[0].id, status: 'ok' });
+  } catch (error) {
+    console.error('Feedback submission error:', error);
+    res.status(500).json({ error: 'Failed to submit feedback' });
   }
 });
 

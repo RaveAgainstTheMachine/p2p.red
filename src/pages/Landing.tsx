@@ -109,7 +109,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo }) => {
               title: 'Integrity verified',
               copy: 'Reliable DataChannels plus CRC32 checks per shard to catch corruption.'
             }
-          ].map((item, index) => (
+          ].map((item) => (
             <div
               key={item.title}
               className="glass-card p-6 text-white/70"

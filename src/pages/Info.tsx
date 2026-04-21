@@ -213,7 +213,7 @@ export const Info: React.FC<InfoProps> = () => {
 
       {/* Sections grid */}
       <div className="grid gap-4 sm:grid-cols-2 mb-10">
-        {sections.map((section, i) => (
+        {sections.map((section) => (
           <div
             key={section.title}
             className="glass-card p-5"

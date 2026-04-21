@@ -1221,10 +1221,12 @@ function App() {
               <>
                 {/* Idle: DropZone fills entire main */}
                 {!shareLink && !selectedFiles && (
-                  <DropZone
-                    onFileSelect={handleFileSelect}
-                    isProcessing={isEncrypting || status === 'encrypting' || isProcessingFiles}
-                  />
+                  <div className="absolute inset-0 flex flex-col overflow-hidden">
+                    <DropZone
+                      onFileSelect={handleFileSelect}
+                      isProcessing={isEncrypting || status === 'encrypting' || isProcessingFiles}
+                    />
+                  </div>
                 )}
                 
                 {isProcessingFiles && (

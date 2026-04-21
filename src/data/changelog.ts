@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.5.5',
+    date: '2026-04-21',
+    changes: [
+      { category: 'Fixed', description: 'Restored the full-screen "click-to-pick" area for the DropZone.' }
+    ]
+  },
+  {
     version: '1.5.4',
     date: '2026-04-21',
     changes: [

@@ -5,12 +5,13 @@ services:
     container_name: p2p-postgres
     restart: unless-stopped
     env_file:
-      - /run/secrets/metadata.env
+      - ${METADATA_API_ENV_FILE:-/run/secrets/metadata.env}
     environment:
       POSTGRES_DB: p2p_metadata
       POSTGRES_USER: p2p_api_user
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ${METADATA_API_ENV_FILE:-/run/secrets/metadata.env}:/run/secrets/metadata.env:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U p2p_api_user -d p2p_metadata"]
       interval: 10s
@@ -25,12 +26,13 @@ services:
     container_name: p2p-plausible-db
     restart: unless-stopped
     env_file:
-      - /run/secrets/plausible.env
+      - ${PLAUSIBLE_ENV_FILE:-/run/secrets/plausible.env}
     environment:
       POSTGRES_DB: plausible
       POSTGRES_USER: plausible
     volumes:
       - plausible_db_data:/var/lib/postgresql/data
+      - ${PLAUSIBLE_ENV_FILE:-/run/secrets/plausible.env}:/run/secrets/plausible.env:ro
     networks:
       - p2p-network
 
@@ -57,7 +59,7 @@ services:
       - plausible-db
       - plausible-events-db
     env_file:
-      - /run/secrets/plausible.env
+      - ${PLAUSIBLE_ENV_FILE:-/run/secrets/plausible.env}
     environment:
       BASE_URL: https://plausible.p2p.red
       CLICKHOUSE_DATABASE_URL: http://plausible-events-db:8123/plausible_events
@@ -87,8 +89,7 @@ services:
     container_name: p2p-metadata-api
     restart: unless-stopped
     env_file:
-      - ${METADATA_API_ENV_FILE:-./metadata-api/.env}
-      - /run/secrets/metadata.env
+      - ${METADATA_API_ENV_FILE:-/run/secrets/metadata.env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -131,7 +132,7 @@ services:
       retries: 3
       start_period: 40s
     volumes:
-      - /run/secrets:/run/secrets:ro
+      - ${METADATA_API_ENV_FILE:-/run/secrets/metadata.env}:/run/secrets/metadata.env:ro
   # Anubis PoW filter for metadata API
   anubis:
     image: ghcr.io/techarohq/anubis:latest

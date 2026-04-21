@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Upload } from 'lucide-react';
+import { Download } from 'lucide-react';
 
 interface DropZoneProps {
   onFileSelect: (files: File[]) => void;
@@ -127,7 +127,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
       {dragActive && (
         <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center gap-4 bg-blue-950/70 backdrop-blur-sm">
           <div className="flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-blue-400 bg-blue-500/20">
-            <Upload size={32} className="text-blue-300" />
+            <Download size={32} className="text-blue-300" />
           </div>
           <p className="text-2xl font-semibold text-blue-100">Drop to share</p>
           <p className="text-sm text-blue-300/60">End-to-end encrypted · No server storage</p>
@@ -155,7 +155,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
       >
         <div className="flex flex-col items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/8 border border-white/10">
-            <Upload size={24} className="text-white/30" />
+            <Download size={24} className="text-white/30" />
           </div>
 
           {(isProcessing || internalProcessing) ? (

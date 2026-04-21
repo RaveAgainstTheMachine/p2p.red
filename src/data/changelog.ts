@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.5.2',
+    date: '2026-04-21',
+    changes: [
+      { category: 'Improved', description: 'Restored the full Liquid Glass aesthetic with improved stability.' },
+      { category: 'Added', description: 'Dynamic color palettes are back! Customize your sharing experience with the new theme switcher.' },
+      { category: 'Fixed', description: 'The drop icon now points down (Download) instead of up (Upload). Gravity exists again.' },
+      { category: 'Improved', description: 'Production deployment configuration refactored for better secrets management.' }
+    ]
+  },
+  {
     version: '1.4.0',
     date: '2026-04-20',
     changes: [

@@ -1427,7 +1427,7 @@ function App() {
             className={`flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 shadow-lg shadow-black/20 backdrop-blur-xl transition-all duration-200 hover:text-white hover:scale-110 active:scale-95 ${isThemeMenuOpen ? 'border-white/30 bg-white/15' : ''}`}
             onClick={() => setIsThemeMenuOpen(!isThemeMenuOpen)}
           >
-            <Palette size={20} className={isThemeMenuOpen ? 'rotate-12 scale-110' : ''} />
+            <Palette size={20} className={`text-[var(--theme-primary)] ${isThemeMenuOpen ? 'rotate-12 scale-110' : ''}`} />
           </button>
 
           {isThemeMenuOpen && (

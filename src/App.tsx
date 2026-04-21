@@ -1431,9 +1431,9 @@ function App() {
           </button>
 
           {isThemeMenuOpen && (
-            <div className="flex w-48 flex-col gap-4 rounded-3xl border border-white/15 bg-black/40 p-4 shadow-2xl backdrop-blur-2xl animate-fade-up">
+            <div className="theme-picker-menu flex w-48 flex-col gap-4 rounded-3xl border border-white/15 bg-black/40 p-4 shadow-2xl backdrop-blur-2xl animate-fade-up">
               <div className="flex flex-col gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">Brightness</span>
+                <span className="theme-picker-label text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">Brightness</span>
                 <div className="flex gap-1 justify-between bg-white/5 rounded-2xl p-1">
                   {[
                     { id: 'system', icon: Monitor, label: 'System' },
@@ -1443,7 +1443,7 @@ function App() {
                     <button
                       key={id}
                       onClick={() => setThemePreference(id as any)}
-                      className={`flex h-8 flex-1 items-center justify-center rounded-xl transition-all ${themePreference === id ? 'bg-white/20 text-white shadow-lg' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}
+                      className={`flex h-8 flex-1 items-center justify-center rounded-xl transition-all ${themePreference === id ? 'bg-white/20 text-white shadow-lg' : 'theme-picker-button text-white/50 hover:bg-white/5 hover:text-white'}`}
                       title={label}
                     >
                       <Icon size={16} />
@@ -1453,7 +1453,7 @@ function App() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">Color Palette</span>
+                <span className="theme-picker-label text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">Color Palette</span>
                 <div className="grid grid-cols-4 gap-2">
                   {THEMES.map((theme) => (
                     <button

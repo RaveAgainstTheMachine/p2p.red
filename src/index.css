@@ -263,6 +263,18 @@ html[data-theme='dark'] .header-headline {
   color: rgba(255, 255, 255, 0.6) !important;
 }
 
+html[data-theme='light'] .theme-picker-label {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+html[data-theme='light'] .theme-picker-button {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+html[data-theme='light'] .theme-picker-menu {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
 html[data-theme='light'] .text-white\/30 {
   color: #cbd5e1 !important;
 }

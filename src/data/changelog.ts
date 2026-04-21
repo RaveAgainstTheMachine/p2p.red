@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.5.4',
+    date: '2026-04-21',
+    changes: [
+      { category: 'Improved', description: 'Re-imagined the default "System" theme as "Brighter Dark" with a custom Moon-Sun hybrid icon.' },
+      { category: 'Improved', description: 'Reordered theme brightness options for a more logical Light -> Brighter Dark -> Dark progression.' },
+      { category: 'Added', description: 'Brighter Dark is now the default theme for new visitors, providing perfect contrast without eye-strain.' },
+      { category: 'Fixed', description: 'Corrected theme picker icon visibility and improved layout consistency across brightness modes.' }
+    ]
+  },
+  {
     version: '1.5.3',
     date: '2026-04-21',
     changes: [

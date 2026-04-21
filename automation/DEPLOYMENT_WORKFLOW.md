@@ -31,28 +31,34 @@ SSH to the production host and run the deployment logic.
 
 ### A) Move and Load Images
 ```bash
+# Move to canonical storage
+sudo mkdir -p /opt/p2p-file-share/images
 sudo mv /tmp/*.tar /opt/p2p-file-share/images/
-sudo docker load -i /opt/p2p-file-share/images/app-blue.tar
-sudo docker load -i /opt/p2p-file-share/images/app-green.tar
-sudo docker load -i /opt/p2p-file-share/images/metadata-api.tar
-sudo docker load -i /opt/p2p-file-share/images/peerjs.tar
-sudo docker load -i /opt/p2p-file-share/images/envoy.tar
+
+# Load all images
+for f in /opt/p2p-file-share/images/*.tar; do sudo docker load -i $f; done
 ```
 
-### B) Update Shared Services
+### B) Sync Runtime Configuration (Snap Requirement)
+Ubuntu Core uses the **Snap version of Docker**. To avoid "read-only file system" errors during mounts, runtime configs MUST be copied to the Snap-accessible directory.
+```bash
+sudo mkdir -p /var/snap/docker/common/p2p-file-share/envoy-runtime
+sudo cp -r /opt/p2p-file-share/envoy-runtime/* /var/snap/docker/common/p2p-file-share/envoy-runtime/
+```
+
+### C) Zero-Downtime Release
+Always use `sudo -E` to preserve the `ENVOY_RUNTIME_DIR` environment variable.
 ```bash
 cd /opt/p2p-file-share
-sudo METADATA_API_ENV_FILE=/run/secrets/metadata.env docker compose -f docker-compose.yml up -d
-```
-
-### C) Zero-Downtime App Switch
-Run the release script which will detect the inactive color, start it, health check it, and shift traffic via Envoy.
-```bash
-# Authoritative switch
-DEPLOY_ENV=prod USE_PREBUILT_IMAGES=1 ./automation/release-prod.sh
+sudo -E \
+  DEPLOY_ENV=prod \
+  ENVOY_RUNTIME_DIR=/var/snap/docker/common/p2p-file-share/envoy-runtime \
+  METADATA_API_ENV_FILE=/run/secrets/metadata.env \
+  ./automation/release-prod.sh
 ```
 
 ## 🛠️ Safety Guardrails
+- **Snap Confinement**: Do NOT attempt to mount volumes directly from `/opt` on the VPS. Always sync to `/var/snap/docker/common/`.
+- **Project Consistency**: Always run release scripts from `/opt/p2p-file-share` to maintain the correct Docker Compose project context.
 - **Preflight Enforcement**: `automation/preflight.sh` will block deployments if the environment marker `/etc/p2pred-env` is missing or incorrect.
-- **Image Retention**: `automation/cleanup-images.sh` runs automatically after deploy to keep only the current and one previous version of each service.
-- **No Source on Prod**: Prod host only contains orchestration files (`docker-compose.yml`, `envoy.yaml`) and image tars. No source code or build tools.
+- **Image Retention**: `automation/cleanup-images.sh` runs automatically after deploy to keep only the current and one previous version.

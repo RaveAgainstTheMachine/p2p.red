@@ -57,3 +57,10 @@ Code/commits/PRs: write normal. "stop caveman" or "normal mode": revert. Level p
 
 ## Documentation First Policy
 Search `PROJECT_DOCUMENTATION/` and `automation/` before action. Follow `BUILD_DEPLOY.md`, `VPS_DEPLOYMENT_GUIDE.md`, and `DEPLOYMENT_WORKFLOW.md`. No guess. Ask if confused.
+
+## Production Release Constraints
+- **Snap Awareness**: Prod VPS uses Snap Docker. Path `/opt` is restricted.
+- **Volume Mounts**: Always sync runtime configs to `/var/snap/docker/common/p2p-file-share/` for mounts.
+- **Project Context**: Run all Docker commands from `/opt/p2p-file-share` to avoid project name/container naming conflicts.
+- **Environment**: Use `sudo -E` for releases to preserve `ENVOY_RUNTIME_DIR`.
+

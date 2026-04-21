@@ -17,7 +17,7 @@ import { AppFooter } from './components/AppFooter';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, File, Check, Sun, Moon, Monitor, Palette, Shuffle } from 'lucide-react';
+import { Download, File, Check, Sun, Moon, Palette, Shuffle, CloudSun } from 'lucide-react';
 import { createShortLink, getMetadata, API_BASE_URL } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
@@ -271,12 +271,13 @@ function App() {
   const [remainingAttempts, setRemainingAttempts] = useState<number | undefined>(undefined);
   const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<'landing' | 'home' | 'legal' | 'info' | 'changelog' | 'feedback'>('home');
-  const [themePreference, setThemePreference] = useState<'system' | 'light' | 'dark'>(() => {
+  const [themePreference, setThemePreference] = useState<'brighter-dark' | 'light' | 'dark'>(() => {
     const storedTheme = localStorage.getItem('theme');
-    if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') {
+    if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'brighter-dark') {
       return storedTheme;
     }
-    return 'system';
+    // Default is now brighter-dark
+    return 'brighter-dark';
   });
   const [variantPreference, setVariantPreference] = useState<string>(() => {
     return getCookie('p2p_variant') || 'random';
@@ -517,22 +518,12 @@ function App() {
   }, [isThemeMenuOpen]);
 
   useEffect(() => {
-    const applyTheme = (preference: 'system' | 'light' | 'dark') => {
+    const applyTheme = (preference: 'brighter-dark' | 'light' | 'dark') => {
       const root = document.documentElement;
-      const resolved = preference === 'system'
-        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-        : preference;
-      root.setAttribute('data-theme', resolved);
+      root.setAttribute('data-theme', preference);
     };
 
-    if (themePreference !== 'system') {
-      return undefined;
-    }
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = () => applyTheme('system');
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
+    applyTheme(themePreference);
   }, [themePreference]);
 
 
@@ -1436,8 +1427,8 @@ function App() {
                 <span className="theme-picker-label text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">Brightness</span>
                 <div className="flex gap-1 justify-between bg-white/5 rounded-2xl p-1">
                   {[
-                    { id: 'system', icon: Monitor, label: 'System' },
                     { id: 'light', icon: Sun, label: 'Light' },
+                    { id: 'brighter-dark', icon: CloudSun, label: 'Brighter Dark' },
                     { id: 'dark', icon: Moon, label: 'Dark' },
                   ].map(({ id, icon: Icon, label }) => (
                     <button

@@ -1466,7 +1466,7 @@ function App() {
                       title={theme.name}
                     >
                       {theme.id === 'random' ? (
-                        <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/10 text-white/70 group-hover:text-white">
+                        <div className="theme-picker-random flex h-full w-full items-center justify-center rounded-xl bg-white/10 text-white/70 group-hover:text-white">
                           <Shuffle size={14} />
                         </div>
                       ) : (

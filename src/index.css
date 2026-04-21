@@ -275,6 +275,10 @@ html[data-theme='light'] .theme-picker-menu {
   background-color: rgba(255, 255, 255, 0.7) !important;
 }
 
+html[data-theme='light'] .theme-picker-random {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
 html[data-theme='light'] .text-white\/30 {
   color: #cbd5e1 !important;
 }

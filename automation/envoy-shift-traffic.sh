@@ -3,7 +3,8 @@
 set -euo pipefail
 
 ENVOY_ADMIN_URL=${ENVOY_ADMIN_URL:-http://127.0.0.1:9901}
-RUNTIME_DIR=${RUNTIME_DIR:-/opt/p2p-file-share/envoy-runtime/traffic_split}
+ENVOY_RUNTIME_DIR=${ENVOY_RUNTIME_DIR:-/opt/p2p-file-share/envoy-runtime}
+RUNTIME_DIR=${ENVOY_RUNTIME_DIR}/traffic_split
 BLUE_WEIGHT=${1:-}
 GREEN_WEIGHT=${2:-}
 

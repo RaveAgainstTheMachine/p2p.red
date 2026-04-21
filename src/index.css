@@ -39,9 +39,9 @@
 
 /* Smooth scrolling and dark scrollbar */
 html {
-  scroll-behavior: smooth;
   color-scheme: dark;
   scrollbar-color: rgba(255, 255, 255, 0.2) rgba(0, 0, 0, 0.3);
+  overflow-y: scroll; /* Prevent layout shift */
 
   /* Default Theme Variables (Indigo) */
   --theme-primary: #6366f1;
@@ -202,13 +202,141 @@ html[data-theme='dark'] {
 }
 
 html[data-theme='light'] {
-  --app-overlay-base: rgba(0, 0, 0, 0.1);
-  --card-bg: rgba(255, 255, 255, 0.05);
-  --card-border: rgba(255, 255, 255, 0.15);
+  --theme-bg-1: #ffffff;
+  --theme-bg-2: #ffffff;
+  --theme-bg-3: #ffffff;
+  --app-overlay-base: rgba(0, 0, 0, 0);
+  --card-bg: #ffffff;
+  --card-border: rgba(0, 0, 0, 0.08);
+  --theme-glow: rgba(0, 0, 0, 0.05);
+  --theme-glow-hover: rgba(0, 0, 0, 0.1);
+  color-scheme: light;
+}
+
+html[data-theme='light'] .app-overlay-accent,
+html[data-theme='light'] .app-overlay-base,
+html[data-theme='light'] .app-overlay-base::before {
+  background-image: none !important;
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='light'] .app-overlay-accent {
+  display: none !important;
+}
+
+html[data-theme='light'] body {
+  color: #0f172a;
+}
+
+html[data-theme='light'] .text-white {
+  color: #0f172a !important;
+}
+
+html[data-theme='light'] .text-white\/80 {
+  color: #1e293b !important;
+}
+
+html[data-theme='light'] .text-white\/60 {
+  color: #475569 !important;
+}
+
+html[data-theme='light'] .text-white\/50 {
+  color: #64748b !important;
+}
+
+html[data-theme='light'] .text-white\/40 {
+  color: #94a3b8 !important;
+}
+
+/* Footer Logo Contrast Adjustments */
+html[data-theme='light'] footer .logo-inner,
+html[data-theme='dark'] footer .logo-inner {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+html[data-theme='light'] .header-headline {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+html[data-theme='dark'] .header-headline {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+html[data-theme='light'] .text-white\/30 {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme='light'] .text-white\/20,
+html[data-theme='light'] .text-white\/10 {
+  color: #e2e8f0 !important;
+}
+
+html[data-theme='light'] .glass-card {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  background-image: none !important;
+  background-color: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  backdrop-filter: none !important;
+}
+
+html[data-theme='light'] .glass-card * {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html[data-theme='light'] footer {
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-accent));
+  color: white !important;
+}
+
+html[data-theme='light'] footer .text-white,
+html[data-theme='light'] footer .text-white\/90,
+html[data-theme='light'] footer .text-white\/80 {
+  color: white !important;
+}
+
+html[data-theme='light'] footer .text-white\/60,
+html[data-theme='light'] footer .text-white\/50,
+html[data-theme='light'] footer .text-white\/40,
+html[data-theme='light'] footer .text-white\/30 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+html[data-theme='light'] footer a,
+html[data-theme='light'] footer button {
+  color: white !important;
+}
+
+html[data-theme='light'] .btn-secondary {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: #1e293b !important;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+html[data-theme='light'] .btn-secondary:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Hide or fade out dark-mode specific glows in light mode */
+html[data-theme='light'] .animate-glow-pulse {
+  display: none !important;
+}
+
+html[data-theme='light'] .bg-white\/5,
+html[data-theme='light'] .bg-white\/10,
+html[data-theme='light'] .bg-white\/20 {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+html[data-theme='light'] .border-white\/10,
+html[data-theme='light'] .border-white\/15,
+html[data-theme='light'] .border-white\/20 {
+  border-color: rgba(0, 0, 0, 0.08) !important;
 }
 
 .app-shell {
-  background: linear-gradient(135deg, var(--theme-bg-1) 0%, var(--theme-bg-2) 50%, var(--theme-bg-3) 100%);
+  background: transparent;
 }
 
 .app-overlay-base {
@@ -352,7 +480,7 @@ html[data-theme='light'] {
 }
 
 .animate-fade-up {
-  animation: fade-up 0.8s ease-out both;
+  animation: fade-up 0.3s ease-out both;
 }
 
 .animate-glow-pulse {

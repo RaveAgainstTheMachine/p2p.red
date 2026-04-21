@@ -9,6 +9,17 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.5.3',
+    date: '2026-04-21',
+    changes: [
+      { category: 'Added', description: 'New high-impact brand headline in the sticky header: "SEND FILES SECURELY AND PRIVATELY".' },
+      { category: 'Improved', description: 'Main layout standardization for pixel-perfect centering and high-performance scroll transitions.' },
+      { category: 'Improved', description: 'Security messaging updated to "YOUR FILES ARE ENCRYPTED IN YOUR BROWSER BEFORE SENDING" for technical clarity.' },
+      { category: 'Improved', description: 'Header is now sticky with backdrop blur, keeping brand controls always accessible.' },
+      { category: 'Fixed', description: 'Standardized theme-aware logo contrast for high visibility in both Light and Obsidian modes.' }
+    ]
+  },
+  {
     version: '1.5.2',
     date: '2026-04-21',
     changes: [

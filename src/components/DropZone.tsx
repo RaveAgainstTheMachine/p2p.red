@@ -125,12 +125,12 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
     <>
       {/* Full-screen drag overlay — fixed so it covers nav too */}
       {dragActive && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center gap-4 bg-blue-950/70 backdrop-blur-sm">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-blue-400 bg-blue-500/20">
-            <Download size={32} className="text-blue-300" />
+        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center gap-4 bg-[var(--theme-bg-1)]/80 backdrop-blur-md">
+          <div className="flex h-24 w-24 items-center justify-center rounded-[2rem] border-2 border-[var(--theme-primary)] bg-[var(--theme-primary)]/10 shadow-[0_0_50px_var(--theme-glow)]">
+            <Download size={40} className="text-[var(--theme-primary)] animate-bounce" />
           </div>
-          <p className="text-2xl font-semibold text-blue-100">Drop to share</p>
-          <p className="text-sm text-blue-300/60">End-to-end encrypted · No server storage</p>
+          <p className="text-3xl font-bold text-[var(--theme-primary)]">Drop to share</p>
+          <p className="text-sm font-medium opacity-60">End-to-end encrypted · No server storage</p>
         </div>
       )}
 
@@ -153,9 +153,9 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
         onDragOver={handleDragOver}
         onClick={handleClick}
       >
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/8 border border-white/10">
-            <Download size={24} className="text-white/30" />
+        <div className="flex flex-col items-center gap-6">
+          <div className="flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-[var(--theme-primary)]/10 border border-[var(--theme-primary)]/20 shadow-xl transition-transform hover:scale-110 active:scale-95">
+            <Download size={32} className="text-[var(--theme-primary)]" />
           </div>
 
           {(isProcessing || internalProcessing) ? (
@@ -171,8 +171,8 @@ export const DropZone: React.FC<DropZoneProps> = ({ onFileSelect, isProcessing =
           )}
         </div>
 
-        <p className="absolute bottom-6 text-xs text-white/15 pointer-events-none">
-          No uploads to our servers · Scout's honour
+        <p className="absolute bottom-10 text-[10px] font-bold uppercase tracking-[0.2em] opacity-20 pointer-events-none">
+          Your files are encrypted in your browser before sending
         </p>
       </div>
     </>

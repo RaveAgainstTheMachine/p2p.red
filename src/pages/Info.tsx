@@ -1,6 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Radio, Shield, Zap, Link2, Lock, Database, User, Cookie, AlertTriangle, Wifi, Bot } from 'lucide-react';
-import { Logo } from '../components/Logo';
+import { Radio, Shield, Zap, Link2, Lock, Database, User, Cookie, AlertTriangle, Wifi, Bot } from 'lucide-react';
 
 interface InfoProps {
   onBack: () => void;
@@ -195,138 +194,91 @@ const faqs = [
   },
 ];
 
-export const Info: React.FC<InfoProps> = ({ onBack }) => {
+export const Info: React.FC<InfoProps> = () => {
   return (
-    <div className="min-h-screen app-shell relative overflow-hidden text-white">
-      <div className="absolute inset-0 app-overlay-base" />
-      <div className="absolute inset-0 app-overlay-accent animate-gradient-shift" />
-      <div className="absolute -top-32 -right-20 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl animate-glow-pulse" />
-      <div
-        className="absolute -bottom-24 -left-16 h-80 w-80 rounded-full bg-pink-500/20 blur-3xl animate-glow-pulse"
-        style={{ animationDelay: '1.5s' }}
-      />
-
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-4xl flex-col px-6 py-8">
-        {/* Nav */}
-        <header className="flex items-center justify-between mb-10">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-white/60 hover:text-white transition-colors group"
-          >
-            <ArrowLeft size={18} className="transition-transform group-hover:-translate-x-0.5" />
-            <span className="text-sm">Back</span>
-          </button>
-          <button onClick={onBack} className="flex items-center gap-2 opacity-70 hover:opacity-100 transition-opacity">
-            <Logo size="small" />
-          </button>
-        </header>
-
-        {/* Hero */}
-        <div className="mb-10 animate-fade-up">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-xs uppercase tracking-[0.25em] text-white/60 mb-4">
-            How it works
-          </div>
-          <h1 className="text-3xl md:text-4xl font-semibold text-white leading-tight">
-            Privacy-first file sharing — the wiring explained.
-          </h1>
-          <p className="mt-3 text-white/50 text-base leading-relaxed max-w-2xl">
-            p2p.red uses WebRTC to send files directly between browsers. Here's exactly what happens
-            under the hood — no hand-waving.
-          </p>
+    <div className="w-full max-w-4xl">
+      {/* Hero */}
+      <div className="mb-10">
+        <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-xs uppercase tracking-[0.25em] text-white/60 mb-4">
+          How it works
         </div>
+        <h1 className="text-3xl md:text-4xl font-semibold text-white leading-tight">
+          Privacy-first file sharing — the wiring explained.
+        </h1>
+        <p className="mt-3 text-white/50 text-base leading-relaxed max-w-2xl">
+          p2p.red uses WebRTC to send files directly between browsers. Here's exactly what happens
+          under the hood — no hand-waving.
+        </p>
+      </div>
 
-        {/* Sections grid */}
-        <div className="grid gap-4 sm:grid-cols-2 mb-10">
-          {sections.map((section, i) => (
-            <div
-              key={section.title}
-              className="glass-card p-5 animate-fade-up"
-              style={{ animationDelay: `${0.05 * i}s` }}
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 flex-shrink-0">
-                  <section.icon size={17} className={section.iconColor} />
-                </div>
-                <h2 className="text-sm font-semibold text-white">{section.title}</h2>
+      {/* Sections grid */}
+      <div className="grid gap-4 sm:grid-cols-2 mb-10">
+        {sections.map((section, i) => (
+          <div
+            key={section.title}
+            className="glass-card p-5"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 flex-shrink-0">
+                <section.icon size={17} className={section.iconColor} />
               </div>
-              <div className="text-sm text-white/60 leading-relaxed">
-                {section.body}
-              </div>
+              <h2 className="text-sm font-semibold text-white">{section.title}</h2>
+            </div>
+            <div className="text-sm text-white/60 leading-relaxed">
+              {section.body}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Security callout */}
+      <div className="glass-card border border-amber-500/20 bg-amber-500/5 p-5 mb-10">
+        <div className="flex items-center gap-3 mb-3">
+          <AlertTriangle size={17} className="text-amber-300 flex-shrink-0" />
+          <h2 className="text-sm font-semibold text-white">Security reminders</h2>
+        </div>
+        <ul className="text-sm text-white/60 space-y-1.5">
+          <li>• Only download files from people you trust</li>
+          <li>• Scan executables with antivirus before running them</li>
+          <li>• Verify sender identity through a separate channel if in doubt</li>
+        </ul>
+      </div>
+
+      {/* FAQ */}
+      <div className="mb-10">
+        <h2 className="text-lg font-semibold text-white mb-4">Frequently asked questions</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {faqs.map((faq) => (
+            <div key={faq.q} className="glass-card p-5">
+              <p className="text-sm font-semibold text-white mb-1.5">{faq.q}</p>
+              <p className="text-sm text-white/60 leading-relaxed">{faq.a}</p>
             </div>
           ))}
         </div>
+      </div>
 
-        {/* Security callout */}
-        <div className="glass-card border border-amber-500/20 bg-amber-500/5 p-5 mb-10 animate-fade-up">
-          <div className="flex items-center gap-3 mb-3">
-            <AlertTriangle size={17} className="text-amber-300 flex-shrink-0" />
-            <h2 className="text-sm font-semibold text-white">Security reminders</h2>
+      {/* Usage quick guide */}
+      <div className="glass-card p-6 mb-10">
+        <h2 className="text-sm font-semibold text-white mb-4">How to use it</h2>
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div>
+            <div className="text-xs uppercase tracking-widest text-white/40 mb-2">Sending</div>
+            <ol className="space-y-2 text-sm text-white/60">
+              <li className="flex gap-2"><span className="text-white/30 font-mono">1.</span> Drop your files on the transfer page</li>
+              <li className="flex gap-2"><span className="text-white/30 font-mono">2.</span> Set a PIN if needed</li>
+              <li className="flex gap-2"><span className="text-white/30 font-mono">3.</span> Copy and share the link</li>
+              <li className="flex gap-2"><span className="text-white/30 font-mono">4.</span> Keep the tab open until download completes</li>
+            </ol>
           </div>
-          <ul className="text-sm text-white/60 space-y-1.5">
-            <li>• Only download files from people you trust</li>
-            <li>• Scan executables with antivirus before running them</li>
-            <li>• Verify sender identity through a separate channel if in doubt</li>
-          </ul>
-        </div>
-
-        {/* FAQ */}
-        <div className="mb-10">
-          <h2 className="text-lg font-semibold text-white mb-4">Frequently asked questions</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {faqs.map((faq) => (
-              <div key={faq.q} className="glass-card p-5">
-                <p className="text-sm font-semibold text-white mb-1.5">{faq.q}</p>
-                <p className="text-sm text-white/60 leading-relaxed">{faq.a}</p>
-              </div>
-            ))}
+          <div>
+            <div className="text-xs uppercase tracking-widest text-white/40 mb-2">Receiving</div>
+            <ol className="space-y-2 text-sm text-white/60">
+              <li className="flex gap-2"><span className="text-white/30 font-mono">1.</span> Open the share link</li>
+              <li className="flex gap-2"><span className="text-white/30 font-mono">2.</span> Enter the PIN if required</li>
+              <li className="flex gap-2"><span className="text-white/30 font-mono">3.</span> Click download and keep the tab open</li>
+            </ol>
           </div>
         </div>
-
-        {/* Usage quick guide */}
-        <div className="glass-card p-6 mb-10 animate-fade-up">
-          <h2 className="text-sm font-semibold text-white mb-4">How to use it</h2>
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div>
-              <div className="text-xs uppercase tracking-widest text-white/40 mb-2">Sending</div>
-              <ol className="space-y-2 text-sm text-white/60">
-                <li className="flex gap-2"><span className="text-white/30 font-mono">1.</span> Drop your files on the transfer page</li>
-                <li className="flex gap-2"><span className="text-white/30 font-mono">2.</span> Set a PIN if needed</li>
-                <li className="flex gap-2"><span className="text-white/30 font-mono">3.</span> Copy and share the link</li>
-                <li className="flex gap-2"><span className="text-white/30 font-mono">4.</span> Keep the tab open until download completes</li>
-              </ol>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-widest text-white/40 mb-2">Receiving</div>
-              <ol className="space-y-2 text-sm text-white/60">
-                <li className="flex gap-2"><span className="text-white/30 font-mono">1.</span> Open the share link</li>
-                <li className="flex gap-2"><span className="text-white/30 font-mono">2.</span> Enter the PIN if required</li>
-                <li className="flex gap-2"><span className="text-white/30 font-mono">3.</span> Click download and keep the tab open</li>
-              </ol>
-            </div>
-          </div>
-        </div>
-
-        <footer className="mt-auto border-t border-white/10 py-6 text-xs text-white/40 flex flex-col items-center gap-4">
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-            <button onClick={onBack} className="hover:text-white transition-colors">Back to home</button>
-            <span className="group relative inline-flex items-center leading-none text-white/40">
-              <span className="text-sm" role="img" aria-label="Canada">🇨🇦</span>
-              <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                Proudly made in Canada
-              </span>
-            </span>
-            <span>© 2026 Steven Frost</span>
-            <a
-              href="https://cv.tee215.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group inline-flex items-center gap-1 whitespace-nowrap leading-none text-white/40"
-            >
-              <span>Logo by</span>
-              <span className="text-blue-400 transition-colors group-hover:text-blue-300">T</span>
-            </a>
-          </div>
-        </footer>
       </div>
     </div>
   );

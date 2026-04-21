@@ -190,7 +190,7 @@ services:
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/snap/docker/common/p2p-envoy-certs:/var/snap/docker/common/p2p-envoy-certs:ro
-      - ./envoy-runtime:/etc/envoy/runtime:ro
+      - ${ENVOY_RUNTIME_DIR:-./envoy-runtime}:/etc/envoy/runtime:ro
     depends_on:
       - app
       - peerjs-server

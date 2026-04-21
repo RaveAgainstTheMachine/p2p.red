@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { DataConnection } from 'peerjs';
 import { useWebRTC } from './hooks/useWebRTC';
 import { useEncryption } from './hooks/useEncryption';
@@ -9,13 +10,14 @@ import { EnhancedProgressBar } from './components/EnhancedProgressBar';
 import { EncryptionIndicator } from './components/EncryptionIndicator';
 import { FileTypeWarning } from './components/FileTypeWarning';
 import { CookieBanner } from './components/CookieBanner';
-import { Monitoring } from './components/Monitoring';
 import { FileStructure } from './components/FileStructure';
 import { Logo } from './components/Logo';
+import { GlowBackground } from './components/GlowBackground';
+import { AppFooter } from './components/AppFooter';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, CheckCircle, File, Check, Sun, Moon, Monitor, Coffee, Palette, Shuffle } from 'lucide-react';
+import { Download, File, Check, Sun, Moon, Monitor, Palette, Shuffle } from 'lucide-react';
 import { createShortLink, getMetadata, API_BASE_URL } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
@@ -204,9 +206,21 @@ const normalizeResumeSessions = (sessions: Record<string, ResumeSession>) => {
 };
 
 function App() {
+  const pageTransition = {
+    initial: { x: '100%' },
+    animate: { x: 0 },
+    exit: { opacity: 0, x: '-10%', transition: { duration: 0.3 } },
+    transition: { 
+      type: 'spring',
+      stiffness: 150,
+      damping: 25,
+      mass: 1
+    }
+  };
+
   const { peer, peerId, isConnected, connectionState, isOnline, connectToPeer } = useWebRTC();
   const { isEncrypting } = useEncryption();
-  const { transferProgress, isTransferring, resumeTransfer } = useFileTransfer();
+  const { transferProgress, resumeTransfer } = useFileTransfer();
   const { transferProgress: adaptiveProgress, transferFileAdaptive, prepareDownloadBridge } = useAdaptiveMultiStreamTransfer();
 
   const [mode, setMode] = useState<'share' | 'receive'>('share');
@@ -279,7 +293,7 @@ function App() {
     }
   }, [variantPreference]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.setAttribute('data-variant', activeVariant);
   }, [activeVariant]);
 
@@ -1188,27 +1202,207 @@ function App() {
     );
   }
 
-  if (currentPage === 'legal') {
-    return <Legal onBack={() => setCurrentPage('home')} />;
-  }
-  
-  if (currentPage === 'info') {
-    return <Info onBack={() => setCurrentPage('home')} />;
-  }
+  /* Unified Shell Content */
+  const renderPageContent = () => {
+    switch (currentPage) {
+      case 'legal':
+        return <Legal onBack={() => setCurrentPage('home')} />;
+      case 'info':
+        return <Info onBack={() => setCurrentPage('home')} />;
+      case 'changelog':
+        return <Changelog onBack={() => setCurrentPage('home')} />;
+      case 'feedback':
+        return <Feedback onBack={() => setCurrentPage('home')} apiBaseUrl={API_BASE_URL} />;
+      default:
+        return (
+          <>
+            {requiresPin ? (
+              <div className="glass-card w-full max-w-2xl mx-auto" style={{ minHeight: '200px' }}>
+                <PinVerification 
+                  onVerify={handlePinVerification}
+                  error={pinError}
+                  remainingAttempts={remainingAttempts}
+                  isVerifying={isVerifyingPin}
+                  modeOverride={pinModeOverride}
+                />
+              </div>
+            ) : mode === 'share' ? (
+              <>
+                {/* Idle: DropZone fills entire main */}
+                {!shareLink && !selectedFiles && (
+                  <DropZone
+                    onFileSelect={handleFileSelect}
+                    isProcessing={isEncrypting || status === 'encrypting' || isProcessingFiles}
+                  />
+                )}
+                
+                {isProcessingFiles && (
+                  <div className="mt-4 text-center animate-pulse">
+                    <p className="text-blue-300 font-medium">Processing large file set...</p>
+                  </div>
+                )}
 
-  if (currentPage === 'changelog') {
-    return <Changelog onBack={() => setCurrentPage('home')} />;
-  }
+                {/* File selected: card with details + actions */}
+                {!shareLink && selectedFiles && (
+                  <div className="glass-card p-8 w-full max-w-2xl mx-auto">
+                    {resumeSessions.some((session) => session.role === 'sender') && (
+                      <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                          <div>
+                            <div className="text-white font-semibold">Resume a paused send</div>
+                            <div className="text-sm text-white/60">Pick up where you left off.</div>
+                          </div>
+                          <button type="button" onClick={refreshResumeSessions} className="text-sm text-white/60 hover:text-white">Refresh</button>
+                        </div>
+                        <div className="mt-4 grid gap-3">
+                          {resumeSessions.filter((session) => session.role === 'sender').map((session) => (
+                            <div key={session.transferId} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="text-white/90 font-medium truncate">{session.fileName}</div>
+                                <div className="text-xs text-white/60">{formatFileSize(session.fileSize)}</div>
+                              </div>
+                              <div className="flex gap-2">
+                                <button type="button" onClick={() => handleResumeSenderSession(session)} className="px-3 py-1 rounded-lg bg-[var(--theme-primary)] text-white text-sm">Resume</button>
+                                <button type="button" onClick={() => handleClearResumeSession(session)} className="px-3 py-1 rounded-lg bg-white/10 text-sm">Clear</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {selectedFiles.length === 1 ? (
+                      <div className="flex items-center justify-center gap-3 text-white/80 mb-6">
+                        <File size={20} className="text-[var(--theme-primary)]" />
+                        <div className="text-center">
+                          <p className="font-medium">{selectedFiles[0].name}</p>
+                          <p className="text-sm text-white/60">{formatFileSize(selectedFiles[0].size)}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mb-6"><FileStructure files={selectedFiles} /></div>
+                    )}
+                    <PinToggle onPinChange={setPin} />
+                    <div className="flex flex-col gap-4 mt-6">
+                      {anubisStatusMessage && (
+                        <div className="text-center py-3 px-5 rounded-2xl bg-[var(--theme-primary)]/10 border border-[var(--theme-primary)]/20">
+                          <p className="text-[var(--theme-primary)] text-xs font-bold uppercase tracking-widest">{anubisStatusMessage}</p>
+                        </div>
+                      )}
+                      <div className="flex gap-3 justify-center">
+                        <button onClick={() => { setSelectedFiles(null); setPin(''); }} className="btn-secondary" disabled={status === 'encrypting'}>Cancel</button>
+                        <button onClick={() => handleProceedWithTransfer()} className="btn-primary" disabled={status === 'encrypting'}>
+                          {status === 'encrypting' ? 'Warming up...' : 'Share Link'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-  if (currentPage === 'feedback') {
-    return <Feedback onBack={() => setCurrentPage('home')} apiBaseUrl={API_BASE_URL} />;
-  }
+                {/* Link generated */}
+                {shareLink && (
+                  <div className="glass-card p-8 w-full max-w-2xl mx-auto">
+                    <div className="flex flex-col gap-6">
+                      {anubisStatusMessage && (
+                        <div className="text-center py-4 px-6 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 shadow-xl backdrop-blur-lg">
+                          <p className="text-white/90 text-sm italic">"{anubisStatusMessage}"</p>
+                        </div>
+                      )}
+                      {relayLimitWarning && (
+                        <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
+                          <p className="text-amber-200 font-semibold">Relay limit exceeded</p>
+                          <p className="text-amber-200/70 text-sm">This transfer is over 100GB.</p>
+                        </div>
+                      )}
+                      <ShareLink shareLink={shareLink} />
+                      {status === 'waiting' && (
+                        <div className="text-center text-white/60 flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                          Waiting for recipient...
+                        </div>
+                      )}
+                      {status === 'transferring' && (
+                        <EnhancedProgressBar progress={adaptiveProgress} label="Transferring..." showETA showSpeed />
+                      )}
+                      {status === 'complete' && (
+                        <div className="text-center text-green-400 font-semibold">Transfer complete!</div>
+                      )}
+                      {status === 'error' && (
+                        <div className="text-center text-red-400">
+                          <p>Transfer failed</p>
+                          <p className="text-sm text-red-400/70">{transferErrorMessage}</p>
+                          {transferProgress.percentage > 0 && transferProgress.percentage < 100 && (
+                            <button onClick={() => handleResume(0)} className="mt-4 px-4 py-2 bg-blue-600 rounded text-white text-sm">Resume</button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="glass-card p-8 w-full max-w-2xl mx-auto">
+                <div>
+                  {resumeSessions.some((session) => session.role === 'receiver' && matchesIncomingResume(session)) && !pendingReceive && (
+                    <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+                      <div className="text-white font-semibold">Resume detected</div>
+                      <div className="flex gap-2 mt-3">
+                        <button onClick={handleChooseSaveLocation} className="btn-primary">Resume</button>
+                        <button onClick={() => {
+                          const match = resumeSessions.find(s => s.role === 'receiver' && matchesIncomingResume(s));
+                          if (match) void handleClearResumeSession(match);
+                        }} className="btn-secondary">Clear</button>
+                      </div>
+                    </div>
+                  )}
+                  {status === 'connecting' && (
+                    <div className="text-center py-12">
+                      <div className="w-12 h-12 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                      <p className="text-white/80">Connecting...</p>
+                    </div>
+                  )}
+                  {status === 'transferring' && (
+                    <EnhancedProgressBar progress={adaptiveProgress} label="Receiving..." showETA showSpeed />
+                  )}
+                  {status === 'complete' && (
+                    <div className="text-center text-green-400 font-semibold">Download complete!</div>
+                  )}
+                  {pendingReceive && incomingFileInfo && (
+                    <div className="animate-fade-up">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-6 mb-6">
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-blue-500/15 border border-blue-500/20 text-2xl">📁</div>
+                          <div className="flex-1">
+                            <p className="text-white font-semibold truncate">{incomingFileInfo.name}</p>
+                            <span className="text-white/50 text-sm">{formatFileSize(incomingFileInfo.size)}</span>
+                          </div>
+                        </div>
+                        <div className="mt-4 text-center">
+                          <FileTypeWarning fileName={incomingFileInfo.name} />
+                        </div>
+                      </div>
+                      <button onClick={handleChooseSaveLocation} className="w-full py-4 bg-[var(--theme-primary)] text-white rounded-2xl font-semibold shadow-lg">
+                        <Download size={20} className="inline mr-2" />
+                        Download
+                      </button>
+                    </div>
+                  )}
+                  {status === 'error' && (
+                    <div className="text-center text-red-400">
+                      <p>Download failed</p>
+                      <p className="text-sm text-red-400/70">{transferErrorMessage}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        );
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Animated background */}
-      <div className="fixed inset-0 app-overlay-base" />
-      <div className="fixed inset-0 app-overlay-accent animate-gradient-shift" />
+      <GlowBackground />
       {anubisChallenge.active && anubisChallenge.url && (
         <iframe
           title="Anubis Challenge"
@@ -1299,8 +1493,8 @@ function App() {
 
       <div className="relative z-10 flex flex-col min-h-screen">
 
-        {/* Slim top nav */}
-        <nav className="flex items-center justify-between px-6 pt-5 pb-3">
+        {/* Slim top nav - Sticky */}
+        <nav className="sticky top-0 z-50 flex items-center justify-between px-6 pt-5 pb-3 bg-transparent backdrop-blur-sm">
           <a
             href="https://p2p.red"
             className="flex items-center opacity-80 hover:opacity-100 transition-opacity"
@@ -1308,6 +1502,16 @@ function App() {
           >
             <Logo size="small" />
           </a>
+
+          <div className="hidden lg:flex flex-col items-center justify-center flex-1 mx-8 gap-0.5">
+            <span className="header-headline text-[13px] font-black uppercase tracking-[0.3em] drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+              Send files securely and privately
+            </span>
+            <span className="header-headline opacity-60 text-[9px] font-bold uppercase tracking-[0.4em]">
+              No account or login required
+            </span>
+          </div>
+
           <div className="flex items-center gap-1">
           </div>
         </nav>
@@ -1347,466 +1551,33 @@ function App() {
         />
 
         {/* Hero — centered, WeTransfer-style */}
-        <main className="flex flex-1 flex-col items-center justify-center px-4 py-6 relative">
-
-
-
-
-        {/* Main Content */}
-        {requiresPin ? (
-          <div className="glass-card w-full max-w-2xl mx-auto" style={{ minHeight: '200px' }}>
-            <PinVerification 
-              onVerify={handlePinVerification}
-              error={pinError}
-              remainingAttempts={remainingAttempts}
-              isVerifying={isVerifyingPin}
-              modeOverride={pinModeOverride}
-            />
-          </div>
-        ) : mode === 'share' ? (
-          <>
-            {/* Idle: DropZone fills entire main */}
-            {!shareLink && !selectedFiles && (
-              <DropZone
-                onFileSelect={handleFileSelect}
-                isProcessing={isEncrypting || status === 'encrypting' || isProcessingFiles}
-              />
-            )}
-            
-            {isProcessingFiles && (
-              <div className="mt-4 text-center animate-pulse">
-                <p className="text-blue-300 font-medium">Processing large file set...</p>
-              </div>
-            )}
-
-            {/* File selected: card with details + actions */}
-            {!shareLink && selectedFiles && (
-              <div className="glass-card p-8 w-full max-w-2xl mx-auto">
-                {resumeSessions.some((session) => session.role === 'sender') && (
-                  <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                      <div>
-                        <div className="text-white font-semibold">Resume a paused send</div>
-                        <div className="text-sm text-white/60">Pick up where you left off by selecting the original file.</div>
-                      </div>
-                      <button type="button" onClick={refreshResumeSessions} className="text-sm text-white/60 hover:text-white">Refresh</button>
-                    </div>
-                    <div className="mt-4 grid gap-3">
-                      {resumeSessions.filter((session) => session.role === 'sender').map((session) => (
-                        <div key={session.transferId} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="min-w-0">
-                            <div className="text-white/90 font-medium truncate" title={session.fileName}>{session.fileName}</div>
-                            <div className="text-xs text-white/60">{formatFileSize(session.fileSize)} • {Math.round((session.completedShardIds.length / Math.max(1, session.shardCount)) * 100)}% cached</div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => handleResumeSenderSession(session)} className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm">Resume</button>
-                            <button type="button" onClick={() => handleClearResumeSession(session)} className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm">Clear</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {selectedFiles.length === 1 ? (
-                  <div className="flex items-center justify-center gap-3 text-white/80 mb-6">
-                    <File size={20} className="text-blue-400" />
-                    <div className="text-center">
-                      <p className="font-medium">{selectedFiles[0].name}</p>
-                      <p className="text-sm text-white/60">{formatFileSize(selectedFiles[0].size)}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mb-6"><FileStructure files={selectedFiles} /></div>
-                )}
-                <PinToggle onPinChange={setPin} />
-                <div className="flex flex-col gap-4 mt-6">
-                  {anubisStatusMessage && (
-                    <div className="text-center py-3 px-5 rounded-2xl bg-white/5 border border-white/10 shadow-lg shadow-black/20 backdrop-blur-md animate-pulse">
-                      <div className="inline-flex items-center gap-3">
-                        <div className="h-1.5 w-1.5 rounded-full bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.8)]" />
-                        <p className="text-blue-100/90 text-xs font-semibold uppercase tracking-[0.1em]">{anubisStatusMessage}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex gap-3 justify-center">
-                    <button onClick={() => { setSelectedFiles(null); setPin(''); }} className="btn-secondary" disabled={status === 'encrypting'}>Cancel</button>
-                    <button onClick={() => handleProceedWithTransfer()} className="btn-primary" disabled={status === 'encrypting'}>
-                      {status === 'encrypting' ? <span>Warming up the moose...</span> : 'Make me a share link, eh?'}
-                    </button>
-                  </div>
+        <main className="flex flex-1 flex-col items-center justify-center relative overflow-hidden">
+          <AnimatePresence initial={false}>
+            <motion.div
+              key={currentPage}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              variants={pageTransition}
+              className="w-full h-full overflow-y-auto overflow-x-hidden absolute inset-0 px-4 py-6 will-change-transform"
+            >
+              <div className="w-full min-h-full flex flex-col items-center justify-center py-12">
+                <div className="w-full max-w-6xl flex flex-col items-center">
+                  {renderPageContent()}
                 </div>
               </div>
-            )}
-
-            {/* Link generated: ShareLink + transfer status */}
-            {shareLink && (
-              <div className="glass-card p-8 w-full max-w-2xl mx-auto">
-                <div className="flex flex-col gap-6">
-                  {anubisStatusMessage && (
-                    <div className="text-center py-4 px-6 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 shadow-xl shadow-black/40 backdrop-blur-lg animate-fade-in ring-1 ring-white/5">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
-                          <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,1)]" />
-                          <span className="text-[10px] font-bold text-emerald-400/90 uppercase tracking-widest">Security Moose Approved</span>
-                        </div>
-                        <p className="text-white/90 text-sm font-medium leading-relaxed italic">"{anubisStatusMessage}"</p>
-                      </div>
-                    </div>
-                  )}
-                  {relayLimitWarning && (
-                    <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
-                      <div className="flex items-start gap-3">
-                        <div className="text-amber-400 text-xl flex-shrink-0">⚠️</div>
-                        <div className="flex-1">
-                          <p className="text-amber-200 font-semibold">Relay size limit exceeded</p>
-                          <p className="text-amber-200/70 text-sm mt-1">
-                            Your transfer ({formatFileSize(relayLimitWarning.totalSize)}) is over the 100 GB relay cap.
-                            The recipient has been notified. Improve your connection or reduce file size and start a new share.
-                          </p>
-                          <details className="mt-3">
-                            <summary className="cursor-pointer text-sm text-amber-300/80 hover:text-amber-200 transition-colors">Tips to get a direct connection</summary>
-                            <ul className="mt-2 space-y-1 text-sm text-amber-200/60 list-disc list-inside">
-                              <li>Disable VPN/proxy and refresh</li>
-                              <li>Try home Wi-Fi instead of corporate/mobile network</li>
-                              <li>Enable UPnP on your router (if comfortable)</li>
-                              <li>Ensure UDP/WebRTC is not blocked by your firewall</li>
-                            </ul>
-                          </details>
-                          <button type="button" onClick={() => window.location.reload()} className="mt-3 px-4 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-200 text-sm hover:bg-amber-500/25 transition-colors">
-                            Refresh &amp; create new share
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <ShareLink shareLink={shareLink} />
-                  {status === 'waiting' && (
-                    <div className="text-center">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="inline-flex items-center gap-2 text-white/60">
-                          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                          <span>Waiting for the other human to show up...</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {status === 'transferring' && (
-                    <div className="w-full">
-
-                      <EnhancedProgressBar
-                        progress={adaptiveProgress}
-                        label={`Transferring file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}
-                        showETA={true}
-                        showSpeed={true}
-                      />
-                    </div>
-                  )}
-                  {status === 'complete' && (
-                    <div className="text-center">
-                      <CheckCircle size={64} className="text-green-400 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold text-white">Transfer complete. No rocket science harmed.</h3>
-                    </div>
-                  )}
-                  {status === 'error' && (
-                    <div>
-                      <div className="text-6xl mb-4">❌</div>
-                      <h3 className="text-xl font-semibold text-white mb-2">Transfer bailed</h3>
-                      <p className="text-white/80">{transferErrorMessage || 'We hit a snag. Give it another go.'}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="glass-card p-8 w-full max-w-2xl mx-auto">
-            <div>
-              {resumeSessions.some((session) => session.role === 'receiver') && !pendingReceive && (
-                <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
-                  <div className="text-white font-semibold">Resume a paused download</div>
-                  <div className="text-sm text-white/60">Open the original share link, then choose Resume when it’s ready.</div>
-                  <div className="mt-3 grid gap-3">
-                    {resumeSessions.filter((session) => session.role === 'receiver').map((session) => (
-                      <div key={session.transferId} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                          <div className="text-white/90 font-medium truncate" title={session.fileName}>
-                            {session.fileName}
-                          </div>
-                          <div className="text-xs text-white/60">
-                            {formatFileSize(session.fileSize)} • {Math.round((session.completedShardIds.length / Math.max(1, session.shardCount)) * 100)}% cached
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleClearResumeSession(session)}
-                          className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {status === 'connecting' && (
-                <div className="text-center py-12">
-                  <div className="w-12 h-12 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                  <p className="text-white/80">Calling the other human...</p>
-                </div>
-              )}
-              
-              {status === 'transferring' && (
-                <div className="mt-8 max-w-5xl mx-auto">
-                  <EnhancedProgressBar 
-                    progress={adaptiveProgress} 
-                    label={`Receiving file (Adaptive Multi-Stream: ${adaptiveProgress.activeStreams} streams, ${adaptiveProgress.networkQuality})`}
-                    showETA={true}
-                    showSpeed={true}
-                  />
-                </div>
-              )}
-              
-              {!isTransferring && transferProgress.percentage > 0 && transferProgress.percentage < 100 && (
-                <div className="text-center mt-4">
-                  <p className="text-yellow-400 mb-2">Transfer took a coffee break</p>
-                  {/* <ResumeButton
-                    onClick={() => {
-                      const resumeFromChunk = Math.floor(transferProgress.bytesTransferred / (64 * 1024));
-                      handleResume(resumeFromChunk);
-                    }}
-                    disabled={false}
-                    progress={transferProgress.percentage}
-                  /> */}
-                </div>
-              )}
-              
-              {status === 'complete' && (
-                <div className="text-center mt-8">
-                  <CheckCircle size={64} className="text-green-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-white">
-                    File downloaded successfully!
-                  </h3>
-                </div>
-              )}
-              
-              {pendingReceive && incomingFileInfo && (
-                <div className="animate-fade-up">
-                  {/* Relay limit warning — only when relay AND >100GB */}
-                  {relayLimitWarning && (
-                    <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-left">
-                      <div className="flex items-start gap-3">
-                        <span className="text-amber-400 text-xl flex-shrink-0">⚠️</span>
-                        <div className="flex-1">
-                          <p className="text-amber-200 font-semibold">Relay size limit exceeded</p>
-                          <p className="text-amber-200/70 text-sm mt-1">
-                            This transfer ({formatFileSize(relayLimitWarning.totalSize)}) exceeds the 100 GB relay cap.
-                            Ask the sender to improve their connection, then create a new share.
-                          </p>
-                          <details className="mt-3">
-                            <summary className="cursor-pointer text-sm text-amber-300/80 hover:text-amber-200 transition-colors">Tips for the sender</summary>
-                            <ul className="mt-2 space-y-1 text-sm text-amber-200/60 list-disc list-inside">
-                              <li>Disable VPN/proxy and refresh</li>
-                              <li>Try home Wi-Fi instead of corporate/mobile network</li>
-                              <li>Enable UPnP on router (if comfortable)</li>
-                              <li>Ensure UDP/WebRTC is not blocked by firewall</li>
-                            </ul>
-                          </details>
-                          <button type="button" onClick={() => window.location.reload()}
-                            className="mt-3 px-4 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 text-amber-200 text-sm hover:bg-amber-500/25 transition-colors">
-                            Refresh to try again
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* File preview card */}
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-6 mb-6 text-left">
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/15 border border-blue-500/20 text-2xl select-none">
-                        {incomingFileInfo.fileType?.startsWith('image/') ? '🖼️' :
-                         incomingFileInfo.fileType?.startsWith('video/') ? '🎬' :
-                         incomingFileInfo.fileType?.startsWith('audio/') ? '🎵' :
-                         incomingFileInfo.fileType?.includes('zip') || incomingFileInfo.fileType?.includes('tar') || incomingFileInfo.fileType?.includes('gzip') ? '📦' :
-                         incomingFileInfo.fileType?.includes('pdf') ? '📄' :
-                         incomingFileInfo.fileType?.includes('text') ? '📝' : '📁'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-semibold text-lg leading-tight truncate" title={incomingFileInfo.name}>
-                          {incomingFileInfo.name}
-                        </p>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
-                          <span className="text-white/50 text-sm">{formatFileSize(incomingFileInfo.size)}</span>
-                          {incomingFileInfo.fileType && <span className="text-white/30 text-sm">{incomingFileInfo.fileType}</span>}
-                          {incomingFileInfo.expiresAt && <span className="text-white/40 text-sm">🕐 {formatExpirationTime(incomingFileInfo.expiresAt)}</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-4 rounded-xl border border-white/8 bg-white/5 px-4 py-3 text-xs text-white/40">
-                      🔒 End-to-end encrypted · Not stored on servers · Direct from sender's browser
-                    </div>
-                    {incomingFilesList && (
-                      <div className="mt-4 max-h-48 overflow-y-auto custom-scrollbar rounded-xl border border-white/10 bg-black/20 p-3">
-                        <div className="text-sm font-semibold text-white/70 mb-2 px-1">Files ({incomingFilesList.length}):</div>
-                        <ul className="space-y-1">
-                          {incomingFilesList.map((f, i) => (
-                            <li key={i} className="flex justify-between text-sm text-white/60 px-1">
-                              <span className="truncate pr-2">{f.name}</span>
-                              <span className="flex-shrink-0">{formatFileSize(f.size)}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="max-w-md mx-auto mb-4">
-                    <FileTypeWarning fileName={incomingFileInfo.name} />
-                  </div>
-
-                  {resumeSessions.some((session) => session.role === 'receiver' && matchesIncomingResume(session)) && (
-                    <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-4 text-left">
-                      <div className="text-white/90 font-medium">Resume detected</div>
-                      <div className="text-sm text-white/60 mt-1">Cached shards found — resume to skip verified parts.</div>
-                      <div className="mt-3 flex gap-2">
-                        <button type="button" onClick={handleChooseSaveLocation} className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm">Resume download</button>
-                        <button type="button" onClick={() => {
-                          const match = resumeSessions.find((s) => s.role === 'receiver' && matchesIncomingResume(s));
-                          if (match) void handleClearResumeSession(match);
-                        }} className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm">Start fresh</button>
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleChooseSaveLocation}
-                    disabled={!!relayLimitWarning}
-                    className="w-full py-4 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-semibold transition-colors shadow-lg text-lg"
-                  >
-                    <Download size={20} className="inline mr-2 -mt-0.5" />
-                    Download
-                  </button>
-                  <p className="text-white/30 mt-3 text-sm text-center">Your browser will ask where to save it.</p>
-                </div>
-              )}
-              
-              {status === 'idle' && !pendingReceive && !currentHash && (
-                <div>
-                  <Download size={64} className="text-white/40 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-white mb-2">
-                    Waiting for a share link...
-                  </h3>
-                  <p className="text-white/60">
-                    Open one and we’ll get you the goods.
-                  </p>
-                </div>
-              )}
-              {status === 'error' && (
-                <div>
-                  <div className="text-6xl mb-4">❌</div>
-                  <h3 className="text-xl font-semibold text-white mb-2">
-                    Transfer bailed
-                  </h3>
-                  <p className="text-white/80">
-                    {transferErrorMessage || 'We hit a snag. Give it another go.'}
-                  </p>
-                  {transferProgress.percentage > 0 && transferProgress.percentage < 100 && (
-                    <div className="flex justify-center mt-4">
-                      <button 
-                        onClick={() => handleResume(0)}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
-                      >
-                        Resume the transfer
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
 
       {/* Footer */}
-      <footer className="relative z-10 mt-auto border-t border-white/10">
-        <div className="mx-auto w-full max-w-none px-[15px] py-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 w-full text-[clamp(10px,2vw,13px)] text-white/60">
-            {/* Left: Version */}
-            <div className="flex items-center">
-              {buildIndicatorClass && buildIndicatorLabel && (
-                <button
-                  onClick={() => setCurrentPage('changelog')}
-                  title="Click to view changelog"
-                  className="group relative flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/70 transition-all hover:bg-white/10 hover:border-white/20 active:scale-95"
-                >
-                  <span className={`h-2 w-2 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.3)]`} />
-                  <span>{displayVersion}</span>
-                  <div className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 group-hover:max-w-[200px] group-hover:opacity-100 flex items-center">
-                    <span className="text-white/30 mx-2">•</span>
-                    <span className="text-white/40 tracking-normal font-medium lowercase">{buildIndicatorLabel}</span>
-                  </div>
-                </button>
-              )}
-            </div>
-
-            {/* Center: Links */}
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-              <a
-                href="https://buymeacoffee.com/p2p.red"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 whitespace-nowrap leading-none px-3 py-1.5 rounded-full bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 transition-all hover:bg-yellow-400/20 hover:scale-105 active:scale-95"
-              >
-                <Coffee size={14} />
-                <span className="font-semibold tracking-wide">Support</span>
-              </a>
-              <button
-                onClick={() => setCurrentPage('info')}
-                className="inline-flex items-center whitespace-nowrap leading-none text-white/60 transition-colors hover:text-white"
-              >
-                About
-              </button>
-              <button
-                onClick={() => setCurrentPage('feedback')}
-                className="inline-flex items-center whitespace-nowrap leading-none text-white/60 transition-colors hover:text-white"
-              >
-                Feedback
-              </button>
-              <span className="group relative inline-flex items-center whitespace-nowrap leading-none text-white/60">
-                <span className="text-base" role="img" aria-label="Canada">🇨🇦</span>
-                <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                  Proudly made in Canada
-                </span>
-              </span>
-              <button
-                onClick={() => setCurrentPage('legal')}
-                className="inline-flex items-center whitespace-nowrap leading-none text-white/60 transition-colors hover:text-white"
-              >
-                Legal
-              </button>
-              <span className="inline-flex items-center whitespace-nowrap leading-none text-white/60">© 2026 Steven Frost</span>
-              <a
-                href="https://cv.tee215.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group inline-flex items-center gap-1 whitespace-nowrap leading-none text-white/50"
-              >
-                <span className="whitespace-nowrap">Logo by</span>
-                <span className="text-blue-400 transition-colors group-hover:text-blue-300">T</span>
-              </a>
-            </div>
-
-            {/* Right: Status */}
-            <div className="flex items-center">
-              <Monitoring placement="footer" />
-            </div>
-          </div>
-        </div>
-      </footer>
+      <AppFooter 
+        onNavigate={setCurrentPage}
+        displayVersion={displayVersion}
+        buildIndicatorClass={buildIndicatorClass}
+        buildIndicatorLabel={buildIndicatorLabel}
+      />
 
       {/* Cookie/Privacy Banner */}
       <CookieBanner />

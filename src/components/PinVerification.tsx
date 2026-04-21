@@ -122,7 +122,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
   return (
     <div className="flex flex-col items-center gap-6 p-8">
       <div className="flex items-center gap-3 text-white">
-        <Lock size={24} className="text-blue-400" />
+        <Lock size={24} className="text-[var(--theme-primary)]" />
         <h3 className="text-xl font-semibold">Locked link</h3>
       </div>
 
@@ -139,7 +139,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
             onClick={() => handleModeChange('pin')}
             className={`px-3 py-1 rounded-full border transition-colors ${
               mode === 'pin'
-                ? 'border-blue-400 text-white'
+                ? 'border-[var(--theme-primary)] text-white bg-[var(--theme-primary)]/10'
                 : 'border-white/20 text-white/50 hover:text-white'
             }`}
           >
@@ -150,7 +150,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
             onClick={() => handleModeChange('passphrase')}
             className={`px-3 py-1 rounded-full border transition-colors ${
               mode === 'passphrase'
-                ? 'border-blue-400 text-white'
+                ? 'border-[var(--theme-primary)] text-white bg-[var(--theme-primary)]/10'
                 : 'border-white/20 text-white/50 hover:text-white'
             }`}
           >
@@ -175,7 +175,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
               disabled={isVerifying}
               className={`w-14 h-16 text-center text-2xl font-bold bg-white/5 border-2 rounded-lg 
                          text-white focus:outline-none transition-colors
-                         ${error ? 'border-red-400 animate-shake' : 'border-white/20 focus:border-blue-400'}
+                         ${error ? 'border-red-400 animate-shake' : 'border-white/20 focus:border-[var(--theme-primary)]'}
                          ${isVerifying ? 'opacity-50 cursor-not-allowed' : ''}`}
             />
           ))}
@@ -191,7 +191,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
             onChange={(event) => setPassphrase(event.target.value)}
             disabled={isVerifying}
             className={`w-full px-4 py-3 bg-white/5 border-2 rounded-lg text-white focus:outline-none transition-colors
-                       ${error ? 'border-red-400' : 'border-white/20 focus:border-blue-400'}
+                       ${error ? 'border-red-400' : 'border-white/20 focus:border-[var(--theme-primary)]'}
                        ${isVerifying ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
           <p className="text-white/40 text-xs text-center">Up to 128 characters</p>
@@ -221,7 +221,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
 
       {isVerifying && (
         <div className="flex items-center gap-2 text-white/60">
-          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          <div className="w-4 h-4 border-2 border-[var(--theme-primary)] border-t-transparent rounded-full animate-spin" />
           <span className="text-sm">Checking the PIN...</span>
         </div>
       )}

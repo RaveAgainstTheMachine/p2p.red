@@ -20,7 +20,7 @@ echo "🚀 Zero-Downtime Deployment"
 echo "==========================="
 echo "🌐 Site URL: $SITE_URL"
 
-export DEPLOY_ENV ENVOY_ADMIN_URL ENVOY_CERTS_DIR ALLOW_PROD_ON_DEV
+export DEPLOY_ENV ENVOY_ADMIN_URL ENVOY_CERTS_DIR ALLOW_PROD_ON_DEV ENVOY_RUNTIME_DIR
 "$REPO_ROOT/automation/preflight.sh" "$DEPLOY_ENV"
 
 require_port_free() {

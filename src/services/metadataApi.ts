@@ -8,7 +8,7 @@ export const API_BASE_URL = apiEnvBase
   ? `${apiEnvBase}/api`
   : import.meta.env.PROD
     ? 'https://p2p.red/api'
-    : 'http://localhost:3001/api';
+    : '/api';
 
 export interface TransferMetadata {
   peerId: string;

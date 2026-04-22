@@ -7,7 +7,7 @@ interface LandingProps {
   onLegal: () => void;
 }
 
-export const Landing: React.FC<LandingProps> = ({ onStart, onInfo }) => {
+export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) => {
   return (
     <div className="w-full max-w-6xl">
       <main className="flex flex-col justify-center gap-16 py-12">

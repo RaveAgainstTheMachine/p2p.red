@@ -23,7 +23,7 @@ export const environments: Record<string, EnvironmentConfig> = {
     apiUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:5173',
     peerJsConfig: {
       host: import.meta.env.VITE_PEERJS_HOST ?? 'localhost',
-      port: Number(import.meta.env.VITE_PEERJS_PORT ?? 9000),
+      port: Number(import.meta.env.VITE_PEERJS_PORT ?? 3002),
       path: import.meta.env.VITE_PEERJS_PATH ?? '/',
       secure: String(import.meta.env.VITE_PEERJS_SECURE ?? 'false') === 'true',
       config: {

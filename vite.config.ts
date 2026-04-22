@@ -1,8 +1,15 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+
+const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf-8'))
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: {
+    'import.meta.env.VITE_BUILD_VERSION': JSON.stringify(pkg.version),
+  },
   plugins: [react()],
   build: {
     // Cache busting with timestamp
@@ -24,11 +31,11 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 3000,
+    port: 3002,
     allowedHosts: true,
     proxy: {
       '/api/metadata': {
-        target: 'http://127.0.0.1:8923',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq) => {
@@ -46,7 +53,7 @@ export default defineConfig({
         }
       },
       '/api/metadata/': {
-        target: 'http://127.0.0.1:8923',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq) => {
@@ -64,7 +71,7 @@ export default defineConfig({
         }
       },
       '/.within.website': {
-        target: 'http://127.0.0.1:8923',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq) => {

@@ -18,10 +18,9 @@ interface MonitoringProps {
 }
 
 export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) => {
-  const devBaseUrl = import.meta.env.VITE_API_URL || window.location.origin;
   const statusUrl = import.meta.env.PROD
     ? `${window.location.origin}/api/status`
-    : `${devBaseUrl.replace(/\/$/, '')}/api/status`;
+    : '/api/status';
   const [overallStatus, setOverallStatus] = useState<DisplayStatus>('degraded');
   const [serviceStatuses, setServiceStatuses] = useState<Record<string, ServiceStatus>>({});
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
@@ -57,7 +56,7 @@ export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) =
           setLastCheckedAt(data.checkedAt || null);
         }
       } catch (error) {
-        // Service health check failed
+        console.warn('Service health check failed', error);
       }
     };
 
@@ -65,7 +64,7 @@ export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) =
     const interval = setInterval(checkHealth, 60000); // Check every minute
 
     return () => clearInterval(interval);
-  }, []);
+  }, [statusUrl]);
 
   const services = [
     { key: 'web', label: 'Web' },
@@ -102,7 +101,10 @@ export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) =
         }
         title="Service Status"
       >
-        <Activity size={20} className={placement === 'footer' ? 'text-white/70' : 'text-white/60'} />
+        <Activity
+          size={placement === 'footer' ? 18 : 20}
+          className={`${getStatusColor(overallStatus)} ${overallStatus === 'healthy' ? 'animate-pulse' : ''} transition-colors duration-500`}
+        />
       </button>
       {isVisible && (
         <div

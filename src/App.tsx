@@ -150,6 +150,36 @@ const resetMetaTags = () => {
   updateMetaName('description', 'Share files securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage, no tracking.');
 };
 
+// Recursive dir reader for global dropzone
+const readDirEntry = async (entry: any, prefix = ''): Promise<File[]> => {
+  const files: File[] = [];
+  const reader = entry.createReader();
+  const readBatch = (): Promise<any[]> =>
+    new Promise((res, rej) => reader.readEntries(res, rej));
+
+  let batch: any[];
+  do {
+    batch = await readBatch();
+    for (const child of batch) {
+      if (child.isFile) {
+        const file: File = await new Promise((res, rej) => child.file(res, rej));
+        try {
+          Object.defineProperty(file, 'webkitRelativePath', {
+            value: prefix + file.name,
+            writable: false,
+            configurable: true,
+          });
+        } catch { /* already set */ }
+        files.push(file);
+      } else if (child.isDirectory) {
+        files.push(...await readDirEntry(child, prefix + child.name + '/'));
+      }
+    }
+  } while (batch.length > 0);
+
+  return files;
+};
+
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -244,6 +274,108 @@ function App() {
   const [requiresPin, setRequiresPin] = useState<boolean>(false);
   const [pinModeOverride, setPinModeOverride] = useState<'pin' | 'passphrase' | null>(null);
 
+  // Global DropZone logic
+  const [globalDragActive, setGlobalDragActive] = useState(false);
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
+  const globalDragCounter = useRef(0);
+  const globalFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleGlobalDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    globalDragCounter.current += 1;
+    if (!(isEncrypting || status === 'encrypting' || isProcessingFiles)) {
+      setGlobalDragActive(true);
+    }
+  };
+
+  const handleGlobalDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    globalDragCounter.current = Math.max(0, globalDragCounter.current - 1);
+    if (globalDragCounter.current === 0) {
+      setGlobalDragActive(false);
+    }
+  };
+
+  const handleGlobalDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleGlobalDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    globalDragCounter.current = 0;
+    setGlobalDragActive(false);
+    
+    // Immediate navigation for better UX
+    setCurrentPage('home');
+    
+    if (isEncrypting || status === 'encrypting' || isProcessingFiles) return;
+
+    const { items } = e.dataTransfer;
+    if (!items || items.length === 0) return;
+
+    // Set internal processing if we suspect this might take a moment
+    if (items.length > 5 || Array.from(items).some(item => (item as any).webkitGetAsEntry?.()?.isDirectory)) {
+      setIsProcessingFiles(true);
+    }
+
+    try {
+      const collected: Array<{ entry: any; fallbackFile: File | null }> = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind !== 'file') continue;
+        const entry = (item as any).webkitGetAsEntry?.();
+        collected.push({ entry: entry ?? null, fallbackFile: entry ? null : item.getAsFile() });
+      }
+
+      const allFiles: File[] = [];
+      for (const { entry, fallbackFile } of collected) {
+        if (entry?.isDirectory) {
+          allFiles.push(...await readDirEntry(entry, entry.name + '/'));
+        } else if (entry?.isFile) {
+          const file: File = await new Promise((res, rej) => entry.file(res, rej));
+          allFiles.push(file);
+        } else if (fallbackFile) {
+          allFiles.push(fallbackFile);
+        }
+      }
+
+      if (allFiles.length > 0) handleFileSelect(allFiles);
+    } finally {
+      setIsProcessingFiles(false);
+    }
+  };
+
+  const handleGlobalClick = (e: React.MouseEvent) => {
+    console.log('🖱️ Global click target:', (e.target as HTMLElement).tagName, (e.target as HTMLElement).className);
+    if (isEncrypting || status === 'encrypting' || isProcessingFiles) return;
+    // Don't trigger file picker if clicking interactive elements
+    const interactive = (e.target as HTMLElement).closest('.glass-card, button, a, input, select, nav, footer, .theme-picker-menu, [role="button"]');
+    if (interactive) {
+      console.log('🚫 Click on interactive element, skipping picker');
+      return;
+    }
+    
+    console.log('📂 Triggering global file picker');
+    // If not clicking a card/button/link, it's a background click
+    globalFileInputRef.current?.click();
+  };
+
+  const handleGlobalInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (fileList && fileList.length > 0) {
+      const files = Array.from(fileList);
+      console.log('📂 Global input change detected:', files.length, 'files');
+      setCurrentPage('home');
+      if (files.length > 50) setIsProcessingFiles(true);
+      setTimeout(() => {
+        handleFileSelect(files);
+        setIsProcessingFiles(false);
+      }, 10);
+    }
+    e.target.value = '';
+  };
+
   // Sender: Handle preview connections
   useEffect(() => {
     if (!peer || status !== 'waiting' || !selectedFiles || selectedFiles.length === 0) return;
@@ -276,7 +408,6 @@ function App() {
     if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'brighter-dark') {
       return storedTheme;
     }
-    // Default is now brighter-dark
     return 'brighter-dark';
   });
   const [variantPreference, setVariantPreference] = useState<string>(() => {
@@ -304,7 +435,6 @@ function App() {
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
   const [anubisStatusMessage, setAnubisStatusMessage] = useState<string | null>(null);
   const [transferErrorMessage, setTransferErrorMessage] = useState<string>('');
-  const [isProcessingFiles, setIsProcessingFiles] = useState<boolean>(false);
 
   const [anubisChallenge, setAnubisChallenge] = useState<{ active: boolean; url?: string }>({
     active: false
@@ -656,7 +786,11 @@ function App() {
   }, [pendingReceive, senderPeerId, peer, isConnected, incomingFilesList]);
 
   const handleFileSelect = (files: File[]) => {
+    console.log('🎯 handleFileSelect called with:', files.length, 'files');
     if (!files || files.length === 0) return;
+    
+    // Always navigate to home when files are selected/dropped
+    setCurrentPage('home');
     
     if (files.length > 50) {
       setIsProcessingFiles(true);
@@ -794,9 +928,10 @@ function App() {
             await copyShareLinkToClipboard(shareLink);
             setStatus('waiting');
             showHumanToast();
+            console.log('✅ Share link set and copied to clipboard');
           } catch (error) {
-            console.error('Failed to create short link:', error);
-            setTransferErrorMessage('Failed to create short link. Please try again.');
+            console.error('❌ Failed to create short link (in catch):', error);
+            setTransferErrorMessage(`Failed to create short link: ${error instanceof Error ? error.message : 'Unknown error'}`);
             setStatus('error');
           }
           
@@ -1183,19 +1318,19 @@ function App() {
 
 
   // Page routing
-  if (currentPage === 'landing') {
-    return (
-      <Landing
-        onStart={() => setCurrentPage('home')}
-        onInfo={() => setCurrentPage('info')}
-        onLegal={() => setCurrentPage('legal')}
-      />
-    );
-  }
+
 
   /* Unified Shell Content */
   const renderPageContent = () => {
     switch (currentPage) {
+      case 'landing':
+        return (
+          <Landing
+            onStart={() => setCurrentPage('home')}
+            onInfo={() => setCurrentPage('info')}
+            onLegal={() => setCurrentPage('legal')}
+          />
+        );
       case 'legal':
         return <Legal onBack={() => setCurrentPage('home')} />;
       case 'info':
@@ -1204,6 +1339,7 @@ function App() {
         return <Changelog onBack={() => setCurrentPage('home')} />;
       case 'feedback':
         return <Feedback onBack={() => setCurrentPage('home')} apiBaseUrl={API_BASE_URL} />;
+      case 'home':
       default:
         return (
           <>
@@ -1219,50 +1355,51 @@ function App() {
               </div>
             ) : mode === 'share' ? (
               <>
-                {/* Idle: DropZone fills entire main */}
+                {/* Idle: Resume sessions on top if any */}
                 {!shareLink && !selectedFiles && (
-                  <div className="absolute inset-0 flex flex-col overflow-hidden">
-                    <DropZone
-                      onFileSelect={handleFileSelect}
-                      isProcessing={isEncrypting || status === 'encrypting' || isProcessingFiles}
-                    />
-                  </div>
+                  <>
+                    {resumeSessions.some((session) => session.role === 'sender') && (
+                      <div className="glass-card p-8 w-full max-w-2xl mx-auto relative z-10">
+                        <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+                          <div className="flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                              <div className="text-white font-semibold">Resume a paused send</div>
+                              <div className="text-sm text-white/60">Pick up where you left off.</div>
+                            </div>
+                            <button type="button" onClick={refreshResumeSessions} className="text-sm text-white/60 hover:text-white">Refresh</button>
+                          </div>
+                          <div className="mt-4 grid gap-3">
+                            {resumeSessions.filter((session) => session.role === 'sender').map((session) => (
+                              <div key={session.transferId} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                  <div className="text-white/90 font-medium truncate">{session.fileName}</div>
+                                  <div className="text-xs text-white/60">{formatFileSize(session.fileSize)}</div>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={() => handleResumeSenderSession(session)} className="px-3 py-1 rounded-lg bg-[var(--theme-primary)] text-white text-sm">Resume</button>
+                                  <button type="button" onClick={() => handleClearResumeSession(session)} className="px-3 py-1 rounded-lg bg-white/10 text-sm">Clear</button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="text-center opacity-40 text-xs uppercase tracking-widest font-bold">
+                          or drop new files to start fresh
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
                 
                 {isProcessingFiles && (
-                  <div className="mt-4 text-center animate-pulse">
+                  <div className="mt-4 text-center animate-pulse relative z-10">
                     <p className="text-blue-300 font-medium">Processing large file set...</p>
                   </div>
                 )}
 
                 {/* File selected: card with details + actions */}
                 {!shareLink && selectedFiles && (
-                  <div className="glass-card p-8 w-full max-w-2xl mx-auto">
-                    {resumeSessions.some((session) => session.role === 'sender') && (
-                      <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
-                        <div className="flex items-center justify-between flex-wrap gap-3">
-                          <div>
-                            <div className="text-white font-semibold">Resume a paused send</div>
-                            <div className="text-sm text-white/60">Pick up where you left off.</div>
-                          </div>
-                          <button type="button" onClick={refreshResumeSessions} className="text-sm text-white/60 hover:text-white">Refresh</button>
-                        </div>
-                        <div className="mt-4 grid gap-3">
-                          {resumeSessions.filter((session) => session.role === 'sender').map((session) => (
-                            <div key={session.transferId} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="min-w-0">
-                                <div className="text-white/90 font-medium truncate">{session.fileName}</div>
-                                <div className="text-xs text-white/60">{formatFileSize(session.fileSize)}</div>
-                              </div>
-                              <div className="flex gap-2">
-                                <button type="button" onClick={() => handleResumeSenderSession(session)} className="px-3 py-1 rounded-lg bg-[var(--theme-primary)] text-white text-sm">Resume</button>
-                                <button type="button" onClick={() => handleClearResumeSession(session)} className="px-3 py-1 rounded-lg bg-white/10 text-sm">Clear</button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                  <div className="glass-card p-8 w-full max-w-2xl mx-auto relative z-10">
                     {selectedFiles.length === 1 ? (
                       <div className="flex items-center justify-center gap-3 text-white/80 mb-6">
                         <File size={20} className="text-[var(--theme-primary)]" />
@@ -1394,17 +1531,34 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div 
+      className="h-screen flex flex-col overflow-hidden bg-[var(--theme-bg-1)] relative text-white font-inter selection:bg-[var(--theme-primary)]/30"
+      onDragEnter={handleGlobalDragEnter}
+      onDragLeave={handleGlobalDragLeave}
+      onDragOver={handleGlobalDragOver}
+      onDrop={handleGlobalDrop}
+    >
       <GlowBackground />
+      
+      <input
+        ref={globalFileInputRef}
+        type="file"
+        multiple
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handleGlobalInputChange}
+      />
+
       {anubisChallenge.active && anubisChallenge.url && (
         <iframe
           title="Anubis Challenge"
           src={anubisChallenge.url}
-          className="fixed left-[-1000px] top-[-1000px] h-20 w-20 opacity-1 pointer-events-auto"
+          className="fixed left-[-1000px] top-[-1000px] h-20 w-20 opacity-1 z-50"
         />
       )}
       
-      <div ref={themeToggleRef} className="fixed top-4 right-4 z-30">
+      <div ref={themeToggleRef} className="fixed top-4 right-4 z-40">
         <div
           className="flex flex-col items-end gap-2"
           onMouseEnter={() => setIsThemeMenuOpen(true)}
@@ -1418,13 +1572,16 @@ function App() {
           <button
             type="button"
             className={`flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 shadow-lg shadow-black/20 backdrop-blur-xl transition-all duration-200 hover:text-white hover:scale-110 active:scale-95 ${isThemeMenuOpen ? 'border-white/30 bg-white/15' : ''}`}
-            onClick={() => setIsThemeMenuOpen(!isThemeMenuOpen)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsThemeMenuOpen(!isThemeMenuOpen);
+            }}
           >
             <Palette size={20} className={`text-[var(--theme-primary)] ${isThemeMenuOpen ? 'rotate-12 scale-110' : ''}`} />
           </button>
 
           {isThemeMenuOpen && (
-            <div className="theme-picker-menu flex w-48 flex-col gap-4 rounded-3xl border border-white/15 bg-black/40 p-4 shadow-2xl backdrop-blur-2xl animate-fade-up">
+            <div className="theme-picker-menu flex w-48 flex-col gap-4 rounded-3xl border border-white/15 bg-black/40 p-4 shadow-2xl backdrop-blur-2xl animate-fade-up" onClick={(e) => e.stopPropagation()}>
               <div className="flex flex-col gap-2">
                 <span className="theme-picker-label text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">Brightness</span>
                 <div className="flex gap-1 justify-between bg-white/5 rounded-2xl p-1">
@@ -1484,10 +1641,16 @@ function App() {
         </div>
       </div>
 
-      <div className="relative z-10 flex flex-col min-h-screen">
+      <DropZone
+        dragActive={globalDragActive}
+        isProcessing={isEncrypting || status === 'encrypting' || isProcessingFiles}
+        showUI={(currentPage === 'home' || currentPage === 'landing') && mode === 'share' && !shareLink && !selectedFiles}
+      />
 
-        {/* Slim top nav - Sticky */}
-        <nav className="sticky top-0 z-50 flex items-center justify-between px-6 pt-5 pb-3 bg-transparent backdrop-blur-sm">
+      {/* Main App Container - Stationary Layout */}
+      <div className="flex flex-col flex-1 min-h-0 relative z-10">
+        {/* Slim top nav - Stationary */}
+        <nav className="flex items-center justify-between px-6 pt-5 pb-3 bg-transparent backdrop-blur-sm z-50">
           <a
             href="https://p2p.red"
             className="flex items-center opacity-80 hover:opacity-100 transition-opacity"
@@ -1516,17 +1679,12 @@ function App() {
           onChange={handleResumeFilePicked}
         />
 
-        {/* Connection status banners */}
-        {(!isOnline || connectionState === 'failed' || (connectionState === 'reconnecting' && isOnline)) && (
-          <div className="mx-auto w-full max-w-2xl px-4 mt-2">
+        {/* Connection status banners - Stationary below nav */}
+        {(!isOnline || connectionState === 'failed') && (
+          <div className="mx-auto w-full max-w-2xl px-4 py-2 z-50 relative">
             {!isOnline && (
               <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300 text-center">
                 No internet — give your Wi-Fi a nudge.
-              </div>
-            )}
-            {connectionState === 'reconnecting' && isOnline && (
-              <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300 text-center">
-                Reconnecting…
               </div>
             )}
             {connectionState === 'failed' && (
@@ -1544,7 +1702,10 @@ function App() {
         />
 
         {/* Hero — centered, WeTransfer-style */}
-        <main className="flex flex-1 flex-col items-center justify-center relative overflow-hidden">
+        <main 
+          className="flex-1 relative overflow-hidden"
+          onClick={handleGlobalClick}
+        >
           <AnimatePresence initial={false}>
             <motion.div
               key={currentPage}
@@ -1562,22 +1723,20 @@ function App() {
             </motion.div>
           </AnimatePresence>
         </main>
+
+        {/* Footer - Inside h-screen to stay at bottom without causing outer scroll */}
+        <AppFooter 
+          onNavigate={setCurrentPage}
+          displayVersion={displayVersion}
+          buildIndicatorClass={buildIndicatorClass}
+          buildIndicatorLabel={buildIndicatorLabel}
+        />
       </div>
 
-      {/* Footer */}
-      <AppFooter 
-        onNavigate={setCurrentPage}
-        displayVersion={displayVersion}
-        buildIndicatorClass={buildIndicatorClass}
-        buildIndicatorLabel={buildIndicatorLabel}
-      />
-
-      {/* Cookie/Privacy Banner */}
+      {/* Cookie/Privacy Banner - Global Fixed */}
       <CookieBanner />
       
-      {/* Monitoring */}
-
-      {/* Clipboard Notification */}
+      {/* Clipboard Notification - Global Fixed */}
       {showClipboardNotification && (
         <div className="fixed bottom-8 right-8 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out z-50">
           <div className="flex items-center gap-3">
@@ -1586,7 +1745,6 @@ function App() {
           </div>
         </div>
       )}
-      
     </div>
   );
 }

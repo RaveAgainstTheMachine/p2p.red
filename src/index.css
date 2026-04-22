@@ -41,7 +41,8 @@
 html {
   color-scheme: dark;
   scrollbar-color: rgba(255, 255, 255, 0.2) rgba(0, 0, 0, 0.3);
-  overflow-y: scroll; /* Prevent layout shift */
+  overflow: hidden;
+  height: 100%;
 
   /* Default Theme Variables (Indigo) */
   --theme-primary: #6366f1;
@@ -57,6 +58,15 @@ html {
   --app-overlay-base: rgba(0, 0, 0, 0.25);
   --card-bg: rgba(255, 255, 255, 0.035);
   --card-border: rgba(255, 255, 255, 0.12);
+  --theme-text-primary: #ffffff;
+  --theme-text-secondary: rgba(255, 255, 255, 0.5);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
 }
 
 .app-overlay-base {
@@ -235,9 +245,15 @@ html[data-theme='light'] .app-overlay-accent {
 
 html[data-theme='light'] body {
   color: #0f172a;
+  --theme-text-primary: #0f172a;
+  --theme-text-secondary: #475569;
 }
 
 html[data-theme='light'] .text-white {
+  color: #0f172a !important;
+}
+
+html[data-theme='light'] .text-white\/90 {
   color: #0f172a !important;
 }
 
@@ -245,16 +261,20 @@ html[data-theme='light'] .text-white\/80 {
   color: #1e293b !important;
 }
 
+html[data-theme='light'] .text-white\/70 {
+  color: #334155 !important;
+}
+
 html[data-theme='light'] .text-white\/60 {
   color: #475569 !important;
 }
 
 html[data-theme='light'] .text-white\/50 {
-  color: #64748b !important;
+  color: #475569 !important;
 }
 
 html[data-theme='light'] .text-white\/40 {
-  color: #94a3b8 !important;
+  color: #64748b !important;
 }
 
 /* Footer Logo Contrast Adjustments */
@@ -264,7 +284,8 @@ html[data-theme='dark'] footer .logo-inner {
 }
 
 html[data-theme='light'] .header-headline {
-  color: rgba(0, 0, 0, 0.4) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+  filter: none !important;
 }
 
 html[data-theme='dark'] .header-headline {
@@ -287,8 +308,9 @@ html[data-theme='light'] .theme-picker-random {
   color: rgba(0, 0, 0, 0.6) !important;
 }
 
-html[data-theme='light'] .text-white\/30 {
-  color: #cbd5e1 !important;
+html[data-theme='light'] .text-white\/30,
+html[data-theme='light'] .text-white\/25 {
+  color: #94a3b8 !important;
 }
 
 html[data-theme='light'] .text-white\/20,

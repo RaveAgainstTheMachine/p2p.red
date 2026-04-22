@@ -64,3 +64,8 @@ Search `PROJECT_DOCUMENTATION/` and `automation/` before action. Follow `BUILD_D
 - **Project Context**: Run all Docker commands from `/opt/p2p-file-share` to avoid project name/container naming conflicts.
 - **Environment**: Use `sudo -E` for releases to preserve `ENVOY_RUNTIME_DIR`.
 
+## Testing Protocol
+- **Dev Server Hygiene**: Always ensure dev server (`npm run dev`) is running and accessible before browser testing.
+- **Version Integrity**: Verify testing env serves latest code/version.
+- **Dev Stabilization**: Refer to `PROJECT_DOCUMENTATION/DEV_STABILIZATION.md` for local infrastructure setup (PeerJS proxying, port mappings).
+

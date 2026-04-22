@@ -4,10 +4,9 @@ import { ArrowRight, Shield, Share2, Zap, Database, Sparkles } from 'lucide-reac
 interface LandingProps {
   onStart: () => void;
   onInfo: () => void;
-  onLegal: () => void;
 }
 
-export const Landing: React.FC<LandingProps> = ({ onStart, onInfo, onLegal }) => {
+export const Landing: React.FC<LandingProps> = ({ onStart, onInfo }) => {
   return (
     <div className="w-full max-w-6xl">
       <main className="flex flex-col justify-center gap-16 py-12">

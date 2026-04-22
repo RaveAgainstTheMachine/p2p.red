@@ -1328,7 +1328,6 @@ function App() {
           <Landing
             onStart={() => setCurrentPage('home')}
             onInfo={() => setCurrentPage('info')}
-            onLegal={() => setCurrentPage('legal')}
           />
         );
       case 'legal':

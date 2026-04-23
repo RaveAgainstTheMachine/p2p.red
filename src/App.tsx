@@ -1658,14 +1658,6 @@ function App() {
             <Logo size="small" />
           </a>
 
-          <div className="hidden lg:flex flex-col items-center justify-center flex-1 mx-8 gap-0.5">
-            <span className="header-headline text-[13px] font-black uppercase tracking-[0.3em] drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
-              Send files securely and privately
-            </span>
-            <span className="header-headline opacity-60 text-[9px] font-bold uppercase tracking-[0.4em]">
-              No account or login required
-            </span>
-          </div>
 
           <div className="flex items-center gap-1">
           </div>

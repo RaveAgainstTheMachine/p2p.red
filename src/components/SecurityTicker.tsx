@@ -30,7 +30,7 @@ export const SecurityTicker: React.FC = () => {
           animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
           exit={{ opacity: 0, y: -10, filter: 'blur(8px)' }}
           transition={{ duration: 0.8, ease: "easeInOut" }}
-          className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/30 text-center"
+          className="text-xs font-bold uppercase tracking-[0.3em] text-white/70 text-center"
         >
           {MESSAGES[index]}
         </motion.p>

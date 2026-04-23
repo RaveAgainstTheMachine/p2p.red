@@ -26,7 +26,7 @@ export const AppFooter: React.FC<AppFooterProps> = ({
               <button
                 onClick={() => onNavigate('changelog')}
                 title="Click to view changelog"
-                className="group relative flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/70 transition-all hover:bg-white/10 hover:border-white/20 active:scale-95"
+                className="group relative flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/90 transition-all hover:bg-white/10 hover:border-white/20 active:scale-95"
               >
                 <span className={`h-2 w-2 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.3)]`} />
                 <span>{displayVersion}</span>
@@ -75,12 +75,12 @@ export const AppFooter: React.FC<AppFooterProps> = ({
             >
               Legal
             </button>
-            <span className="inline-flex items-center whitespace-nowrap leading-none text-white/60">© 2026 Steven Frost</span>
+            <span className="inline-flex items-center whitespace-nowrap leading-none text-white/80">© 2026 Steven Frost</span>
             <a
               href="https://cv.tee215.com/"
               target="_blank"
               rel="noopener noreferrer"
-              className="group inline-flex items-center gap-1 whitespace-nowrap leading-none text-white/50"
+              className="group inline-flex items-center gap-1 whitespace-nowrap leading-none text-white/70"
             >
               <span className="whitespace-nowrap">Logo by</span>
               <span className="text-blue-400 transition-colors group-hover:text-blue-300">T</span>

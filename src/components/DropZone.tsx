@@ -34,13 +34,13 @@ export const DropZone: React.FC<DropZoneProps> = ({
 
             {isProcessing ? (
               <div className="text-center">
-                <p className="text-[var(--theme-text-secondary)] font-medium">Processing…</p>
-                <p className="text-[var(--theme-text-secondary)]/50 text-sm mt-1">Hang tight.</p>
+                <p className="text-white/70 font-medium">Processing…</p>
+                <p className="text-white/40 text-sm mt-1">Hang tight.</p>
               </div>
             ) : (
               <div className="text-center">
-                <p className="text-[var(--theme-text-secondary)] text-lg">Drop files or folders anywhere</p>
-                <p className="text-[var(--theme-text-secondary)]/80 text-sm mt-1">or click anywhere to pick your files</p>
+                <p className="text-white/70 text-2xl font-medium">Drop files or folders anywhere</p>
+                <p className="text-white/50 text-lg mt-2">or click anywhere to pick your files</p>
               </div>
             )}
             

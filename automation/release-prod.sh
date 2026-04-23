@@ -27,6 +27,13 @@ DEPLOY_ENV=prod \
   APP_IMAGE_GREEN="$APP_IMAGE_GREEN" \
   "$REPO_ROOT/automation/preflight.sh" prod
 
+# Sync runtime to snap path if on a snap docker host
+if [ -d "/var/snap/docker/common" ] && [ -n "${ENVOY_RUNTIME_DIR:-}" ]; then
+  echo "📦 Syncing runtime to snap path: $ENVOY_RUNTIME_DIR"
+  sudo mkdir -p "$ENVOY_RUNTIME_DIR"
+  sudo cp -r "$REPO_ROOT/envoy-runtime/"* "$ENVOY_RUNTIME_DIR/"
+fi
+
 # Ensure runtime services are up (metadata + peerjs + envoy)
 METADATA_API_ENV_FILE="$METADATA_API_ENV_FILE" \
 ENVOY_RUNTIME_DIR="${ENVOY_RUNTIME_DIR:-./envoy-runtime}" \

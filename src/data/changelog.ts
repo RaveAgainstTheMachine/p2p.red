@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.5.7',
+    date: '2026-04-23',
+    changes: [
+      { category: 'Added', description: 'Dynamic Security Ticker for the DropZone, rotating key privacy promises every 4 seconds.' },
+      { category: 'Improved', description: 'Standardized footer and DropZone layout for cross-browser visual consistency.' }
+    ]
+  },
+  {
     version: '1.5.6',
     date: '2026-04-22',
     changes: [

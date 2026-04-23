@@ -1,5 +1,6 @@
 import React from 'react';
 import { Download } from 'lucide-react';
+import { SecurityTicker } from './SecurityTicker';
 
 interface DropZoneProps {
   isProcessing?: boolean;
@@ -43,9 +44,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
               </div>
             )}
             
-            <p className="fixed bottom-24 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/30 pointer-events-none whitespace-nowrap">
-              Your files are encrypted in your browser before sending
-            </p>
+            <SecurityTicker />
           </div>
         </div>
       )}

@@ -1735,7 +1735,7 @@ function App() {
           buildIndicatorLabel={buildIndicatorLabel}
           themePreference={themePreference}
           variantPreference={variantPreference}
-          onSetTheme={(t) => setThemePreference(t as any)}
+          onSetTheme={(t: string) => setThemePreference(t as any)}
           onSetVariant={(v) => {
             setVariantPreference(v);
             setCookie('p2p_variant', v);

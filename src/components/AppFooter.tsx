@@ -57,10 +57,10 @@ export const AppFooter: React.FC<AppFooterProps> = ({
   const pillBtn = 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 shadow-lg shadow-black/20 backdrop-blur transition-colors hover:bg-white/10 hover:text-white';
 
   return (
-    <footer className="app-footer relative z-10 mt-auto border-t border-white/10">
+    <footer className="app-footer relative z-[60] mt-auto border-t border-white/10 bg-[var(--theme-bg-1)]">
       {/* Mobile burger overlay — slides up from footer */}
       {mobileMenuOpen && (
-        <div className="sm:hidden absolute bottom-full left-0 right-0 bg-black backdrop-blur-xl border-t border-white/10 z-[100] shadow-2xl animate-in slide-in-from-bottom-full duration-300 max-h-[85vh] overflow-y-auto rounded-t-2xl">
+        <div className="sm:hidden absolute bottom-full left-0 right-0 bg-black border-t border-white/20 z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-full duration-300 max-h-[85vh] overflow-y-auto rounded-t-2xl">
           {/* Nav links */}
           <div className="px-4 pt-6 pb-6 flex flex-col gap-0.5">
             {navLinks.map(link => (

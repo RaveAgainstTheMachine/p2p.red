@@ -278,10 +278,7 @@ html[data-theme='light'] .text-white\/40 {
 }
 
 /* Footer Logo Contrast Adjustments */
-html[data-theme='light'] footer .logo-inner,
-html[data-theme='dark'] footer .logo-inner {
-  background-color: rgba(255, 255, 255, 0.9) !important;
-}
+
 
 html[data-theme='light'] .header-headline {
   color: rgba(0, 0, 0, 0.6) !important;

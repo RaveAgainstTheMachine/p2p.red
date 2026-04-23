@@ -17,7 +17,7 @@ import { AppFooter } from './components/AppFooter';
 import { PinVerification } from './components/PinVerification';
 import { PinToggle } from './components/PinToggle';
 import { ShareLink } from './components/ShareLink';
-import { Download, File, Check, Sun, Moon, Palette, Shuffle, CloudSun } from 'lucide-react';
+import { Download, File, Check, Sun, Moon, Palette, Shuffle, CloudSun, ArrowLeft } from 'lucide-react';
 import { createShortLink, getMetadata, API_BASE_URL } from './services/metadataApi';
 import { formatExpirationTime } from './utils/timeFormat';
 import { Info } from './pages/Info';
@@ -434,6 +434,7 @@ function App() {
   const themeToggleRef = useRef<HTMLDivElement | null>(null);
   const [showClipboardNotification, setShowClipboardNotification] = useState<boolean>(false);
   const [anubisStatusMessage, setAnubisStatusMessage] = useState<string | null>(null);
+  const [mooseMessage, setMooseMessage] = useState<string | null>(null);
   const [transferErrorMessage, setTransferErrorMessage] = useState<string>('');
 
   const [anubisChallenge, setAnubisChallenge] = useState<{ active: boolean; url?: string }>({
@@ -464,6 +465,17 @@ function App() {
     'No robot detected. You’re the boss. Link ready.',
     'Security moose bows to you. Link created!'
   ];
+  const MOOSE_MESSAGES = [
+    "No intruders today, eh? I've checked the perimeter and it's looking real good, bud.",
+    "Your connection is as solid as a frozen pond in February. All clear!",
+    "Encrypted? You betcha! I don't settle for less than maple-syrup-thick security.",
+    "Relax, eh. I'm watching the packets like a goalie in the third period. All clear!",
+    "A moose never sleeps on the job, sorry. Your data is safe and sound, eh?",
+    "Looking for leaks? Not on my watch, oop—just scooting past any potential trouble.",
+    "I've sniffed the peer connection. It's cleaner than a fresh sheet of ice, bud.",
+    "Safe and sound. Like a moose with a double-double. Everything's lookin' great, eh?",
+  ];
+
   const buildVariantRaw = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
   const buildVariant = buildVariantRaw || 'dev';
   const buildVersion = (import.meta as any)?.env?.VITE_BUILD_VERSION;
@@ -498,7 +510,12 @@ function App() {
     anubisStatusTimeout.current = window.setTimeout(() => {
       setAnubisStatusMessage(null);
       anubisStatusTimeout.current = null;
-    }, 12000); // Show for 12 seconds so they can read the quirkiness
+    }, 6000);
+  };
+
+  const handleMooseClick = () => {
+    const randomMessage = MOOSE_MESSAGES[Math.floor(Math.random() * MOOSE_MESSAGES.length)];
+    setMooseMessage(randomMessage);
   };
 
   const matchesResumeSessionFile = (session: ResumeSession, file: File) => {
@@ -1570,7 +1587,7 @@ function App() {
         >
           <button
             type="button"
-            className={`hidden sm:flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 shadow-lg shadow-black/20 backdrop-blur-xl transition-all duration-200 hover:text-white hover:scale-110 active:scale-95 ${isThemeMenuOpen ? 'border-white/30 bg-white/15' : ''}`}
+            className={`hidden sm:flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/80 shadow-lg shadow-black/20 backdrop-blur-xl transition-all duration-200 hover:text-white hover:scale-110 active:scale-95 ${isThemeMenuOpen ? 'border-white/30 bg-white/15' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               setIsThemeMenuOpen(!isThemeMenuOpen);
@@ -1592,7 +1609,7 @@ function App() {
                     <button
                       key={id}
                       onClick={() => setThemePreference(id as any)}
-                      className={`flex h-8 flex-1 items-center justify-center rounded-xl transition-all ${themePreference === id ? 'bg-white/20 text-white shadow-lg' : 'theme-picker-button text-white/50 hover:bg-white/5 hover:text-white'}`}
+                      className={`flex h-7 flex-1 items-center justify-center rounded-lg transition-all border border-transparent ${themePreference === id ? 'bg-white/20 text-white border-white/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                       title={label}
                     >
                       <Icon size={16} />
@@ -1611,16 +1628,16 @@ function App() {
                         setVariantPreference(theme.id);
                         setCookie('p2p_variant', theme.id);
                       }}
-                      className={`group relative flex h-8 w-8 items-center justify-center rounded-xl transition-all ${variantPreference === theme.id ? 'ring-2 ring-white/50 ring-offset-2 ring-offset-black/50' : 'hover:scale-110'}`}
+                      className={`group relative flex h-8 w-8 items-center justify-center rounded-lg transition-all ${variantPreference === theme.id ? 'ring-2 ring-white/50 ring-offset-2 ring-offset-black/50' : 'hover:scale-110'}`}
                       title={theme.name}
                     >
                       {theme.id === 'random' ? (
-                        <div className="theme-picker-random flex h-full w-full items-center justify-center rounded-xl bg-white/10 text-white/70 group-hover:text-white">
+                        <div className="theme-picker-random flex h-full w-full items-center justify-center rounded-lg bg-white/10 text-white/70 group-hover:text-white">
                           <Shuffle size={14} />
                         </div>
                       ) : (
                         <div 
-                          className="h-full w-full rounded-xl border border-white/10"
+                          className="h-full w-full rounded-lg border border-white/10"
                           style={{ 
                             background: `linear-gradient(135deg, ${theme.colors[0]}, ${theme.colors[1]})` 
                           }}
@@ -1740,6 +1757,7 @@ function App() {
             setVariantPreference(v);
             setCookie('p2p_variant', v);
           }}
+          onMooseClick={handleMooseClick}
         />
       </div>
 
@@ -1752,6 +1770,41 @@ function App() {
           <div className="flex items-center gap-3">
             <Check size={20} />
             <span className="font-medium">Link copied! You're basically a wizard, eh?</span>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Back Arrow — only on subpages */}
+      {currentPage !== 'home' && currentPage !== 'landing' && (
+        <button
+          onClick={() => setCurrentPage('home')}
+          className="sm:hidden fixed bottom-24 right-6 z-[110] flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--theme-primary)] text-white shadow-lg shadow-black/40 animate-fade-up border border-white/20"
+          aria-label="Back to home"
+        >
+          <ArrowLeft size={24} />
+        </button>
+      )}
+
+      {/* Security Moose Overlay */}
+      {mooseMessage && (
+        <div 
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300 px-6"
+          onClick={() => setMooseMessage(null)}
+        >
+          <div 
+            className="flex flex-col items-center gap-6 max-w-sm text-center animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img src="/assets/security-moose.png" alt="Security Moose" className="w-48 h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" />
+            <div className="bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur-xl shadow-2xl">
+              <p className="text-white text-lg font-medium leading-relaxed italic">"{mooseMessage}"</p>
+              <button 
+                onClick={() => setMooseMessage(null)}
+                className="mt-6 w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-white/90 transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -110,8 +110,8 @@ export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) =
         <div
           className={
             placement === 'footer'
-              ? 'absolute bottom-full right-0 mb-2 z-40 w-64 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg'
-              : 'fixed bottom-1 right-4 z-50 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg'
+              ? 'fixed sm:absolute bottom-20 sm:bottom-full left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 mb-2 z-[200] w-[90vw] sm:w-64 bg-black/95 border border-white/10 rounded-xl p-4 shadow-2xl backdrop-blur-md'
+              : 'fixed bottom-1 right-4 z-[200] bg-black/95 border border-white/10 rounded-xl p-4 shadow-2xl backdrop-blur-md'
           }
         >
           <div className="flex items-center justify-between mb-3">

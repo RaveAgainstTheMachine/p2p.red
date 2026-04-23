@@ -9,6 +9,17 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.6.0',
+    date: '2026-04-23',
+    changes: [
+      { category: 'Added', description: 'Interactive "Canadian Security Moose" personality with localized voice and messages, eh?' },
+      { category: 'Improved', description: 'Mobile UI Stabilization: Centered service status, squircle triggers, and zero-scroll burger menu.' },
+      { category: 'Improved', description: 'Branding Lockdown: Logo color now stays deep red across all themes for consistent identity.' },
+      { category: 'Improved', description: 'Background Balance: Responsive glow blobs now anchor to opposing sides on mobile viewports.' },
+      { category: 'Security', description: 'Hardened click-outside-to-close behavior for all mobile navigation overlays.' }
+    ]
+  },
+  {
     version: '1.5.8',
     date: '2026-04-23',
     changes: [

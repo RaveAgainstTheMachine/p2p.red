@@ -26,6 +26,7 @@ interface AppFooterProps {
   variantPreference?: string;
   onSetTheme?: (t: string) => void;
   onSetVariant?: (v: string) => void;
+  onMooseClick?: () => void;
 }
 
 export const AppFooter: React.FC<AppFooterProps> = ({ 
@@ -37,6 +38,7 @@ export const AppFooter: React.FC<AppFooterProps> = ({
   variantPreference,
   onSetTheme,
   onSetVariant,
+  onMooseClick,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -60,65 +62,86 @@ export const AppFooter: React.FC<AppFooterProps> = ({
     <footer className="app-footer relative z-[60] mt-auto border-t border-white/10 bg-[var(--theme-bg-1)]">
       {/* Mobile burger overlay — slides up from footer */}
       {mobileMenuOpen && (
-        <div className="sm:hidden absolute bottom-full left-0 right-0 bg-black border-t border-white/20 z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-full duration-300 max-h-[85vh] overflow-y-auto rounded-t-2xl">
-          {/* Nav links */}
-          <div className="px-4 pt-6 pb-6 flex flex-col gap-0.5">
-            {navLinks.map(link => (
-              <button
-                key={link.page}
-                onClick={() => handleNav(link.page)}
-                className="text-left text-white/80 hover:text-white text-sm font-medium py-2.5 border-b border-white/5 last:border-0"
-              >
-                {link.label}
-              </button>
-            ))}
-            <a
-              href="https://cv.tee215.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white/60 hover:text-white text-sm py-2.5 border-b border-white/5"
-            >
-              Logo by <span className="text-blue-400">T</span>
-            </a>
-            <span className="text-white/50 text-xs py-2">© 2026 Steven Frost</span>
-          </div>
-
-          {/* Theme picker section in burger */}
-          {onSetTheme && onSetVariant && (
-            <div className="px-4 pb-4 border-t border-white/10 pt-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40 mb-2">Brightness</p>
-              <div className="flex gap-1 bg-white/5 rounded-xl p-1 mb-3">
-                {[
-                  { id: 'light', icon: Sun, label: 'Light' },
-                  { id: 'brighter-dark', icon: CloudSun, label: 'Brighter Dark' },
-                  { id: 'dark', icon: Moon, label: 'Dark' },
-                ].map(({ id, icon: Icon, label }) => (
+        <>
+          <div 
+            className="sm:hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" 
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div className="sm:hidden absolute bottom-full left-0 right-0 bg-black border-t border-white/20 z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-full duration-300 max-h-[85vh] overflow-y-auto rounded-t-2xl">
+            {/* Nav links - 2 Column Grid for vertical space saving */}
+            <div className="px-4 pt-3 pb-2">
+              <div className="grid grid-cols-2 gap-x-4 border-b border-white/5 pb-2">
+                {navLinks.map(link => (
                   <button
-                    key={id}
-                    onClick={() => onSetTheme(id)}
-                    className={`flex h-9 flex-1 items-center justify-center rounded-xl transition-all ${themePreference === id ? 'bg-white/20 text-white shadow-lg' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}
-                    title={label}
+                    key={link.page}
+                    onClick={() => handleNav(link.page)}
+                    className="text-left text-white/80 hover:text-white text-xs font-medium py-2 border-b border-white/5 last:border-0"
                   >
-                    <Icon size={16} />
+                    {link.label}
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40 mb-2">Color</p>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="flex items-center justify-between py-1.5 border-b border-white/5 text-[9px] text-white/40 leading-none">
+                <div className="flex-1 text-left">
+                  <span className="whitespace-nowrap">© 2026 Steven Frost</span>
+                </div>
+                <div className="flex-1 text-center">
+                  <a 
+                    href="https://cv.tee215.com/" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="hover:text-white transition-colors"
+                  >
+                    Logo by T
+                  </a>
+                </div>
+                <div className="flex-1 flex items-center justify-end gap-1 text-white/30">
+                  <span className="uppercase tracking-tighter whitespace-nowrap">Protected by Moose</span>
+                  <button onClick={onMooseClick} className="transition-transform active:scale-90">
+                    <img src="/assets/security-moose.png" alt="Moose" className="h-4 w-auto opacity-60" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Theme picker section in burger */}
+            {onSetTheme && onSetVariant && (
+              <div className="px-4 pb-3 border-t border-white/10 pt-1.5">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-white/30">Brightness</p>
+                  <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5">
+                    {[
+                      { id: 'light', icon: Sun },
+                      { id: 'brighter-dark', icon: CloudSun },
+                      { id: 'dark', icon: Moon },
+                    ].map(({ id, icon: Icon }) => (
+                      <button
+                        key={id}
+                        onClick={() => onSetTheme(id)}
+                        className={`flex h-7 w-10 items-center justify-center rounded-lg transition-all border border-transparent ${themePreference === id ? 'bg-white/20 text-white border-white/20' : 'text-white/40 hover:text-white'}`}
+                      >
+                        <Icon size={12} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                <p className="text-[9px] font-bold uppercase tracking-wider text-white/30 mb-1">Theme Color</p>
+                <div className="grid grid-cols-6 gap-1">
                 {THEMES.map((theme) => (
                   <button
                     key={theme.id}
                     onClick={() => onSetVariant(theme.id)}
-                    className={`group relative flex h-9 w-9 items-center justify-center rounded-xl transition-all ${'colors' in theme ? '' : ''} ${variantPreference === theme.id ? 'ring-2 ring-white/50 ring-offset-1 ring-offset-black/50' : 'hover:scale-110'}`}
+                    className={`group relative flex h-8 w-8 items-center justify-center rounded-lg transition-all ${variantPreference === theme.id ? 'ring-2 ring-white/50 ring-offset-1 ring-offset-black' : 'hover:scale-105'}`}
                     title={theme.name}
                   >
                     {theme.id === 'random' ? (
-                      <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/10 text-white/70">
-                        <Shuffle size={14} />
+                      <div className="flex h-full w-full items-center justify-center rounded-lg bg-white/10 text-white/70">
+                        <Shuffle size={12} />
                       </div>
                     ) : (
                       <div
-                        className="h-full w-full rounded-xl border border-white/10"
+                        className="h-full w-full rounded-lg border border-white/10"
                         style={{ background: `linear-gradient(135deg, ${'colors' in theme ? theme.colors[0] : '#fff'}, ${'colors' in theme ? theme.colors[1] : '#000'})` }}
                       />
                     )}
@@ -133,13 +156,14 @@ export const AppFooter: React.FC<AppFooterProps> = ({
             </div>
           )}
         </div>
-      )}
+      </>
+    )}
 
       <div className="mx-auto w-full max-w-none px-3 sm:px-4 py-1.5">
         <div className="flex items-center justify-between gap-2 w-full text-[clamp(10px,2vw,13px)]">
 
-          {/* Left: Version pill */}
-          <div className="flex items-center shrink-0">
+          {/* Left: Version pill - Fixed width container to prevent shifting rest of footer */}
+          <div className="flex items-center shrink-0 w-[120px] sm:w-[240px]">
             {buildIndicatorClass && buildIndicatorLabel && (
               <button
                 onClick={() => onNavigate('changelog')}
@@ -167,12 +191,15 @@ export const AppFooter: React.FC<AppFooterProps> = ({
                 {link.label}
               </button>
             ))}
-            <span className="group relative inline-flex items-center">
+            <button 
+              onClick={onMooseClick}
+              className="group relative inline-flex items-center"
+            >
               <img src="/assets/security-moose.png" alt="Security Moose" className="h-[20px] w-auto opacity-70 hover:opacity-100 hover:scale-110 cursor-help transition-all" />
               <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                 Guarded by the Security Moose
               </span>
-            </span>
+            </button>
             <span className="text-white/70">© 2026 Steven Frost</span>
             <a href="https://cv.tee215.com/" target="_blank" rel="noopener noreferrer" className="group text-white/70 hover:text-white transition-colors">
               Logo by <span className="text-blue-400 group-hover:text-blue-300">T</span>

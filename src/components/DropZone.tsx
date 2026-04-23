@@ -28,7 +28,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
       {showUI && (
         <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none px-4">
           <div className="flex flex-col items-center gap-4 sm:gap-6">
-            <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-[1.5rem] bg-[var(--theme-primary)]/10 border border-[var(--theme-primary)]/20 shadow-xl">
+            <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-[1.5rem] bg-[var(--theme-primary)]/10 border-2 border-[var(--theme-primary)]/40 shadow-[0_0_30px_var(--theme-glow)] transition-all">
               <Download size={28} className="text-[var(--theme-primary)] sm:w-8 sm:h-8" />
             </div>
 

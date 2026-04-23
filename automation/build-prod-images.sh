@@ -67,3 +67,10 @@ docker build -f "$REPO_ROOT/Dockerfile.envoy" -t p2p-envoy:latest "$REPO_ROOT"
 docker save -o "$IMAGES_DIR/envoy.tar" p2p-envoy:latest
 
 echo "✅ Images saved to $IMAGES_DIR"
+
+# Tag and push to origin so the release is always recoverable from remote
+echo "🔖 Tagging release v${APP_VERSION} and pushing to origin..."
+git -C "$REPO_ROOT" tag -f "v${APP_VERSION}" -m "Release v${APP_VERSION} (build: ${BUILD_VERSION})"
+git -C "$REPO_ROOT" push origin master
+git -C "$REPO_ROOT" push origin "v${APP_VERSION}" --force
+echo "✅ Pushed master + tag v${APP_VERSION} to origin"

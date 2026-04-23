@@ -69,3 +69,16 @@ Search `PROJECT_DOCUMENTATION/` and `automation/` before action. Follow `BUILD_D
 - **Version Integrity**: Verify testing env serves latest code/version.
 - **Dev Stabilization**: Refer to `PROJECT_DOCUMENTATION/DEV_STABILIZATION.md` for local infrastructure setup (PeerJS proxying, port mappings).
 
+
+## Release Automation
+- **Trigger**: `SHIP_IT`
+- **Action**: Execute full production release workflow per `automation/DEPLOYMENT_WORKFLOW.md`.
+- **Steps**:
+  1. Preflight build (`automation/preflight.sh build`).
+  2. Bump version in `package.json`.
+  3. Update `src/data/changelog.ts`.
+  4. Git commit.
+  5. Build images (`automation/build-prod-images.sh`).
+  6. Transfer images to VPS (`scp` via proxy).
+  7. Deploy on VPS (`automation/release-prod.sh` on remote).
+- **Constraints**: Use `USE_PREBUILT_IMAGES=1` for remote release. Ensure zero-downtime script completes.

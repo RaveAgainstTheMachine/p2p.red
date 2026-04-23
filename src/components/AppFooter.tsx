@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Coffee, Menu, X, Sun, Moon, Palette, Shuffle, CloudSun, Check } from 'lucide-react';
+import { Coffee, Menu, X, Sun, Moon, Shuffle, CloudSun, Check } from 'lucide-react';
 import { Monitoring } from './Monitoring';
 import { Logo } from './Logo';
 
@@ -60,9 +60,9 @@ export const AppFooter: React.FC<AppFooterProps> = ({
     <footer className="app-footer relative z-10 mt-auto border-t border-white/10">
       {/* Mobile burger overlay — slides up from footer */}
       {mobileMenuOpen && (
-        <div className="sm:hidden absolute bottom-full left-0 right-0 bg-black/90 backdrop-blur-md border-t border-white/10 z-50">
+        <div className="sm:hidden absolute bottom-full left-0 right-0 bg-black backdrop-blur-xl border-t border-white/10 z-[100] shadow-2xl animate-in slide-in-from-bottom-full duration-300 max-h-[85vh] overflow-y-auto rounded-t-2xl">
           {/* Nav links */}
-          <div className="px-4 pt-4 pb-2 flex flex-col gap-0.5">
+          <div className="px-4 pt-6 pb-6 flex flex-col gap-0.5">
             {navLinks.map(link => (
               <button
                 key={link.page}

@@ -1640,11 +1640,7 @@ function App() {
         </div>
       </div>
 
-      <DropZone
-        dragActive={globalDragActive}
-        isProcessing={isEncrypting || status === 'encrypting' || isProcessingFiles}
-        showUI={(currentPage === 'home' || currentPage === 'landing') && mode === 'share' && !shareLink && !selectedFiles}
-      />
+
 
       {/* Main App Container - Stationary Layout */}
       <div className="flex flex-col flex-1 min-h-0 relative z-10">
@@ -1678,21 +1674,41 @@ function App() {
           isVisible={showEncryptionIndicator}
         />
 
-        {/* Headline block — full width, perfectly centered, no nav interference */}
-        <div className="w-full text-center px-6 pt-5 pb-2 pointer-events-none select-none">
-          <p className="header-headline text-[clamp(18px,5vw,32px)] font-black uppercase tracking-[0.18em] leading-tight">
-            Send files securely and privately
-          </p>
-          <p className="text-[clamp(9px,2vw,12px)] font-bold uppercase tracking-[0.45em] text-white/50 mt-1">
-            No account or login required
-          </p>
-        </div>
+        {/* Header with Logo and Headlines */}
+        <header className="w-full px-4 sm:px-6 pt-4 sm:pt-5 pb-2 relative z-50">
+          <div className="flex flex-col items-center sm:block relative">
+             {/* Logo - top left on desktop, centered above on mobile */}
+             <a
+              href="https://p2p.red"
+              className="opacity-80 hover:opacity-100 transition-opacity shrink-0 sm:absolute sm:left-0 sm:top-0 sm:mt-1"
+              title="p2p.red"
+            >
+              <Logo size="small" />
+            </a>
+
+            {/* Headlines - centered, stacks below logo on mobile */}
+            <div className="w-full flex flex-col items-center pointer-events-none select-none mt-2 sm:mt-0">
+              <p className="header-headline text-[clamp(16px,4vw,32px)] font-black uppercase tracking-[0.18em] leading-tight text-center">
+                Send files securely and privately
+              </p>
+              <p className="text-[clamp(8px,1.8vw,11px)] font-bold uppercase tracking-[0.4em] text-white/50 mt-1 sm:mt-1.5 text-center">
+                No account or login required
+              </p>
+            </div>
+          </div>
+        </header>
 
         {/* Hero — centered, WeTransfer-style */}
         <main 
           className="flex-1 relative overflow-hidden"
           onClick={handleGlobalClick}
         >
+          <DropZone
+            dragActive={globalDragActive}
+            isProcessing={isEncrypting || status === 'encrypting' || isProcessingFiles}
+            showUI={currentPage === 'home' && mode === 'share' && !shareLink && !selectedFiles}
+          />
+
           <AnimatePresence initial={false}>
             <motion.div
               key={currentPage}
@@ -1719,7 +1735,7 @@ function App() {
           buildIndicatorLabel={buildIndicatorLabel}
           themePreference={themePreference}
           variantPreference={variantPreference}
-          onSetTheme={setThemePreference}
+          onSetTheme={(t) => setThemePreference(t as any)}
           onSetVariant={(v) => {
             setVariantPreference(v);
             setCookie('p2p_variant', v);

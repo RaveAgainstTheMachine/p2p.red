@@ -26,25 +26,27 @@ export const DropZone: React.FC<DropZoneProps> = ({
       )}
 
       {showUI && (
-        <div className="fixed inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
-          <div className="flex flex-col items-center gap-6">
-            <div className="flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-[var(--theme-primary)]/10 border border-[var(--theme-primary)]/20 shadow-xl">
-              <Download size={32} className="text-[var(--theme-primary)]" />
+        <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none px-4">
+          <div className="flex flex-col items-center gap-4 sm:gap-6">
+            <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-[1.5rem] bg-[var(--theme-primary)]/10 border border-[var(--theme-primary)]/20 shadow-xl">
+              <Download size={28} className="text-[var(--theme-primary)] sm:w-8 sm:h-8" />
             </div>
 
             {isProcessing ? (
               <div className="text-center">
                 <p className="text-white/70 font-medium">Processing…</p>
-                <p className="text-white/40 text-sm mt-1">Hang tight.</p>
+                <p className="text-white/40 text-xs sm:text-sm mt-1">Hang tight.</p>
               </div>
             ) : (
               <div className="text-center">
-                <p className="text-white/70 text-2xl font-medium">Drop files or folders anywhere</p>
-                <p className="text-white/50 text-lg mt-2">or click anywhere to pick your files</p>
+                <p className="text-white/70 text-lg sm:text-2xl font-medium">Drop files or folders anywhere</p>
+                <p className="text-white/50 text-sm sm:text-lg mt-1 sm:mt-2">or click anywhere to pick your files</p>
               </div>
             )}
             
-            <SecurityTicker />
+            <div className="mt-2 sm:mt-4">
+              <SecurityTicker />
+            </div>
           </div>
         </div>
       )}

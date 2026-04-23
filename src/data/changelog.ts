@@ -12,6 +12,7 @@ export const changelog: ChangelogEntry[] = [
     version: '1.5.6',
     date: '2026-04-22',
     changes: [
+      { category: 'Added', description: 'Introduced the official Security Moose mascot as a high-fidelity footer sticker.' },
       { category: 'Improved', description: 'Stabilized signaling infrastructure with Vite proxy routing for seamless dev/prod parity.' },
       { category: 'Fixed', description: 'Resolved a race condition in the global file picker that caused selection failures.' },
       { category: 'Fixed', description: 'Corrected text visibility and contrast for all Light Mode elements.' },

@@ -28,7 +28,9 @@ DEPLOY_ENV=prod \
   "$REPO_ROOT/automation/preflight.sh" prod
 
 # Ensure runtime services are up (metadata + peerjs + envoy)
-METADATA_API_ENV_FILE="$METADATA_API_ENV_FILE" docker compose -f docker-compose.yml up -d
+METADATA_API_ENV_FILE="$METADATA_API_ENV_FILE" \
+ENVOY_RUNTIME_DIR="${ENVOY_RUNTIME_DIR:-./envoy-runtime}" \
+docker compose -f docker-compose.yml up -d
 
 # Blue/green switch using prebuilt images
 USE_PREBUILT_IMAGES=1 \

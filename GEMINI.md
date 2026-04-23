@@ -80,5 +80,6 @@ Search `PROJECT_DOCUMENTATION/` and `automation/` before action. Follow `BUILD_D
   4. Git commit.
   5. Build images (`automation/build-prod-images.sh`).
   6. Transfer images to VPS (`scp` via proxy).
-  7. Deploy on VPS (`automation/release-prod.sh` on remote).
-- **Constraints**: Use `USE_PREBUILT_IMAGES=1` for remote release. Ensure zero-downtime script completes.
+  7. Sync runtime configs (`sudo mkdir -p /var/snap/docker/common/p2p-file-share/envoy-runtime && sudo cp -r /opt/p2p-file-share/envoy-runtime/* /var/snap/docker/common/p2p-file-share/envoy-runtime/`).
+  8. Deploy on VPS (`sudo -E DEPLOY_ENV=prod ENVOY_RUNTIME_DIR=/var/snap/docker/common/p2p-file-share/envoy-runtime ./automation/release-prod.sh`).
+- **Constraints**: Use `USE_PREBUILT_IMAGES=1` for remote release. Ensure zero-downtime script completes. Sync to `/var/snap/docker/common/` is MANDATORY.

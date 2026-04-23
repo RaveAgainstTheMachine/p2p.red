@@ -59,10 +59,14 @@ export const AppFooter: React.FC<AppFooterProps> = ({
             >
               Feedback
             </button>
-            <span className="group relative inline-flex items-center whitespace-nowrap leading-none text-white/60">
-              <span className="text-base" role="img" aria-label="Canada">🇨🇦</span>
+            <span className="group relative inline-flex items-center whitespace-nowrap leading-none">
+              <img 
+                src="/assets/security-moose.png" 
+                alt="Security Moose" 
+                className="h-[22px] w-auto opacity-80 transition-all hover:opacity-100 hover:scale-110 cursor-help"
+              />
               <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 rounded-lg border border-white/10 bg-black/80 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                Proudly made in Canada
+                Guarded by the Security Moose
               </span>
             </span>
             <button

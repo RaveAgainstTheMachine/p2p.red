@@ -1570,7 +1570,7 @@ function App() {
         >
           <button
             type="button"
-            className={`flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 shadow-lg shadow-black/20 backdrop-blur-xl transition-all duration-200 hover:text-white hover:scale-110 active:scale-95 ${isThemeMenuOpen ? 'border-white/30 bg-white/15' : ''}`}
+            className={`hidden sm:flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 shadow-lg shadow-black/20 backdrop-blur-xl transition-all duration-200 hover:text-white hover:scale-110 active:scale-95 ${isThemeMenuOpen ? 'border-white/30 bg-white/15' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               setIsThemeMenuOpen(!isThemeMenuOpen);
@@ -1648,29 +1648,6 @@ function App() {
 
       {/* Main App Container - Stationary Layout */}
       <div className="flex flex-col flex-1 min-h-0 relative z-10">
-        {/* Slim top nav - Stationary */}
-        <nav className="flex items-center justify-between px-4 sm:px-6 pt-4 pb-3 bg-transparent backdrop-blur-sm z-50 gap-3">
-          <a
-            href="https://p2p.red"
-            className="flex items-center opacity-80 hover:opacity-100 transition-opacity shrink-0"
-            title="p2p.red"
-          >
-            <Logo size="small" />
-          </a>
-
-          {/* Center headline — hidden on very small screens */}
-          <div className="flex flex-col items-center justify-center flex-1 min-w-0 mx-2">
-            <span className="header-headline text-[clamp(12px,3.5vw,22px)] font-black uppercase tracking-[0.15em] text-center leading-tight truncate w-full text-center">
-              Send files securely and privately
-            </span>
-            <span className="hidden sm:block text-[clamp(8px,1.5vw,11px)] font-bold uppercase tracking-[0.4em] text-white/50 mt-0.5">
-              No account or login required
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0">
-          </div>
-        </nav>
 
         <input
           ref={resumeFileInputRef}
@@ -1701,6 +1678,16 @@ function App() {
           isVisible={showEncryptionIndicator}
         />
 
+        {/* Headline block — full width, perfectly centered, no nav interference */}
+        <div className="w-full text-center px-6 pt-5 pb-2 pointer-events-none select-none">
+          <p className="header-headline text-[clamp(18px,5vw,32px)] font-black uppercase tracking-[0.18em] leading-tight">
+            Send files securely and privately
+          </p>
+          <p className="text-[clamp(9px,2vw,12px)] font-bold uppercase tracking-[0.45em] text-white/50 mt-1">
+            No account or login required
+          </p>
+        </div>
+
         {/* Hero — centered, WeTransfer-style */}
         <main 
           className="flex-1 relative overflow-hidden"
@@ -1730,6 +1717,13 @@ function App() {
           displayVersion={displayVersion}
           buildIndicatorClass={buildIndicatorClass}
           buildIndicatorLabel={buildIndicatorLabel}
+          themePreference={themePreference}
+          variantPreference={variantPreference}
+          onSetTheme={setThemePreference}
+          onSetVariant={(v) => {
+            setVariantPreference(v);
+            setCookie('p2p_variant', v);
+          }}
         />
       </div>
 

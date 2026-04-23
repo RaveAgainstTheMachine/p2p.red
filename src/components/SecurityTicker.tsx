@@ -22,7 +22,7 @@ export const SecurityTicker: React.FC = () => {
   }, []);
 
   return (
-    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 pointer-events-none whitespace-nowrap overflow-hidden py-4 flex items-center justify-center min-w-[500px]">
+    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 pointer-events-none overflow-hidden py-4 flex items-center justify-center w-[90vw] max-w-2xl">
       <AnimatePresence mode="wait">
         <motion.p
           key={index}

@@ -9,6 +9,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.5.8',
+    date: '2026-04-23',
+    changes: [
+      { category: 'Improved', description: 'Normalized text readability across the entire site with high-contrast opacity scales.' },
+      { category: 'Improved', description: 'Headline overhaul: "SEND FILES SECURELY" is now much larger for better brand impact.' },
+      { category: 'Improved', description: 'Increased message sizing across the DropZone and Security Ticker for improved legibility.' }
+    ]
+  },
+  {
     version: '1.5.7',
     date: '2026-04-23',
     changes: [

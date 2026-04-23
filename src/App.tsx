@@ -1649,17 +1649,26 @@ function App() {
       {/* Main App Container - Stationary Layout */}
       <div className="flex flex-col flex-1 min-h-0 relative z-10">
         {/* Slim top nav - Stationary */}
-        <nav className="flex items-center justify-between px-6 pt-5 pb-3 bg-transparent backdrop-blur-sm z-50">
+        <nav className="flex items-center justify-between px-4 sm:px-6 pt-4 pb-3 bg-transparent backdrop-blur-sm z-50 gap-3">
           <a
             href="https://p2p.red"
-            className="flex items-center opacity-80 hover:opacity-100 transition-opacity"
+            className="flex items-center opacity-80 hover:opacity-100 transition-opacity shrink-0"
             title="p2p.red"
           >
             <Logo size="small" />
           </a>
 
+          {/* Center headline — hidden on very small screens */}
+          <div className="flex flex-col items-center justify-center flex-1 min-w-0 mx-2">
+            <span className="header-headline text-[clamp(12px,3.5vw,22px)] font-black uppercase tracking-[0.15em] text-center leading-tight truncate w-full text-center">
+              Send files securely and privately
+            </span>
+            <span className="hidden sm:block text-[clamp(8px,1.5vw,11px)] font-bold uppercase tracking-[0.4em] text-white/50 mt-0.5">
+              No account or login required
+            </span>
+          </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
           </div>
         </nav>
 

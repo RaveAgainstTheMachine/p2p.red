@@ -9,7 +9,7 @@ layered_runtime:
   layers:
     - name: disk
       disk_layer:
-        base_directory: /etc/envoy/runtime
+        symlink_root: /etc/envoy/runtime
     - name: admin
       admin_layer: {}
 

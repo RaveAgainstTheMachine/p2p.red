@@ -160,9 +160,9 @@ export const AppFooter: React.FC<AppFooterProps> = ({
     )}
 
       <div className="mx-auto w-full max-w-none px-3 sm:px-4 py-1.5">
-        <div className="grid grid-cols-2 sm:grid-cols-3 items-center gap-2 w-full text-[clamp(10px,2vw,13px)]">
+        <div className="grid grid-cols-2 sm:grid-cols-3 items-center justify-items-stretch gap-2 w-full text-[clamp(10px,2vw,13px)]">
 
-          {/* Left: Version pill - Fixed width container to prevent shifting rest of footer */}
+          {/* Left: Version pill */}
           <div className="flex items-center justify-start shrink-0">
             {buildIndicatorClass && buildIndicatorLabel && (
               <button
@@ -171,7 +171,9 @@ export const AppFooter: React.FC<AppFooterProps> = ({
                 className="group relative flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/90 transition-all hover:bg-white/10 hover:border-white/20 active:scale-95"
               >
                 <span className={`h-2 w-2 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.3)] shrink-0`} />
-                <span className="truncate max-w-[90px] sm:max-w-none">{displayVersion}</span>
+                <span className="truncate max-w-[90px] sm:max-w-none">
+                  {displayVersion.startsWith('v') ? displayVersion : `v${displayVersion}`}
+                </span>
                 <div className="hidden lg:flex max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 group-hover:max-w-[200px] group-hover:opacity-100 items-center">
                   <span className="text-white/30 mx-2">•</span>
                   <span className="text-white/40 tracking-normal font-medium lowercase">{buildIndicatorLabel}</span>
@@ -181,7 +183,7 @@ export const AppFooter: React.FC<AppFooterProps> = ({
           </div>
 
           {/* Center: Desktop nav links — hidden on mobile */}
-          <div className="hidden sm:flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-white/75 whitespace-nowrap">
+          <div className="hidden sm:flex flex-wrap items-center justify-center justify-self-center gap-x-4 gap-y-2 text-white/75 whitespace-nowrap">
             <button onClick={() => onNavigate('home')} className="group inline-flex items-center gap-2 hover:text-white transition-colors">
               <Logo size="small" useFavicon className="transition-transform group-hover:scale-110" />
               <span className="font-semibold tracking-wide">Home</span>

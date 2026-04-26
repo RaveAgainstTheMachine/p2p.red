@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.6.2',
+    date: '2026-04-26',
+    changes: [
+      'Fixed footer links centering on desktop',
+      'Fixed version string display logic',
+    ],
+  },
+  {
     version: '1.6.1',
     date: '2026-04-26',
     changes: [

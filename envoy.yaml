@@ -9,8 +9,7 @@ layered_runtime:
   layers:
     - name: disk
       disk_layer:
-        symlink_root: /etc/envoy/runtime
-        subdirectory: ""
+        base_directory: /etc/envoy/runtime
     - name: admin
       admin_layer: {}
 
@@ -228,10 +227,10 @@ static_resources:
                             weighted_clusters:
                               clusters:
                                 - name: app_blue
-                                  weight: 100
-                                - name: app_green
                                   weight: 0
-                              total_weight: 100
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 0
                               runtime_key_prefix: traffic_split
                         - match:
                             prefix: "/peerjs"
@@ -244,10 +243,10 @@ static_resources:
                             weighted_clusters:
                               clusters:
                                 - name: app_blue
-                                  weight: 100
-                                - name: app_green
                                   weight: 0
-                              total_weight: 100
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 0
                               runtime_key_prefix: traffic_split
                           response_headers_to_remove:
                             - x-frame-options
@@ -274,10 +273,10 @@ static_resources:
                             weighted_clusters:
                               clusters:
                                 - name: app_blue
-                                  weight: 100
-                                - name: app_green
                                   weight: 0
-                              total_weight: 100
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 0
                               runtime_key_prefix: traffic_split
                           response_headers_to_add:
                             - header:
@@ -298,10 +297,10 @@ static_resources:
                             weighted_clusters:
                               clusters:
                                 - name: app_blue
-                                  weight: 100
-                                - name: app_green
                                   weight: 0
-                              total_weight: 100
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 0
                               runtime_key_prefix: traffic_split
                 http_filters:
                   - name: envoy.filters.http.router
@@ -375,10 +374,10 @@ static_resources:
                             weighted_clusters:
                               clusters:
                                 - name: app_blue
-                                  weight: 100
-                                - name: app_green
                                   weight: 0
-                              total_weight: 100
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 0
                               runtime_key_prefix: traffic_split
                 http_filters:
                   - name: envoy.filters.http.router

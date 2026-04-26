@@ -9,6 +9,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.6.1',
+    date: '2026-04-26',
+    changes: [
+      { category: 'Fixed', description: 'Footer link centering: Switched to grid-cols-3 layout for perfect horizontal alignment on desktop.' },
+      { category: 'Fixed', description: 'Mobile cutoff: Added bottom safe-area padding to prevent clipping on mobile viewports.' },
+      { category: 'Security', description: 'Mandatory production release with latest UI stability patches.' }
+    ]
+  },
+  {
     version: '1.6.0',
     date: '2026-04-23',
     changes: [

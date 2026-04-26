@@ -59,7 +59,7 @@ export const AppFooter: React.FC<AppFooterProps> = ({
   const pillBtn = 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 shadow-lg shadow-black/20 backdrop-blur transition-colors hover:bg-white/10 hover:text-white';
 
   return (
-    <footer className="app-footer relative z-[60] mt-auto border-t border-white/10 bg-[var(--theme-bg-1)]">
+    <footer className="app-footer relative z-[60] mt-auto border-t border-white/10 bg-[var(--theme-bg-1)] pb-8 sm:pb-0">
       {/* Mobile burger overlay — slides up from footer */}
       {mobileMenuOpen && (
         <>
@@ -160,10 +160,10 @@ export const AppFooter: React.FC<AppFooterProps> = ({
     )}
 
       <div className="mx-auto w-full max-w-none px-3 sm:px-4 py-1.5">
-        <div className="flex items-center justify-between gap-2 w-full text-[clamp(10px,2vw,13px)]">
+        <div className="grid grid-cols-2 sm:grid-cols-3 items-center gap-2 w-full text-[clamp(10px,2vw,13px)]">
 
           {/* Left: Version pill - Fixed width container to prevent shifting rest of footer */}
-          <div className="flex items-center shrink-0 w-[120px] sm:w-[240px]">
+          <div className="flex items-center justify-start shrink-0">
             {buildIndicatorClass && buildIndicatorLabel && (
               <button
                 onClick={() => onNavigate('changelog')}
@@ -172,7 +172,7 @@ export const AppFooter: React.FC<AppFooterProps> = ({
               >
                 <span className={`h-2 w-2 rounded-full ${buildIndicatorClass} shadow-[0_0_8px_rgba(255,255,255,0.3)] shrink-0`} />
                 <span className="truncate max-w-[90px] sm:max-w-none">{displayVersion}</span>
-                <div className="hidden sm:flex max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 group-hover:max-w-[200px] group-hover:opacity-100 items-center">
+                <div className="hidden lg:flex max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-500 group-hover:max-w-[200px] group-hover:opacity-100 items-center">
                   <span className="text-white/30 mx-2">•</span>
                   <span className="text-white/40 tracking-normal font-medium lowercase">{buildIndicatorLabel}</span>
                 </div>
@@ -181,7 +181,7 @@ export const AppFooter: React.FC<AppFooterProps> = ({
           </div>
 
           {/* Center: Desktop nav links — hidden on mobile */}
-          <div className="hidden sm:flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-white/75">
+          <div className="hidden sm:flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-white/75 whitespace-nowrap">
             <button onClick={() => onNavigate('home')} className="group inline-flex items-center gap-2 hover:text-white transition-colors">
               <Logo size="small" useFavicon className="transition-transform group-hover:scale-110" />
               <span className="font-semibold tracking-wide">Home</span>
@@ -207,7 +207,7 @@ export const AppFooter: React.FC<AppFooterProps> = ({
           </div>
 
           {/* Right: status + support + burger */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center justify-end gap-1.5 shrink-0">
             <Monitoring placement="footer" />
             {/* Support — same pill shape as Monitoring */}
             <a

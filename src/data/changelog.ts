@@ -12,8 +12,9 @@ export const changelog: ChangelogEntry[] = [
     version: '1.6.2',
     date: '2026-04-26',
     changes: [
-      'Fixed footer links centering on desktop',
-      'Fixed version string display logic',
+      { category: 'Improved', description: 'Centered footer links' },
+      { category: 'Fixed', description: 'Mobile footer cutoff' },
+      { category: 'Fixed', description: 'Version string display logic' },
     ],
   },
   {

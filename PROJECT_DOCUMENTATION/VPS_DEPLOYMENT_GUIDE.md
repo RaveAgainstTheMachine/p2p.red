@@ -109,12 +109,15 @@ sudo ufw enable
 
 ```bash
 # Obtain SSL certificate
-sudo certbot certonly --standalone -d <domain> -d www.<domain>
+sudo certbot certonly --standalone -d p2p.red -d signal.p2p.red -d plausible.p2p.red -d dash.p2p.red
 
-# Setup auto-renewal
-sudo crontab -e
-# Add: 0 12 * * * /usr/bin/certbot renew --quiet
+# CRITICAL: Link the hardened conversion hook
+# This script converts PEM to PKCS12 for Envoy and re-applies traffic splits via Admin API
+sudo certbot reconfigure --cert-name p2p.red --deploy-hook /opt/p2p-file-share/automation/renew-certs-hook.sh
 ```
+
+> [!IMPORTANT]
+> Since Envoy runs in Snap Docker, it cannot read PEM files directly from `/etc/letsencrypt`. The `renew-certs-hook.sh` MUST run after every renewal to sync `.p12` bundles to `/var/snap/docker/common/p2p-envoy-certs/`.
 
 ## 📦 **Deployment Configuration**
 

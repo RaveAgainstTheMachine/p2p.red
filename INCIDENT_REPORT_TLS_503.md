@@ -40,4 +40,25 @@
 3.  **Observability First**: 
     - Use Envoy Admin API (`/stats`, `/clusters`, `/runtime`) to diagnose routing BEFORE restarting containers.
 4.  **Verification Loop**: 
-    - Always verify via `curl -Ik` (headers) and `od -c` (body) to confirm 200 OK vs 503 "no healthy upstream".
+    
+---
+
+## 🚨 Incident: 2026-04-27 - Envoy Crash Loop & 503 Re-emergence
+
+### 📋 Status: RESOLVED
+* **Issue**: Site unreachable (SSL Reset) followed by 503 Service Unavailable.
+* **Resolution**: Hardened renewal hook, linked to Certbot, and locked runtime traffic to Blue.
+
+### 🔍 RCA (Root Cause Analysis)
+1. **Broken TLS Chain**: Certificates renewed on Apr 26, but `deploy_hook` was missing from Certbot configs. Envoy was running on stale certs until a container restart triggered a fatal "Failed to load certificate chain" error.
+2. **Runtime Default (50/50)**: Envoy's runtime layer was empty/uninitialized. On restart, it defaulted to 50/50 traffic. Since `app_green` was exited, users experienced 50% failure rate.
+
+### 🛠️ Actions Taken
+1. **Emergency Restoration**: Generated self-signed `.p12` files to break the Envoy crash loop.
+2. **Hardened Hook**: Updated `automation/renew-certs-hook.sh` with post-restart health checks (`curl -k`) and **dynamic weight restoration**.
+3. **Linked Certbot**: Manually added `deploy_hook` to `/etc/letsencrypt/renewal/*.conf` for all active domains.
+4. **Traffic Lock**: Flipped traffic to 100% Blue via Admin API and ensured weights are persisted in the runtime files for the hook to read.
+
+### 🛡️ Prevention
+1. **Verification Gated Renewal**: The renewal script now fails if HTTPS health checks don't pass after a restart.
+2. **Explicit Persistence**: The hook reads `/opt/p2p-file-share/envoy-runtime/` to re-apply the current Blue/Green split via the Admin API on every renewal, preventing Envoy's 50/50 fallback.

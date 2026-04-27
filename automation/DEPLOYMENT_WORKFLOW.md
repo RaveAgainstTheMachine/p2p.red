@@ -62,3 +62,5 @@ sudo -E \
 - **Project Consistency**: Always run release scripts from `/opt/p2p-file-share` to maintain the correct Docker Compose project context.
 - **Preflight Enforcement**: `automation/preflight.sh` will block deployments if the environment marker `/etc/p2pred-env` is missing or incorrect.
 - **Image Retention**: `automation/cleanup-images.sh` runs automatically after deploy to keep only the current and one previous version.
+- **TLS Hook Integrity**: Periodically verify that `/etc/letsencrypt/renewal/*.conf` contains the `deploy_hook` pointing to `automation/renew-certs-hook.sh`.
+- **Runtime Persistence**: Always explicitly set `app_blue` and `app_green` weights in the runtime directory. Never rely on Envoy's 50/50 default split.

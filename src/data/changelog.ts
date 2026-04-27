@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+  {
+    version: '1.6.6',
+    date: '2026-04-27',
+    changes: [
+      { category: 'Fixed', description: 'Made header theme-aware to prevent contrast issues in light mode.' },
+      { category: 'Improved', description: 'Added 3D depth to headlines using layered text-shadows and theme-synced gradients.' },
+    ],
+  },
     version: '1.6.5',
     date: '2026-04-27',
     changes: [

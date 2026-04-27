@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+  {
+    version: '1.6.5',
+    date: '2026-04-27',
+    changes: [
+      { category: 'Improved', description: 'Redesigned main sticky header with premium P2P Red gradients and glow typography.' },
+      { category: 'Improved', description: 'Enhanced Landing Page visual hierarchy for better brand alignment.' },
+    ],
+  },
     version: '1.6.4',
     date: '2026-04-27',
     changes: [

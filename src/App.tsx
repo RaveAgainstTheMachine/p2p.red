@@ -1705,10 +1705,12 @@ function App() {
 
             {/* Headlines - centered, stacks below logo on mobile */}
             <div className="w-full flex flex-col items-center pointer-events-none select-none mt-2 sm:mt-0">
-              <p className="header-headline text-[clamp(16px,4vw,32px)] font-black uppercase tracking-[0.18em] leading-tight text-center">
-                Send files securely and privately
+              <p className="header-headline text-[clamp(18px,4.5vw,36px)] font-bold uppercase tracking-tight leading-none text-center">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-red-500">
+                  Send files securely and privately
+                </span>
               </p>
-              <p className="text-[clamp(8px,1.8vw,11px)] font-bold uppercase tracking-[0.4em] text-white/50 mt-1 sm:mt-1.5 text-center">
+              <p className="text-[clamp(8px,1.8vw,11px)] font-bold uppercase tracking-[0.45em] text-red-500/70 mt-2 sm:mt-3 text-center drop-shadow-[0_0_8px_rgba(239,68,68,0.3)]">
                 No account or login required
               </p>
             </div>

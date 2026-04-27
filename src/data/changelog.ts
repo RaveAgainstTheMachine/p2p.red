@@ -9,6 +9,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.6.4',
+    date: '2026-04-27',
+    changes: [
+      { category: 'Security', description: 'Hardened TLS renewal hook with dynamic weight restoration and loopback health checks.' },
+      { category: 'Security', description: 'Locked Envoy Admin API to loopback and hardened certificate permissions (chmod 600).' },
+      { category: 'Improved', description: 'Premium Landing Page overhaul: Implemented P2P Red gradients and glow badges for higher visual fidelity.' },
+    ],
+  },
+  {
     version: '1.6.2',
     date: '2026-04-26',
     changes: [

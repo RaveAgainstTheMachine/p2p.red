@@ -12,12 +12,13 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo }) => {
       <main className="flex flex-col justify-center gap-16 py-12">
         <section className="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-white/70">
-              <Sparkles size={14} className="text-cyan-200" />
-              Private by design
+            <div className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-red-200 shadow-[0_0_20px_rgba(176,18,3,0.2)]">
+              <Sparkles size={14} className="text-red-400" />
+              Direct-to-Peer Protocol
             </div>
-            <h1 className="text-4xl font-semibold leading-tight text-white md:text-5xl">
-              Share files at native WebRTC speed — direct, encrypted, and no rocket surgery required.
+            <h1 className="text-4xl font-bold leading-tight tracking-tight text-white md:text-6xl">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70">Share files at native </span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-400">WebRTC speed.</span>
             </h1>
             <p className="text-lg text-white/70">
               p2p.red connects browsers directly with WebRTC DataChannels. When direct paths fail, we fall back to

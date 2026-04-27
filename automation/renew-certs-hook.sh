@@ -30,7 +30,7 @@ for DOMAIN in "${DOMAINS[@]}"; do
             -name "$DOMAIN" \
             -passout "pass:$PASSWORD"
             
-        sudo chmod 644 "$TARGET_DIR/$DOMAIN.p12"
+        sudo chmod 600 "$TARGET_DIR/$DOMAIN.p12"
         echo "✅ $DOMAIN.p12 updated in $TARGET_DIR"
     else
         echo "⚠️  Certs for $DOMAIN not found in $LE_DIR, skipping."

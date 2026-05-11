@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.6.8',
+    date: '2026-05-11',
+    changes: [
+      { category: 'Added', description: 'P2P Health Sentinel on bao: Real-time Discord notifications for site health and upstream availability.' },
+    ],
+  },
+  {
     version: '1.6.7',
     date: '2026-05-11',
     changes: [

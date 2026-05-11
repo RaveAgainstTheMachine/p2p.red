@@ -74,10 +74,19 @@ Critical for P2P success in restrictive network environments.
 
 ## Security Architecture
 
+### 1. File-Level Security
 - **Client-Side Encryption**: AES-GCM 256-bit encryption ensures file contents are never visible to any server component.
-- **Transient State**: Metadata is stored with a TTL; no user data persists long-term.
-- **Isolated Networks**: Deploy backend services (DB, Redis) in a private subnet, accessible only by the API layer.
-- **Rate Limiting**: Protect metadata endpoints from brute-force discovery.
+- **Ephemeral Keys**: Keys are stored in the URL fragment (`#`), ensuring they never leave the client's browser or hit server logs.
+
+### 2. Network Isolation (Zero-Trust)
+In production (`p2p.red`), we implement a **Zero-Trust Network Architecture**:
+- **Private Backplane**: Internal services (PostgreSQL, Redis, OpenBao) are bound to private interfaces and are only accessible via an encrypted **WireGuard** tunnel.
+- **Management Plane**: SSH access and the Admin Dashboard are restricted to the WireGuard network, eliminating the attack surface on the public internet.
+- **Encrypted Signaling**: Signaling traffic between geographically distributed nodes is routed over the VPN backplane.
+
+### 3. Service Hardening
+- **Isolated Networks**: Backend services are deployed in a private subnet.
+- **Rate Limiting**: Aggressive rate limiting at the Envoy layer protects against brute-force metadata discovery.
 
 ## Disaster Recovery
 

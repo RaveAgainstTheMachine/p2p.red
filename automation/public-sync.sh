@@ -1,77 +1,66 @@
 #!/bin/bash
 
-set -euo pipefail
+# P2P.RED Public Sync & Sanitization Orchestrator
+# Author: Steven Frost
+# Purpose: Mirror master to public while stripping internal documentation and metadata.
 
-DEV_REPO=${DEV_REPO:-"$(pwd)"}
-PUBLIC_REPO=${PUBLIC_REPO:-""}
-PUBLIC_SYNC_DRY_RUN=${PUBLIC_SYNC_DRY_RUN:-0}
+set -e
 
-if [ -z "$PUBLIC_REPO" ]; then
-  echo "❌ PUBLIC_REPO is required."
-  echo "Usage: PUBLIC_REPO=/path/to/public-repo ./automation/public-sync.sh"
+# Configuration
+SOURCE_BRANCH="master"
+TARGET_BRANCH="public"
+NON_PUBLIC_DOCS=(
+  "PROJECT_DOCUMENTATION/INFRASTRUCTURE.md"
+  "PROJECT_DOCUMENTATION/WG_SSH_BASTION_SETUP.md"
+  "PROJECT_DOCUMENTATION/OPENBAO_SETUP.md"
+  "PROJECT_DOCUMENTATION/VPS_DEPLOYMENT_GUIDE.md"
+  "PROJECT_DOCUMENTATION/INFRA_SETUP_TEMPLATE.md"
+)
+
+echo "🚀 Starting P2P.RED Sanitized Sync..."
+
+# 1. Ensure we are starting from a clean state
+if [[ $(git status --short) ]]; then
+  echo "❌ Error: Working tree is not clean. Commit or stash changes first."
   exit 1
 fi
 
-EXCLUDES=(
-  ".git"
-  "node_modules"
-  "dist"
-  "build"
-  ".env"
-  ".env.*"
-  "metadata-api/.env"
-  "turnserver.conf"
-  "p2p.red_ecdsa.pub"
-  "PROJECT_DOCUMENTATION/PRIVATE"
-  "PROJECT_DOCUMENTATION/*_PRIVATE.md"
-  "PROJECT_DOCUMENTATION/*_SENSITIVE.md"
-  "PROJECT_DOCUMENTATION/INTERNAL_*.md"
-  "MONETIZATION_STRATEGIES.md"
-  "ADVERTISING_PLAN.md"
-)
+# 2. Switch to public and merge master
+echo "🔄 Merging $SOURCE_BRANCH into $TARGET_BRANCH..."
+git checkout $TARGET_BRANCH
+git merge $SOURCE_BRANCH -m "chore: auto-sync from master $(date +%F)" --no-edit
 
-RSYNC_EXCLUDES=()
-for item in "${EXCLUDES[@]}"; do
-  RSYNC_EXCLUDES+=("--exclude=$item")
+# 3. The "No-No Purge"
+echo "🧼 Purging internal-only documentation..."
+for doc in "${NON_PUBLIC_DOCS[@]}"; do
+  if [ -f "$doc" ]; then
+    rm "$doc"
+    echo "  - Removed $doc"
+  fi
 done
 
-RSYNC_ARGS=("-a" "--delete")
-if [ "$PUBLIC_SYNC_DRY_RUN" = "1" ]; then
-  RSYNC_ARGS+=("--dry-run" "--itemize-changes")
+# 4. Metadata Re-Injection (Author & License)
+echo "🏷️ Re-injecting public metadata (Steven Frost / BSL 1.1)..."
+find . -name "package.json" -not -path "*/node_modules/*" -exec sed -i 's/"license": ".*"/"license": "Business Source License 1.1"/g' {} +
+find . -name "package.json" -not -path "*/node_modules/*" -exec sed -i 's/"author": ".*"/"author": "Steven Frost"/g' {} +
+
+# 5. Security Scan (Final Guard)
+echo "🔒 Performing final security leak check..."
+if git ls-files | grep -E "github_deploy_key|privkey|\.env$"; then
+  echo "⚠️ WARNING: Potential secret leak detected! Aborting commit."
+  exit 1
 fi
 
-if [ "$PUBLIC_SYNC_DRY_RUN" = "1" ]; then
-  echo "🧪 Dry run enabled (no files will be modified)."
+# 6. Commit the sanitized state
+echo "📝 Committing sanitized release..."
+git add .
+if git diff --cached --quiet; then
+  echo "✅ No changes to commit (already sanitized)."
+else
+  git commit -m "chore: public release hardening - $(date +%F)"
+  echo "✅ Sanitized sync complete."
 fi
 
-echo "🔄 Syncing dev repo to public repo..."
-rsync "${RSYNC_ARGS[@]}" "${RSYNC_EXCLUDES[@]}" "$DEV_REPO/" "$PUBLIC_REPO/"
-
-if [ "$PUBLIC_SYNC_DRY_RUN" = "1" ]; then
-  echo "ℹ️  Dry run enabled - skipping redaction."
-  echo "✅ Public repo sync dry run complete: $PUBLIC_REPO"
-  exit 0
-fi
-
-echo "🧹 Redacting public copy (docs/scripts/configs only)..."
-REDACT_FILES=$(find "$PUBLIC_REPO" -type f \( \
-  -name "*.md" -o \
-  -name "*.sh" -o \
-  -name "*.yml" -o \
-  -name "*.yaml" -o \
-  -name "*.conf" \
-\))
-
-for file in $REDACT_FILES; do
-  perl -pi -e 's/\b\d{1,3}(?:\.\d{1,3}){3}\b/<ip>/g' "$file"
-  perl -pi -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g' "$file"
-  perl -pi -e 's/\bdev-signal\.p2p\.red\b/<dev-signal-domain>/g' "$file"
-  perl -pi -e 's/\bdev-turn\.p2p\.red\b/<dev-turn-domain>/g' "$file"
-  perl -pi -e 's/\bdev\.p2p\.red\b/<dev-domain>/g' "$file"
-  perl -pi -e 's/\bsignal\.p2p\.red\b/<signal-domain>/g' "$file"
-  perl -pi -e 's/\bturn1\.p2p\.red\b/<turn1-domain>/g' "$file"
-  perl -pi -e 's/\bturn2\.p2p\.red\b/<turn2-domain>/g' "$file"
-  perl -pi -e 's/\bp2p\.red\b/<domain>/g' "$file"
-done
-
-echo "✅ Public repo sync complete: $PUBLIC_REPO"
+# 7. Switch back to master
+git checkout $SOURCE_BRANCH
+echo "🏁 Done. You are back on $SOURCE_BRANCH."

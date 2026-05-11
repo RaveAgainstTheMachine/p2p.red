@@ -1,0 +1,22 @@
+# P2P.RED Merge Shield Attributes
+# Author: Steven Frost
+
+# Ensure these files are never merged/overwritten from master to public
+PROJECT_DOCUMENTATION/INFRASTRUCTURE.md merge=ours
+PROJECT_DOCUMENTATION/WG_SSH_BASTION_SETUP.md merge=ours
+PROJECT_DOCUMENTATION/OPENBAO_SETUP.md merge=ours
+PROJECT_DOCUMENTATION/VPS_DEPLOYMENT_GUIDE.md merge=ours
+PROJECT_DOCUMENTATION/INFRA_SETUP_TEMPLATE.md merge=ours
+
+# Prevent environment leaks during merges
+.env* merge=ours
+github_deploy_key* merge=ours
+
+# Force consistent line endings for cross-platform releases
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf

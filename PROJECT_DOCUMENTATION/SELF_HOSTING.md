@@ -37,17 +37,19 @@ Update the `envoy.yaml` file to point to your certificate paths.
 #### Environment Variables
 Create a `.env` file in the root directory:
 ```env
-POSTGRES_USER=p2p_user
+# Metadata API Secrets
 POSTGRES_PASSWORD=your_secure_password
-POSTGRES_DB=p2p_metadata
-REDIS_URL=redis://redis:6379
-VITE_API_URL=https://your-domain.com
+API_KEY=your_admin_api_key
+
+# Optional: Override images or ports
+# APP_IMAGE=p2p-app:latest
+# METADATA_API_IMAGE=p2p-metadata-api:latest
 ```
 
 #### TURN Server
-Update `turnserver.conf` with a secure username and password:
+Update `turnserver.conf` with your domain and a secure secret:
 ```conf
-user=p2p_user:your_password
+static-auth-secret=your_secure_auth_secret
 realm=your-domain.com
 ```
 
@@ -55,7 +57,7 @@ realm=your-domain.com
 
 Deploy the full stack using Docker Compose:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.metadata.yml up -d
+docker compose up -d
 ```
 
 ### 5. Verification

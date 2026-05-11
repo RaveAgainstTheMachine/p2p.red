@@ -57,8 +57,8 @@ P2P File Share is designed to be fully self-hostable on standard Linux environme
 
 1.  **Clone the Repository**:
     ```bash
-    git clone https://github.com/example/p2p-file-share.git
-    cd p2p-file-share
+    git clone https://github.com/RaveAgainstTheMachine/p2p.red.git
+    cd p2p.red
     ```
 
 2.  **Configure Environment**:

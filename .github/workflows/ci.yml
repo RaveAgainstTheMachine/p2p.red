@@ -51,7 +51,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Frontend Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -59,7 +59,7 @@ jobs:
           tags: p2p-app:latest
 
       - name: Build Metadata API Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile.metadata-server
@@ -67,7 +67,7 @@ jobs:
           tags: p2p-metadata-api:latest
 
       - name: Build PeerJS Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile.peerjs
@@ -75,7 +75,7 @@ jobs:
           tags: p2p-peerjs:latest
 
       - name: Build Envoy Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile.envoy

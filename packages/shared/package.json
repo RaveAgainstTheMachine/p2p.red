@@ -1,4 +1,6 @@
 {
+  "author": "Steven Frost",
+  "license": "Business Source License 1.1",
   "name": "@p2p-file-share/shared",
   "version": "0.0.0",
   "private": true,

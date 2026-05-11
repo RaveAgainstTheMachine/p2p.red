@@ -40,7 +40,13 @@ EOF
 echo ""
 echo "✅ .env generated successfully."
 
-# 4. Docker Compose Instructions
+# 4. Inject into turnserver.conf if exists
+if [ -f "turnserver.conf" ]; then
+    sed -i "s/static-auth-secret=.*/static-auth-secret=$TURN_SECRET/" turnserver.conf
+    echo "✅ turnserver.conf updated with generated secret."
+fi
+
+# 5. Docker Compose Instructions
 PROFILES="--profile core"
 [[ "$ENABLE_PLAUSIBLE" =~ ^[Yy]$ ]] && PROFILES="$PROFILES --profile analytics"
 [[ "$ENABLE_OPENBAO" =~ ^[Yy]$ ]] && PROFILES="$PROFILES --profile secrets"

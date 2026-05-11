@@ -80,4 +80,10 @@ This project prioritizes security through simplicity:
 
 ## License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+This project is licensed under the **Business Source License 1.1** (BSL).
+
+- **Licensor**: Steven Frost
+- **Change Date**: January 1, 2030
+- **Change License**: Apache License, Version 2.0
+
+For more details, see the [LICENSE](LICENSE) file.

@@ -10,6 +10,13 @@ set -e
 SOURCE_BRANCH="master"
 TARGET_BRANCH="public"
 NON_PUBLIC_DOCS=(
+  ".githooks"
+  "docker-compose.metadata.yml"
+  "docker-compose.local-prod.yml"
+  "docker-compose.e2e.yml"
+  "docker-compose.dev-blue-green.yml"
+  "docker-compose.blue-green.yml"
+  "Makefile"
   "envoy-runtime"
   "tests"
   "test-results"
@@ -79,7 +86,7 @@ git merge $SOURCE_BRANCH -m "chore: auto-sync from master $(date +%F)" --no-edit
 echo "🧼 Purging internal-only documentation..."
 for doc in "${NON_PUBLIC_DOCS[@]}"; do
   if [ -f "$doc" ]; then
-    rm "$doc"
+    rm -rf "$doc"
     echo "  - Removed $doc"
   fi
 done

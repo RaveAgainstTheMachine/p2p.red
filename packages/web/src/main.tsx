@@ -18,6 +18,16 @@ if (import.meta.env.PROD) {
   console.error = wrap(error);
 }
 
+// Inject Plausible if domain is provided
+const plausibleDomain = import.meta.env.VITE_PLAUSIBLE_DOMAIN;
+if (plausibleDomain && import.meta.env.PROD) {
+  const script = document.createElement('script');
+  script.defer = true;
+  script.setAttribute('data-domain', plausibleDomain);
+  script.src = '/js/script.js';
+  document.head.appendChild(script);
+}
+
 // Health check endpoint for load balancer
 if (window.location.pathname === '/health') {
   ReactDOM.createRoot(document.getElementById('root')!).render(

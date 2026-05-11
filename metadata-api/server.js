@@ -37,7 +37,8 @@ const telemetryIngestEnv = (process.env.TELEMETRY_INGEST_ENABLED || '').trim().t
 let telemetryIngestEnabled = telemetryIngestEnv
   ? !['0', 'false', 'off', 'no'].includes(telemetryIngestEnv)
   : true;
-const OPENBAO_ADDR = (process.env.OPENBAO_ADDR || 'https://bao.p2p.red').replace(/\/$/, '');
+const OPENBAO_ENABLED = process.env.ENABLE_OPENBAO === 'true';
+const OPENBAO_ADDR = (process.env.OPENBAO_ADDR || '').replace(/\/$/, '');
 const OPENBAO_USERPASS_PATH = process.env.OPENBAO_USERPASS_PATH || '/v1/auth/userpass/login';
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || '';
 const ADMIN_JWT_TTL_SECONDS = parseInt(process.env.ADMIN_JWT_TTL_SECONDS || '3600', 10);
@@ -403,16 +404,16 @@ const buildStatusPayload = async () => {
   const webUrl = process.env.WEB_STATUS_URL || (isDev ? 'https://dev.p2p.red' : 'https://p2p.red');
   const signalHost = process.env.SIGNAL_STATUS_HOST || (isDev ? 'dev-signal.p2p.red' : 'signal.p2p.red');
   const signalUrl = process.env.SIGNAL_STATUS_URL || `https://${signalHost}/peerjs/id`;
-  const analyticsUrl = process.env.ANALYTICS_STATUS_URL || 'https://plausible.p2p.red/js/script.js';
-  const openBaoUrl = process.env.OPENBAO_STATUS_URL || 'https://bao.p2p.red/v1/sys/health';
+  const analyticsUrl = process.env.ANALYTICS_STATUS_URL || '';
+  const openBaoUrl = process.env.OPENBAO_STATUS_URL || (OPENBAO_ADDR ? `${OPENBAO_ADDR}/v1/sys/health` : '');
   const turnHost = process.env.TURN_STATUS_HOST || (isDev ? 'dev-turn.p2p.red' : 'turn1.p2p.red');
   const turnPort = parseInt(process.env.TURN_STATUS_PORT || '3478', 10);
 
   const [webOk, signalOk, analyticsOk, openBaoOk, turnOk] = await Promise.all([
     checkHttp(webUrl, { method: 'HEAD' }),
     checkHttp(signalUrl, { method: 'GET' }),
-    checkHttp(analyticsUrl, { method: 'HEAD' }),
-    checkHttp(openBaoUrl, { method: 'GET' }),
+    analyticsUrl ? checkHttp(analyticsUrl, { method: 'HEAD' }) : Promise.resolve(false),
+    openBaoUrl ? checkHttp(openBaoUrl, { method: 'GET' }) : Promise.resolve(false),
     checkTcp(turnHost, turnPort),
   ]);
 
@@ -440,9 +441,9 @@ const buildStatusPayload = async () => {
     signal: signalOk ? 'online' : 'offline',
     api: apiStatus,
     databases: databaseStatus,
-    analytics: analyticsOk ? 'online' : 'offline',
+    analytics: analyticsUrl ? (analyticsOk ? 'online' : 'offline') : 'disabled',
     turn: turnOk ? 'online' : 'offline',
-    secrets: openBaoOk ? 'online' : 'offline',
+    secrets: OPENBAO_ENABLED ? (openBaoOk ? 'online' : 'offline') : 'disabled',
   };
 
   const statusValues = Object.values(services);
@@ -505,8 +506,11 @@ app.get('/api/status', async (req, res) => {
 });
 
 app.post('/api/admin/login', async (req, res) => {
+  if (!OPENBAO_ENABLED) {
+    return res.status(503).json({ error: 'Admin authentication (OpenBao) is disabled' });
+  }
   if (!ADMIN_JWT_SECRET) {
-    return res.status(503).json({ error: 'Admin auth not configured' });
+    return res.status(503).json({ error: 'Admin auth JWT secret not configured' });
   }
   const { username, password } = req.body || {};
   if (!username || !password) {

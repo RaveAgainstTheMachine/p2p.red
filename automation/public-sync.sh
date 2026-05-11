@@ -1,14 +1,17 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting P2P.RED Pure Whitelist Sync..."
+# P2P.RED Ghost Sync Engine
+echo "🚀 Starting P2P.RED Ghost Sync (Public Purge)..."
 
+# Ensure we're on public
 git checkout public
 
-# Nuclear wipe (except .git)
+# Nuclear wipe of the public branch (except .git)
 find . -maxdepth 1 -not -name ".git" -not -name "." -exec rm -rf {} +
 
 # Whitelist checkout from master
+# ONLY code, root assets, and public CI/CD
 WHITELIST=(
   "packages"
   "metadata-api"
@@ -32,19 +35,22 @@ for item in "${WHITELIST[@]}"; do
   git checkout master -- "$item" || echo "⚠️ Warning: $item not found on master"
 done
 
-# Force-remove any node_modules that might have been checked out
-find . -name "node_modules" -type d -exec rm -rf {} +
+# Cleanup .github - remove internal sync workflow from public
+rm -f .github/workflows/public-sync.yml
 
-# Metadata Fix
+# Metadata Injection
+echo "🏷️ Re-injecting public metadata..."
 find . -name "package.json" -not -path "*/node_modules/*" -exec sed -i 's/"author": ".*"/"author": "Steven Frost"/g' {} +
 find . -name "package.json" -not -path "*/node_modules/*" -exec sed -i 's/"license": ".*"/"license": "BSL-1.1"/g' {} +
 
 # Commit
 git add -A
 if ! git diff-index --quiet HEAD; then
-    git commit -m "chore: pure whitelist sync (node_modules and root bloat purged)"
+    git commit -m "chore: public release hardening (removed internal tools & docs)"
 else
-    echo "✅ No changes to commit (already pure)."
+    echo "✅ Public branch already clean."
 fi
 
+# Return to master
 git checkout master
+echo "🏁 Done. public branch is a lean, self-host ready mirror."

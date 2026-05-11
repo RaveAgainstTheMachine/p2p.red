@@ -33,6 +33,8 @@ services:
     volumes:
       - plausible_db_data:/var/lib/postgresql/data
       - ${PLAUSIBLE_ENV_FILE:-/run/secrets/plausible.env}:/run/secrets/plausible.env:ro
+    profiles:
+      - analytics
     networks:
       - p2p-network
 
@@ -47,6 +49,8 @@ services:
         hard: 262144
     volumes:
       - plausible_events_data:/var/lib/clickhouse
+    profiles:
+      - analytics
     networks:
       - p2p-network
 
@@ -64,6 +68,8 @@ services:
       BASE_URL: https://plausible.p2p.red
       CLICKHOUSE_DATABASE_URL: http://plausible-events-db:8123/plausible_events
       DISABLE_AUTH_FOR_PRODUCTION: "false"
+    profiles:
+      - analytics
     networks:
       - p2p-network
 
@@ -194,11 +200,17 @@ services:
       - /var/snap/docker/common/p2p-envoy-certs:/var/snap/docker/common/p2p-envoy-certs:ro
       - ${ENVOY_RUNTIME_DIR:-./envoy-runtime}:/etc/envoy/runtime:ro
     depends_on:
-      - app
-      - peerjs-server
-      - metadata-api
-      - anubis
-      - plausible
+      app:
+        condition: service_started
+      peerjs-server:
+        condition: service_started
+      metadata-api:
+        condition: service_started
+      anubis:
+        condition: service_started
+      plausible:
+        condition: service_started
+        required: false
     networks:
       - p2p-network
       - p2p-bluegreen-network

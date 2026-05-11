@@ -1,33 +1,55 @@
 #!/bin/bash
 set -e
 
-echo "🚀 p2p.red Self-Host Orchestrator"
-echo "--------------------------------"
+# p2p.red Self-Host Setup Orchestrator
+echo "🚀 p2p.red Self-Host Setup"
+echo "=========================="
 
-# Default config
-ENABLE_PLAUSIBLE=false
-ENABLE_OPENBAO=false
+# 1. Environment Configuration
+read -p "Enter your base domain (e.g., p2p.red): " BASE_DOMAIN
+BASE_DOMAIN=${BASE_DOMAIN:-p2p.red}
 
-read -p "Enable Plausible Analytics? (y/N): " USE_PLAUSIBLE
-[[ "$USE_PLAUSIBLE" =~ ^[Yy]$ ]] && ENABLE_PLAUSIBLE=true
+echo ""
+echo "--- Optional Components ---"
+read -p "Enable Plausible Analytics? (y/N): " ENABLE_PLAUSIBLE
+read -p "Enable OpenBao Secrets Management? (y/N): " ENABLE_OPENBAO
 
-read -p "Enable OpenBao Secret Management? (y/N): " USE_OPENBAO
-[[ "$USE_OPENBAO" =~ ^[Yy]$ ]] && ENABLE_OPENBAO=true
+# 2. Secret Generation
+JWT_SECRET=$(openssl rand -base64 32)
+TURN_SECRET=$(openssl rand -base64 32)
 
-# Generate .env
-cat > .env << ENV_EOF
+# 3. Create .env
+cat > .env << EOF
 # Core
-BASE_DOMAIN=p2p.red
+BASE_DOMAIN=$BASE_DOMAIN
 NODE_ENV=production
 
-# Feature Flags
-ENABLE_PLAUSIBLE=$ENABLE_PLAUSIBLE
-ENABLE_OPENBAO=$ENABLE_OPENBAO
+# Secrets
+ADMIN_JWT_SECRET=$JWT_SECRET
+TURN_SECRET=$TURN_SECRET
 
-# Optional Keys (Only if enabled)
-PLAUSIBLE_DOMAIN=${PLAUSIBLE_DOMAIN:-}
-VAULT_ADDR=${VAULT_ADDR:-}
-ENV_EOF
+# Optional Features
+ENABLE_PLAUSIBLE=$( [[ "$ENABLE_PLAUSIBLE" =~ ^[Yy]$ ]] && echo "true" || echo "false" )
+ENABLE_OPENBAO=$( [[ "$ENABLE_OPENBAO" =~ ^[Yy]$ ]] && echo "true" || echo "false" )
 
-echo "✅ Configuration generated in .env"
-echo "🚀 To start: docker compose up -d"
+# Service URLs (Defaults)
+WEB_STATUS_URL=https://$BASE_DOMAIN
+SIGNAL_STATUS_URL=https://signal.$BASE_DOMAIN/peerjs/id
+EOF
+
+echo ""
+echo "✅ .env generated successfully."
+
+# 4. Docker Compose Instructions
+PROFILES="--profile core"
+[[ "$ENABLE_PLAUSIBLE" =~ ^[Yy]$ ]] && PROFILES="$PROFILES --profile analytics"
+[[ "$ENABLE_OPENBAO" =~ ^[Yy]$ ]] && PROFILES="$PROFILES --profile secrets"
+
+echo "🚀 To start your p2p.red instance, run:"
+echo "   docker compose $PROFILES up -d"
+echo ""
+echo "Note: Ensure your DNS (A records) are pointed to this server for:"
+echo " - $BASE_DOMAIN"
+[[ "$ENABLE_PLAUSIBLE" =~ ^[Yy]$ ]] && echo " - plausible.$BASE_DOMAIN"
+[[ "$ENABLE_OPENBAO" =~ ^[Yy]$ ]] && echo " - bao.$BASE_DOMAIN"
+echo "=========================="

@@ -1,6 +1,6 @@
 {
   "name": "p2p-file-share",
-  "version": "1.6.6",
+  "version": "1.6.7",
   "description": "Privacy-first P2P file sharing using WebRTC DataChannels",
   "type": "module",
   "scripts": {

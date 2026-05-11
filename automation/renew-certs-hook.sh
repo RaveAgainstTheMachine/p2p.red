@@ -44,12 +44,20 @@ sudo docker restart p2p-envoy
 
 # 📍 Persistence - Restore traffic split from disk via Admin API
 echo "📍 Restoring traffic split from disk..."
-BLUE_WEIGHT=$(cat "$REPO_ROOT/envoy-runtime/traffic_split/app_blue" 2>/dev/null || echo "100")
-GREEN_WEIGHT=$(cat "$REPO_ROOT/envoy-runtime/traffic_split/app_green" 2>/dev/null || echo "0")
+
+# Prioritize Snap path if it exists
+SNAP_RUNTIME_DIR="/var/snap/docker/common/p2p-file-share/envoy-runtime/traffic_split"
+if [ -d "$SNAP_RUNTIME_DIR" ]; then
+    BLUE_WEIGHT=$(cat "$SNAP_RUNTIME_DIR/app_blue" 2>/dev/null || echo "100")
+    GREEN_WEIGHT=$(cat "$SNAP_RUNTIME_DIR/app_green" 2>/dev/null || echo "0")
+else
+    BLUE_WEIGHT=$(cat "$REPO_ROOT/envoy-runtime/traffic_split/app_blue" 2>/dev/null || echo "100")
+    GREEN_WEIGHT=$(cat "$REPO_ROOT/envoy-runtime/traffic_split/app_green" 2>/dev/null || echo "0")
+fi
 
 echo "🔗 Applying weights: Blue=$BLUE_WEIGHT, Green=$GREEN_WEIGHT"
 sleep 2
-curl -X POST "http://127.0.0.1:9901/runtime_modify?traffic_split.app_blue=$BLUE_WEIGHT&traffic_split.app_green=$GREEN_WEIGHT" > /dev/null 2>&1
+curl -fsS -X POST "http://127.0.0.1:9901/runtime_modify?traffic_split.app_blue=$BLUE_WEIGHT&traffic_split.app_green=$GREEN_WEIGHT" > /dev/null 2>&1
 
 # 🛡️ Post-Restart Verification
 echo "🛡️ Verifying Envoy health..."

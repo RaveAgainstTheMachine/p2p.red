@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.6.7',
+    date: '2026-05-11',
+    changes: [
+      { category: 'Fixed', description: 'Resolved "No Healthy Upstream" error by syncing traffic split weights across repository and Snap runtime paths.' },
+      { category: 'Improved', description: 'Hardened automation scripts to preserve live traffic state across Envoy restarts and deployments.' },
+    ],
+  },
+  {
     version: '1.6.6',
     date: '2026-04-27',
     changes: [

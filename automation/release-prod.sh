@@ -31,7 +31,8 @@ DEPLOY_ENV=prod \
 if [ -d "/var/snap/docker/common" ] && [ -n "${ENVOY_RUNTIME_DIR:-}" ]; then
   echo "📦 Syncing runtime to snap path: $ENVOY_RUNTIME_DIR"
   sudo mkdir -p "$ENVOY_RUNTIME_DIR"
-  sudo cp -r "$REPO_ROOT/envoy-runtime/"* "$ENVOY_RUNTIME_DIR/"
+  # Use -n to avoid overwriting existing live weights with repo defaults
+  sudo cp -rn "$REPO_ROOT/envoy-runtime/"* "$ENVOY_RUNTIME_DIR/"
 fi
 
 # Ensure runtime services are up (metadata + peerjs + envoy)

@@ -1,7 +1,10 @@
 import webConfig from './packages/web/eslint.config.js';
 import desktopConfig from './packages/desktop/eslint.config.js';
 
-export default [
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
   {
     ignores: [
       '**/node_modules/**',
@@ -10,13 +13,21 @@ export default [
       '**/*.d.ts',
       '**/vite.config.ts',
       'src/**',
-      'packages/shared/**'
+      'packages/shared/**',
     ],
   },
+  js.configs.recommended,
   ...webConfig,
   ...desktopConfig,
   {
-    files: ['packages/web/src/**/*.{ts,tsx}'],
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        project: ['./tsconfig.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       'react-hooks/set-state-in-effect': 'off',
@@ -25,4 +36,4 @@ export default [
       'no-constant-condition': 'off'
     }
   },
-];
+);

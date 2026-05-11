@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -33,7 +33,7 @@ RUN pnpm run build && \
     cp -f public/download-bridge/sw.js dist/download-bridge/sw.js
 
 # Production stage
-FROM node:20-alpine
+FROM node:22-alpine
 
 ARG VITE_BUILD_VARIANT
 ARG VITE_BUILD_VERSION

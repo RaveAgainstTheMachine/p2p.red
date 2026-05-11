@@ -1,345 +1,83 @@
-# 🚀 P2P File Share
+# P2P File Share
 
-A privacy-first, browser-to-browser file sharing service using WebRTC DataChannels. Peer-to-peer transfers with relay fallback and short, shareable links. Deployed on OVH VPS with full infrastructure control.
+A high-performance, privacy-focused peer-to-peer file sharing platform utilizing WebRTC DataChannels for browser-to-browser transfers.
 
-**Current Status:** Single VPS deployment (testing phase). Designed for thousands of concurrent users with multi-VPS scaling path.
+## Overview
 
-## ✨ **Features**
+P2P File Share is engineered for secure, direct data transfer without intermediary server storage. By leveraging modern browser APIs, it facilitates high-bandwidth transfers that scale with the users' own network capabilities rather than centralized server throughput.
 
-- 🔒 **End-to-end encrypted** - Files encrypted in your browser before transfer
-- 🌐 **Direct P2P** - Peer-to-peer transfers with TURN relay fallback when direct fails
-- 🔗 **Short links** - 16-character shareable links (e.g., `p2p.red#aB3xK9mP12345678`)
-- 💾 **Streaming to disk** - Files written directly to disk via File System Access API (no RAM limits)
-- 🎨 **Beautiful UI** - Glassmorphism design with 11 themes
-- 📱 **Mobile friendly** - Works on all modern browsers and devices
-- 🖥️ **Self-hosted** - Complete control over infrastructure
-- ⚡ **High performance** - Redis caching, PostgreSQL persistence, sub-10ms metadata retrieval
-- 🛡️ **Bot mitigation** - Anubis proof-of-work challenges on metadata endpoints
+### Key Technical Pillars
 
-## 🛠️ **Technology Stack**
+*   **Zero-Knowledge Transfers**: Files are encrypted in the browser using the Web Crypto API (AES-GCM 256-bit) before transmission. Keys are never transmitted to the server.
+*   **WebRTC DataChannels**: Direct P2P communication for optimal latency and throughput.
+*   **Hybrid Signaling Architecture**: Utilizes a lightweight signaling layer for peer discovery with robust STUN/TURN fallback for NAT traversal.
+*   **Streaming I/O**: Implements the File System Access API to stream data directly to/from the local disk, bypassing memory constraints for multi-gigabyte transfers.
+*   **Base62 Metadata Routing**: Efficient short-link generation and routing for transient metadata state.
 
-- **Frontend**: React + TypeScript + Vite
-- **P2P Transport**: WebRTC DataChannels via PeerJS
-- **Encryption**: Browser-native AES-GCM
-- **Metadata Storage**: PostgreSQL + Redis caching
-- **Short Links**: Node.js/Express API with Base62 encoding
-- **Deployment**: OVH VPS + Docker + Envoy
-- **Signaling**: Self-hosted PeerJS server
-- **NAT Traversal**: coturn TURN server
-- **SSL**: Let's Encrypt certificates
+## Technical Stack
 
-## 🚀 **Quick Start**
+### Frontend
+- **Framework**: React 18+ with TypeScript
+- **State Management**: Context API / Hooks
+- **Styling**: Vanilla CSS with a focus on high-performance animations and glassmorphism.
+- **P2P Engine**: WebRTC (via PeerJS abstraction)
+- **Crypto**: AES-GCM (Browser-native)
 
-### For Users
+### Backend Services
+- **Signaling**: PeerJS Server (Node.js)
+- **Metadata API**: Express.js with PostgreSQL persistence
+- **Caching**: Redis for sub-10ms metadata retrieval and link expiration
+- **Edge Proxy**: Envoy Proxy for L7 load balancing and TLS termination
+- **NAT Traversal**: coturn (STUN/TURN)
 
-1. Open [p2p.red](https://p2p.red)
-2. Drag and drop a file to share
-3. Copy the short share link (e.g., `https://p2p.red#aB3xK9mP12345678`)
-4. Send the link to anyone
-5. They open the link and choose save location
-6. File transfers directly from your browser to theirs (P2P)
+## Architecture
 
-**Note:** Both sender and receiver must keep their browsers open during transfer.
-
-### For Developers (Local)
-
-```bash
-# Clone and install
-git clone https://github.com/yourusername/p2p-file-share
-cd p2p-file-share
-pnpm install
-
-# Start dev services (metadata API + Redis + Postgres + PeerJS)
-docker compose -f docker-compose.e2e.yml up -d --build
-
-# Run Vite on 127.0.0.1:3000
-npm run dev -- --host 127.0.0.1 --port 3000
+```mermaid
+graph TD
+    A[Sender] <-->|WebRTC DataChannel| B[Receiver]
+    A -->|1. Register Metadata| C[Metadata API]
+    C -->|2. Store| D[Redis/PostgreSQL]
+    B -->|3. Query Metadata| C
+    A <-->|Signaling| E[PeerJS Server]
+    B <-->|Signaling| E
+    A <-->|Relay fallback| F[TURN Server]
+    B <-->|Relay fallback| F
 ```
 
-Local env defaults live in `.env.local` (expected for dev):
+## Self-Hosting Guide
 
-```bash
-VITE_API_URL=http://127.0.0.1:3001
-VITE_PEERJS_HOST=127.0.0.1
-VITE_PEERJS_PORT=3000
-VITE_PEERJS_SECURE=false
-```
+P2P File Share is designed to be fully self-hostable on standard Linux environments.
 
-### Automation
+### Prerequisites
+- Docker & Docker Compose
+- A domain name with SSL support
+- Ports 80, 443, 3478 (UDP/TCP) open
 
-- Scripts and usage: [`automation/README.md`](automation/README.md)
-- Make targets:
-  - `make deploy-all`
-  - `make deploy-and-test`
-  - `./automation/deploy-zero-downtime.sh` (blue/green)
-  - `make public-sync PUBLIC_REPO=/path/to/public-repo`
-- Public repo dry run:
-  - `PUBLIC_SYNC_DRY_RUN=1 make public-sync PUBLIC_REPO=/path/to/public-repo`
+### Deployment
 
-## 🌐 **Environments**
+1.  **Clone the Repository**:
+    ```bash
+    git clone https://github.com/example/p2p-file-share.git
+    cd p2p-file-share
+    ```
 
-| Environment | URL                        | Purpose            | Cost        |
-|-------------|----------------------------|--------------------|-------------|
-| Development | 127.0.0.1:3000             | Local development  | Free        |
-| Production  | [p2p.red](https://p2p.red) | Live service       | $5-15/month |
+2.  **Configure Environment**:
+    Edit the provided `.env` and configuration files in `envoy.yaml` and `turnserver.conf`.
 
-## 📊 **Browser Support**
+3.  **Launch Infrastructure**:
+    ```bash
+    docker compose up -d
+    ```
 
-| Browser | Support | Notes                      |
-|---------|---------|----------------------------|
-| Chrome  | ✅ Full | All versions               |
-| Firefox | ✅ Full | All versions               |
-| Safari  | ✅ Full | All versions               |
-| Edge    | ✅ Full | All versions               |
-| Mobile  | ✅ Full | iOS Safari, Android Chrome |
+For detailed instructions, see the [Self-Hosting Documentation](PROJECT_DOCUMENTATION/SELF_HOSTING.md).
 
-## 🔐 **Privacy & Security**
+## Security & Audit
 
-- **End-to-end encryption**: AES-GCM 256-bit, keys generated in-browser
-- **Relay transparency**: TURN relays may carry encrypted data when direct P2P is blocked
-- **Metadata-only**: Short-link metadata stored up to 24 hours (filename, size, type, peer IDs)
-- **No server storage**: File contents are never stored on servers
-- **Open source**: Code available for audit
-- **Self-hosted**: Complete control over data
+This project prioritizes security through simplicity:
+- **No Persistence**: File data is never stored or cached on the server.
+- **Client-Side Encryption**: AES-GCM ensures that even if signaling or metadata layers are compromised, file contents remain inaccessible.
+- **Minimal Metadata**: Only transient peer information is stored, with a default 24-hour TTL.
 
-## 📈 **Connection Success**
+## License
 
-- **STUN only**: 70-80% success rate (free)
-- **STUN + TURN**: 95%+ success rate (self-hosted)
-- **Most home networks**: Work perfectly
-- **Corporate networks**: TURN server helps
-
-## 🏗️ **Architecture**
-
-### Current (Single VPS)
-```
-Sender Browser                               Receiver Browser
-      |                                             |
-      | 1. Create short link                        |
-      |-------------------------------------------> |
-      |    POST /api/metadata                       |
-      |    (peerId, fileName, fileSize)             |
-      |                                             |
-      | 2. Share link: p2p.red#aB3xK9mP12345678     |
-      |-------------------------------------------> |
-      |                                             |
-      |                                             | 3. Retrieve metadata
-      |                                             |-------------------->
-      |                                             | GET /api/metadata/:key
-      |                                             |
-      | 4. WebRTC DataChannel (file data)           |
-      |<------------------------------------------->|
-      |    (Direct P2P or TURN relay fallback)      |
-      v                                             v
-      
-      Metadata API (PostgreSQL + Redis)
-           │
-           ├─ Short link generation (Base62)
-           ├─ Metadata storage (24h expiry)
-           └─ Redis caching (<10ms reads)
-```
-
-### Production Target (Multi-VPS)
-See [ARCHITECTURE.md](PROJECT_DOCUMENTATION/ARCHITECTURE.md) for detailed scaling plan to thousands of concurrent users.
-
-## 📁 **Project Structure**
-
-```
-src/
-├── components/          # React components
-│   ├── DropZone.tsx    # File upload area
-│   ├── ShareLink.tsx   # Share link display
-│   ├── ProgressBar.tsx # Transfer progress
-│   └── ConnectionStatus.tsx # Connection state
-├── hooks/              # Custom React hooks
-│   ├── useWebRTC.ts    # WebRTC connection logic
-│   ├── useEncryption.ts # File encryption/decryption
-│   └── useFileTransfer.ts # Streaming file transfer
-├── services/           # API clients
-│   └── metadataApi.ts  # Short link API client
-├── config/             # Environment configuration
-│   └── environments.ts # Dev/prod settings
-├── utils/              # Utility functions
-│   ├── encryption.ts   # Crypto operations
-│   ├── streamingZip.ts # Folder compression
-│   └── themes.ts       # UI theme definitions
-└── styles/             # CSS and themes
-
-metadata-api/           # Short link backend
-├── server.js           # Express API server
-├── db/
-│   └── init.sql        # PostgreSQL schema
-├── package.json        # Dependencies
-└── Dockerfile          # Container image
-```
-
-## 🚀 **Deployment**
-
-### VPS Setup
-
-```bash
-# Connect to VPS
-ssh ubuntu@p2p.red
-
-# Install Docker and dependencies
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker ubuntu
-
-# Install Certbot (standalone)
-sudo apt install -y certbot
-
-# Obtain SSL certificate
-sudo certbot certonly --standalone -d p2p.red -d www.p2p.red
-
-# Open firewall ports
-sudo ufw allow 22/tcp      # SSH
-sudo ufw allow 80/tcp      # HTTP
-sudo ufw allow 443/tcp     # HTTPS
-sudo ufw allow 3478/udp    # TURN server
-sudo ufw enable
-```
-
-### Application Deployment
-
-```bash
-# Deploy metadata API stack (PostgreSQL + Redis + API)
-./deploy-metadata-api.sh
-
-# Deploy frontend and main services
-./deploy.sh
-
-# Zero-downtime blue/green deploy
-./automation/deploy-zero-downtime.sh
-```
-
-### Full Stack Deployment
-
-```bash
-# 1. Deploy metadata services
-docker compose -f docker-compose.metadata.yml up -d
-
-# 2. Initialize database
-docker exec -i p2p-postgres psql -U p2p_api_user -d p2p_metadata < metadata-api/db/init.sql
-
-# 3. Build and deploy frontend
-npm run build
-./deploy.sh
-```
-
-### Manual Deployment
-
-```bash
-# Build application
-npm run build
-
-# Copy to VPS
-scp -r dist/ ubuntu@p2p.red:/opt/p2p-file-share/
-
-# Restart services
-ssh ubuntu@p2p.red "cd /opt/p2p-file-share && sudo docker compose restart"
-```
-
-## 📊 **Monitoring & Logging**
-
-### Application Monitoring
-```bash
-# View all logs
-docker compose logs -f
-docker compose -f docker-compose.metadata.yml logs -f
-
-# Check service status
-docker compose ps
-docker compose -f docker-compose.metadata.yml ps
-
-# Test metadata API
-curl http://localhost:3001/health
-
-# System monitoring
-htop
-df -h
-```
-
-### Metadata API Monitoring
-```bash
-# Check API health
-curl http://localhost:3001/health | jq
-
-# View statistics
-curl http://localhost:3001/api/stats | jq
-
-# Database queries
-docker exec -it p2p-postgres psql -U p2p_api_user -d p2p_metadata
-
-# Redis cache stats
-docker exec -it p2p-redis redis-cli INFO stats
-```
-
-### Log Management
-- **Docker logs**: Container stdout/stderr
-- **Envoy logs**: Edge proxy access/error logs
-- **TURN logs**: Connection and relay logs
-- **Application logs**: WebRTC connection events
-- **Metadata API logs**: Short link creation/retrieval
-- **PostgreSQL logs**: Database queries and errors
-- **Redis logs**: Cache operations
-
-## 💰 **Cost Management**
-
-### Current Costs (Single VPS)
-- **OVH VPS**: $15/month (2 vCPU, 4GB RAM)
-- **Domain**: $10-15/year
-- **SSL**: Free (Let's Encrypt)
-- **Total**: ~$200/year
-
-### Production Costs (Multi-VPS for 3K+ users)
-- **Load Balancer**: $5-10/month
-- **Web VPS x3**: $30-45/month
-- **Database VPS**: $20-30/month
-- **TURN VPS**: $10-20/month
-- **Monitoring VPS**: $10-15/month
-- **Total**: $75-120/month (~$900-1,440/year)
-
-See [ARCHITECTURE.md](PROJECT_DOCUMENTATION/ARCHITECTURE.md) for detailed scaling costs.
-
-### Benefits
-- **Full control**: Complete server administration
-- **Cost effective**: Single server vs cloud services
-- **Performance**: Dedicated resources
-- **Privacy**: No third-party data sharing
-
-## 🔧 **Configuration Files**
-
-- `docker-compose.yml` - Main services (frontend, PeerJS, TURN)
-- `docker-compose.metadata.yml` - Metadata stack (PostgreSQL, Redis, API)
-- `Dockerfile` - Application container
-- `envoy.yaml` - Envoy reverse proxy configuration
-- `Dockerfile.envoy` - Envoy container
-- `turnserver.conf` - TURN server settings
-- `metadata-api/.env` - API configuration
-- `deploy-metadata-api.sh` - Metadata stack deployment
-- `deploy.sh` - Frontend deployment script
-
-## 🤝 **Contributing**
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 **License**
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## 🔗 **Related Projects**
-
-- [PeerJS](https://peerjs.com/) - WebRTC abstraction library
-- [WebRTC](https://webrtc.org/) - Real-time communication in browsers
-- [coturn](https://github.com/coturn/coturn) - TURN server implementation
-- [OVH VPS](https://www.ovhcloud.com/en/vps/) - Virtual private servers
-- [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API) - Browser cryptography
-
----
-
-**Made with ❤️ for privacy-conscious file sharing | Self-hosted on OVH VPS**
+Distributed under the MIT License. See `LICENSE` for more information.

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 const runtimeOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 const adminBaseEnv = (import.meta.env.VITE_ADMIN_API_URL || '').replace(/\/$/, '');
 const apiBase = adminBaseEnv
-  || (import.meta.env.PROD ? (runtimeOrigin || 'https://p2p.red') : 'http://localhost:3001');
+  || (import.meta.env.PROD ? (runtimeOrigin || 'https://example.com') : 'http://localhost:3001');
 const ADMIN_API_BASE = `${apiBase}/api/admin`;
 
 type AdminStatusResponse = {
@@ -98,7 +98,7 @@ export function AdminApp() {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
 
   useEffect(() => {
-    document.title = 'p2p.red Admin Dashboard';
+    document.title = 'P2P File Share Admin Dashboard';
   }, []);
 
   const hydrate = useCallback(async () => {
@@ -189,12 +189,12 @@ export function AdminApp() {
         <div className="mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-6 py-12">
           <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/60">
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            dash.p2p.red
+            dash.example.com
           </div>
           <div className="grid gap-10 lg:grid-cols-[1.2fr_1fr]">
             <div>
               <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl">
-                Operations control tower for <span className="text-emerald-300">p2p.red</span>.
+                Operations control tower for <span className="text-emerald-300">P2P File Share</span>.
               </h1>
               <p className="mt-4 text-lg text-slate-300">
                 Secure access via OpenBao userpass. Live telemetry, system health, and guarded ops toggles in one place.
@@ -258,7 +258,7 @@ export function AdminApp() {
       <div className="mx-auto max-w-6xl px-6 py-12">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-white/50">dash.p2p.red</p>
+            <p className="text-xs uppercase tracking-[0.3em] text-white/50">dash.example.com</p>
             <h1 className="mt-2 text-3xl font-semibold text-white">Admin Telemetry & Ops</h1>
             <p className="mt-2 text-sm text-slate-300">Live status, telemetry signals, and guarded runtime controls.</p>
           </div>

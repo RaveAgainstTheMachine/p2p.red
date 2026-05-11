@@ -12,17 +12,17 @@ describe('ShareLink', () => {
       configurable: true,
     });
 
-    render(<ShareLink shareLink="https://p2p.red/#abc" />);
+    render(<ShareLink shareLink="https://P2P File Share/#abc" />);
 
     const copyButtons = screen.getAllByRole('button', { name: /copy link/i });
     await user.click(copyButtons[0]);
-    expect(writeText).toHaveBeenCalledWith('https://p2p.red/#abc');
+    expect(writeText).toHaveBeenCalledWith('https://P2P File Share/#abc');
   });
 
   it('shows native share button when available', () => {
     Object.assign(navigator, { share: vi.fn() });
 
-    render(<ShareLink shareLink="https://p2p.red/#abc" />);
+    render(<ShareLink shareLink="https://P2P File Share/#abc" />);
 
     expect(screen.getByTitle('Share via AirDrop, Nearby Share, etc.')).toBeInTheDocument();
   });

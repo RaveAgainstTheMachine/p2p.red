@@ -41,7 +41,7 @@ export const Feedback: React.FC<FeedbackProps> = ({ onBack, apiBaseUrl }) => {
       
       setIsSuccess(true);
     } catch (err) {
-      setError('Something went wrong, bud. Please try again later.');
+      setError('Something went wrong. Please try again later.');
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -58,7 +58,7 @@ export const Feedback: React.FC<FeedbackProps> = ({ onBack, apiBaseUrl }) => {
         </div>
         <h2 className="text-2xl font-semibold mb-3">Feedback Received!</h2>
         <p className="text-white/60 mb-8 leading-relaxed">
-          Thanks for the feedback, eh? The Security Moose is personally reviewing your comments as we speak.
+          Thanks for the feedback The Security Moose is personally reviewing your comments as we speak.
         </p>
         <button
           onClick={onBack}
@@ -77,10 +77,10 @@ export const Feedback: React.FC<FeedbackProps> = ({ onBack, apiBaseUrl }) => {
           Feedback
         </div>
         <h1 className="text-3xl md:text-4xl font-semibold text-white leading-tight">
-          How are we doing, bud?
+          How are we doing?
         </h1>
         <p className="mt-3 text-white/50 text-base leading-relaxed">
-          p2p.red is built for you. Tell us what's working, what's broken, or what you'd like to see next.
+          P2P File Share is built for you. Tell us what's working, what's broken, or what you'd like to see next.
         </p>
       </div>
 
@@ -88,7 +88,7 @@ export const Feedback: React.FC<FeedbackProps> = ({ onBack, apiBaseUrl }) => {
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Rating */}
           <div>
-            <label className="block text-sm font-medium text-white/70 mb-4">How much do you like p2p.red?</label>
+            <label className="block text-sm font-medium text-white/70 mb-4">How much do you like P2P File Share?</label>
             <div className="flex gap-4">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
@@ -127,14 +127,14 @@ export const Feedback: React.FC<FeedbackProps> = ({ onBack, apiBaseUrl }) => {
           {/* Email (Optional) */}
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-white/70 mb-2">
-              Email (if you want a reply, eh?)
+              Email (if you want a reply)
             </label>
             <input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="moose@p2p.red"
+              placeholder="moose@P2P File Share"
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-[var(--theme-primary)]/40 transition-all"
             />
           </div>

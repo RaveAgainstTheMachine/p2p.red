@@ -17,7 +17,7 @@ export const Legal: React.FC<LegalProps> = () => {
           Terms of Service & Privacy Policy.
         </h1>
         <p className="mt-3 text-white/50 text-base leading-relaxed max-w-2xl">
-          We keep it simple, honest, and privacy-first. Here is the legal framework for p2p.red.
+          We keep it simple, honest, and privacy-first. Here is the legal framework for P2P File Share.
         </p>
       </div>
 

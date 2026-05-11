@@ -36,7 +36,7 @@ export const Logo: React.FC<LogoProps> = ({
           maskPosition: 'center',
           WebkitMaskPosition: 'center'
         }}
-        aria-label={useFavicon ? 'p2p.red icon' : 'P2P.RED Logo'}
+        aria-label={useFavicon ? 'P2P File Share icon' : 'P2P.RED Logo'}
       />
     </div>
   );

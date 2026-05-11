@@ -6,9 +6,7 @@
 const apiEnvBase = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
 export const API_BASE_URL = apiEnvBase
   ? `${apiEnvBase}/api`
-  : import.meta.env.PROD
-    ? 'https://p2p.red/api'
-    : '/api';
+  : '/api';
 
 export interface TransferMetadata {
   peerId: string;

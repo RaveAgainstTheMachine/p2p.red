@@ -31,8 +31,8 @@ static_resources:
                   virtual_hosts:
                     - name: redirect_p2p
                       domains:
-                        - p2p.red
-                        - www.p2p.red
+                        - example.com
+                        - www.example.com
                       routes:
                         - match:
                             prefix: "/"
@@ -40,7 +40,7 @@ static_resources:
                             https_redirect: true
                     - name: redirect_signal
                       domains:
-                        - signal.p2p.red
+                        - signal.example.com
                       routes:
                         - match:
                             prefix: "/"
@@ -48,7 +48,7 @@ static_resources:
                             https_redirect: true
                     - name: redirect_plausible
                       domains:
-                        - plausible.p2p.red
+                        - plausible.example.com
                       routes:
                         - match:
                             prefix: "/"
@@ -56,7 +56,7 @@ static_resources:
                             https_redirect: true
                     - name: redirect_dash
                       domains:
-                        - dash.p2p.red
+                        - dash.example.com
                       routes:
                         - match:
                             prefix: "/"
@@ -79,8 +79,8 @@ static_resources:
       filter_chains:
         - filter_chain_match:
             server_names:
-              - p2p.red
-              - www.p2p.red
+              - example.com
+              - www.example.com
           transport_socket:
             name: envoy.transport_sockets.tls
             typed_config:
@@ -88,9 +88,9 @@ static_resources:
               common_tls_context:
                 tls_certificates:
                   - pkcs12:
-                      filename: /var/snap/docker/common/p2p-envoy-certs/p2p.red.p12
+                      filename: /etc/envoy/certs/example.com.p12
                     password:
-                      inline_string: "p2pred"
+                      inline_string: "password"
                 tls_params:
                   tls_minimum_protocol_version: TLSv1_2
                   tls_maximum_protocol_version: TLSv1_3
@@ -108,8 +108,8 @@ static_resources:
                   virtual_hosts:
                     - name: p2p
                       domains:
-                        - p2p.red
-                        - www.p2p.red
+                        - example.com
+                        - www.example.com
                       response_headers_to_add:
                         - header:
                             key: X-Content-Type-Options
@@ -121,7 +121,7 @@ static_resources:
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - header:
                             key: Content-Security-Policy
-                            value: "default-src 'self'; script-src 'self' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; style-src 'self' 'unsafe-inline'; connect-src 'self' wss://p2p.red https://signal.p2p.red wss://signal.p2p.red; font-src 'self'; object-src 'none';"
+                            value: "default-src 'self'; script-src 'self' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; style-src 'self' 'unsafe-inline'; connect-src 'self' wss://example.com https://signal.example.com wss://signal.example.com; font-src 'self'; object-src 'none';"
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - header:
                             key: X-Frame-Options
@@ -169,7 +169,7 @@ static_resources:
                           response_headers_to_add:
                             - header:
                                 key: Content-Security-Policy
-                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; style-src-elem 'self' 'unsafe-inline'; style-src-attr 'unsafe-inline' 'unsafe-hashes'; img-src 'self' data:; connect-src 'self' https://signal.p2p.red wss://signal.p2p.red wss://p2p.red; font-src 'self'; object-src 'none';"
+                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; style-src-elem 'self' 'unsafe-inline'; style-src-attr 'unsafe-inline' 'unsafe-hashes'; img-src 'self' data:; connect-src 'self' https://signal.example.com wss://signal.example.com wss://example.com; font-src 'self'; object-src 'none';"
                               append_action: OVERWRITE_IF_EXISTS_OR_ADD
                             - header:
                                 key: X-Frame-Options
@@ -185,7 +185,7 @@ static_resources:
                           response_headers_to_add:
                             - header:
                                 key: Content-Security-Policy
-                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://p2p.red; font-src 'self'; object-src 'none';"
+                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://example.com; font-src 'self'; object-src 'none';"
                               append_action: OVERWRITE_IF_EXISTS_OR_ADD
                             - header:
                                 key: X-Frame-Options
@@ -201,7 +201,7 @@ static_resources:
                           response_headers_to_add:
                             - header:
                                 key: Content-Security-Policy
-                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://p2p.red; font-src 'self'; object-src 'none';"
+                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://example.com; font-src 'self'; object-src 'none';"
                               append_action: OVERWRITE_IF_EXISTS_OR_ADD
                             - header:
                                 key: X-Frame-Options
@@ -211,12 +211,12 @@ static_resources:
                             path: "/js/script.js"
                           route:
                             cluster: plausible
-                            host_rewrite_literal: plausible.p2p.red
+                            host_rewrite_literal: plausible.example.com
                         - match:
                             path: "/api/event"
                           route:
                             cluster: plausible
-                            host_rewrite_literal: plausible.p2p.red
+                            host_rewrite_literal: plausible.example.com
                         - match:
                             prefix: "/api/"
                           route:
@@ -308,7 +308,7 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
         - filter_chain_match:
             server_names:
-              - dash.p2p.red
+              - dash.example.com
           transport_socket:
             name: envoy.transport_sockets.tls
             typed_config:
@@ -316,9 +316,9 @@ static_resources:
               common_tls_context:
                 tls_certificates:
                   - pkcs12:
-                      filename: /var/snap/docker/common/p2p-envoy-certs/dash.p2p.red.p12
+                      filename: /etc/envoy/certs/dash.example.com.p12
                     password:
-                      inline_string: "p2pred"
+                      inline_string: "password"
                 tls_params:
                   tls_minimum_protocol_version: TLSv1_2
                   tls_maximum_protocol_version: TLSv1_3
@@ -334,7 +334,7 @@ static_resources:
                   virtual_hosts:
                     - name: dash
                       domains:
-                        - dash.p2p.red
+                        - dash.example.com
                       response_headers_to_add:
                         - header:
                             key: X-Content-Type-Options
@@ -346,7 +346,7 @@ static_resources:
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - header:
                             key: Content-Security-Policy
-                            value: "default-src 'self'; script-src 'self' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://dash.p2p.red; font-src 'self'; object-src 'none';"
+                            value: "default-src 'self'; script-src 'self' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://dash.example.com; font-src 'self'; object-src 'none';"
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - header:
                             key: X-Frame-Options
@@ -387,7 +387,7 @@ static_resources:
 
         - filter_chain_match:
             server_names:
-              - plausible.p2p.red
+              - plausible.example.com
           transport_socket:
             name: envoy.transport_sockets.tls
             typed_config:
@@ -395,9 +395,9 @@ static_resources:
               common_tls_context:
                 tls_certificates:
                   - pkcs12:
-                      filename: /var/snap/docker/common/p2p-envoy-certs/plausible.p2p.red.p12
+                      filename: /etc/envoy/certs/plausible.example.com.p12
                     password:
-                      inline_string: "p2pred"
+                      inline_string: "password"
                 tls_params:
                   tls_minimum_protocol_version: TLSv1_2
                   tls_maximum_protocol_version: TLSv1_3
@@ -413,7 +413,7 @@ static_resources:
                   virtual_hosts:
                     - name: plausible
                       domains:
-                        - plausible.p2p.red
+                        - plausible.example.com
                       routes:
                         - match:
                             prefix: "/"
@@ -426,7 +426,7 @@ static_resources:
 
         - filter_chain_match:
             server_names:
-              - signal.p2p.red
+              - signal.example.com
           transport_socket:
             name: envoy.transport_sockets.tls
             typed_config:
@@ -434,9 +434,9 @@ static_resources:
               common_tls_context:
                 tls_certificates:
                   - pkcs12:
-                      filename: /var/snap/docker/common/p2p-envoy-certs/signal.p2p.red.p12
+                      filename: /etc/envoy/certs/signal.example.com.p12
                     password:
-                      inline_string: "p2pred"
+                      inline_string: "password"
                 tls_params:
                   tls_minimum_protocol_version: TLSv1_2
                   tls_maximum_protocol_version: TLSv1_3
@@ -454,7 +454,7 @@ static_resources:
                   virtual_hosts:
                     - name: signal
                       domains:
-                        - signal.p2p.red
+                        - signal.example.com
                       routes:
                         - match:
                             prefix: "/peerjs"

@@ -206,7 +206,7 @@ export const Info: React.FC<InfoProps> = () => {
           Privacy-first file sharing — the wiring explained.
         </h1>
         <p className="mt-3 text-white/50 text-base leading-relaxed max-w-2xl">
-          p2p.red uses WebRTC to send files directly between browsers. Here's exactly what happens
+          P2P File Share uses WebRTC to send files directly between browsers. Here's exactly what happens
           under the hood — no hand-waving.
         </p>
       </div>

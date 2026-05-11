@@ -1,6 +1,6 @@
 {
   "name": "p2p-file-share",
-  "version": "1.6.8",
+  "version": "1.0.0",
   "description": "Privacy-first P2P file sharing using WebRTC DataChannels",
   "type": "module",
   "scripts": {
@@ -15,8 +15,7 @@
     "test:unit:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:ui": "playwright test --ui",
-    "test:tui": "node automation/test-tui.js"
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.18",

@@ -42,21 +42,21 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
     const subject = encodeURIComponent('I shared a file with you');
     const bodyContent = qrDataUrl
       ? (
-        `<p>I shared a file with you using p2p.red.</p>` +
+        `<p>I shared a file with you using P2P File Share.</p>` +
         `<p><strong>Grab it here:</strong><br />${shareLink}</p>` +
         `<p>Or scan this QR code:</p>` +
         `<p><img src="${qrDataUrl}" alt="QR code" width="200" height="200" /></p>` +
         `<p>Note: The sender needs to keep their page open until the transfer completes.</p>` +
-        `<p>---<br />Secure P2P file sharing with end-to-end encryption<br />https://p2p.red</p>`
+        `<p>---<br />Secure P2P file sharing with end-to-end encryption<br />https://P2P File Share</p>`
       )
       : (
-        `I shared a file with you using p2p.red\n\n` +
+        `I shared a file with you using P2P File Share\n\n` +
         `Grab it here:\n${shareLink}\n\n` +
         `Or scan this QR code:\n${shareLink.replace('#', '%23')}\n\n` +
         `Note: The sender needs to keep their page open until the transfer completes.\n\n` +
         `---\n` +
         `Secure P2P file sharing with end-to-end encryption\n` +
-        `https://p2p.red`
+        `https://P2P File Share`
       );
     const body = encodeURIComponent(bodyContent);
     window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
@@ -68,7 +68,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
     try {
       await navigator.share({
         title: 'Here’s the file',
-        text: `Grab this file on p2p.red`,
+        text: `Grab this file on P2P File Share`,
         url: shareLink
       });
     } catch (err) {
@@ -83,7 +83,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
     const text = encodeURIComponent('Here’s the file I shared with you');
     // Extract short key from hash and create /share/ URL for better previews
     const shortKey = shareLink.split('#')[1];
-    const previewUrl = `https://p2p.red/share/${shortKey}`;
+    const previewUrl = `https://P2P File Share/share/${shortKey}`;
     const url = encodeURIComponent(previewUrl);
     
     const shareUrls: Record<string, string> = {
@@ -107,7 +107,7 @@ export const ShareLink: React.FC<ShareLinkProps> = ({ shareLink, onCopy }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
       <h2 className="text-xl font-bold text-white">
-        Here’s your share link, bud:
+        Here’s your share link:
       </h2>
       
       <div 

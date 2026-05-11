@@ -95,7 +95,7 @@ const updateMetaTags = (metadata: any) => {
   updateMetaTag('og:url', `${window.location.origin}${window.location.pathname}${window.location.hash}`);
   updateMetaTag('og:title', `${metadata.fileName} - Shared via P2P`);
   updateMetaTag('og:description', `A ${metadata.fileType} file (${formatFileSize(metadata.fileSize)}) shared securely with P2P encryption. Download directly from sender.`);
-  updateMetaTag('og:site_name', 'p2p.red');
+  updateMetaTag('og:site_name', 'P2P File Share');
   
   // Add image for better preview (optional)
   updateMetaTag('og:image', `${window.location.origin}/favicon.svg`);
@@ -135,14 +135,14 @@ const resetMetaTags = () => {
   
   // Reset Open Graph tags
   updateMetaTag('og:type', 'website');
-  updateMetaTag('og:url', 'https://p2p.red/');
+  updateMetaTag('og:url', `${window.location.origin}/`);
   updateMetaTag('og:title', 'P2P File Share - Secure File Sharing');
   updateMetaTag('og:description', 'Share files securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage.');
-  updateMetaTag('og:site_name', 'p2p.red');
+  updateMetaTag('og:site_name', 'P2P File Share');
   
   // Reset Twitter Card tags
   updateMetaName('twitter:card', 'summary');
-  updateMetaName('twitter:url', 'https://p2p.red/');
+  updateMetaName('twitter:url', `${window.location.origin}/`);
   updateMetaName('twitter:title', 'P2P File Share - Secure File Sharing');
   updateMetaName('twitter:description', 'Share files securely with end-to-end encryption. Direct P2P with relay fallback. No server file storage.');
   
@@ -458,7 +458,7 @@ function App() {
     'Certified organic human ✅ Your link is ready.',
     'Humans 1, bots 0. Share link created.',
     'Thanks for proving you’re not a Roomba. Link generated.',
-    'You passed the Turing, eh? Share link ready.',
+    'You passed the Turing Share link ready.',
     'Moose approved! Your secure link is ready to go.',
     'The bots are crying oil. You win! Link ready.',
     'Human detected! Access granted. Grab your link below.',
@@ -466,14 +466,14 @@ function App() {
     'Security moose bows to you. Link created!'
   ];
   const MOOSE_MESSAGES = [
-    "No intruders today, eh? I've checked the perimeter and it's looking real good, bud.",
+    "No intruders today I've checked the perimeter and it's looking real good.",
     "Your connection is as solid as a frozen pond in February. All clear!",
     "Encrypted? You betcha! I don't settle for less than maple-syrup-thick security.",
-    "Relax, eh. I'm watching the packets like a goalie in the third period. All clear!",
-    "A moose never sleeps on the job, sorry. Your data is safe and sound, eh?",
+    "Relax. I'm watching the packets like a goalie in the third period. All clear!",
+    "A moose never sleeps on the job, sorry. Your data is safe and sound",
     "Looking for leaks? Not on my watch, oop—just scooting past any potential trouble.",
-    "I've sniffed the peer connection. It's cleaner than a fresh sheet of ice, bud.",
-    "Safe and sound. Like a moose with a double-double. Everything's lookin' great, eh?",
+    "I've sniffed the peer connection. It's cleaner than a fresh sheet of ice.",
+    "Safe and sound. Like a moose with a double-double. Everything's lookin' great",
   ];
 
   const buildVariantRaw = (import.meta as any)?.env?.VITE_BUILD_VARIANT?.toLowerCase?.();
@@ -1696,9 +1696,9 @@ function App() {
           <div className="flex flex-col items-center sm:block relative">
              {/* Logo - top left on desktop, centered above on mobile */}
              <a
-              href="https://p2p.red"
+              href="https://P2P File Share"
               className="opacity-80 hover:opacity-100 transition-opacity shrink-0 sm:absolute sm:left-0 sm:top-0 sm:mt-1"
-              title="p2p.red"
+              title="P2P File Share"
             >
               <Logo size="small" />
             </a>
@@ -1769,7 +1769,7 @@ function App() {
         <div className="fixed bottom-8 right-8 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out z-50">
           <div className="flex items-center gap-3">
             <Check size={20} />
-            <span className="font-medium">Link copied! You're basically a wizard, eh?</span>
+            <span className="font-medium">Link copied! You're basically a wizard</span>
           </div>
         </div>
       )}

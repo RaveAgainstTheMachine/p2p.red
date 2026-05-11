@@ -37,12 +37,12 @@ const telemetryIngestEnv = (process.env.TELEMETRY_INGEST_ENABLED || '').trim().t
 let telemetryIngestEnabled = telemetryIngestEnv
   ? !['0', 'false', 'off', 'no'].includes(telemetryIngestEnv)
   : true;
-const OPENBAO_ADDR = (process.env.OPENBAO_ADDR || 'https://bao.p2p.red').replace(/\/$/, '');
+const OPENBAO_ADDR = (process.env.OPENBAO_ADDR || 'https://bao.example.com').replace(/\/$/, '');
 const OPENBAO_USERPASS_PATH = process.env.OPENBAO_USERPASS_PATH || '/v1/auth/userpass/login';
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || '';
 const ADMIN_JWT_TTL_SECONDS = parseInt(process.env.ADMIN_JWT_TTL_SECONDS || '3600', 10);
 const ADMIN_COOKIE_NAME = process.env.ADMIN_COOKIE_NAME || 'p2p_admin_session';
-const ADMIN_COOKIE_DOMAIN = process.env.ADMIN_COOKIE_DOMAIN || '.p2p.red';
+const ADMIN_COOKIE_DOMAIN = process.env.ADMIN_COOKIE_DOMAIN || '.example.com';
 const TELEMETRY_RETENTION_DAYS = parseInt(process.env.TELEMETRY_RETENTION_DAYS || '7', 10);
 const TELEMETRY_DAILY_LIMIT = parseInt(process.env.TELEMETRY_DAILY_LIMIT || '10000', 10);
 
@@ -193,7 +193,7 @@ const generateShareHTML = (metadata) => {
   const description = `File size: ${formatFileSize(metadata.fileSize)} • Link expires in 24h • Secure P2P transfer`;
   const safeDescription = escapeHtml(description);
   const shortKey = encodeURIComponent(metadata.shortKey || '');
-  const url = `https://p2p.red/#${shortKey}`;
+  const url = `https://example.com/#${shortKey}`;
   const title = `Download: ${safeFileName}`;
   
   return `<!DOCTYPE html>
@@ -209,7 +209,7 @@ const generateShareHTML = (metadata) => {
   <meta property="og:url" content="${url}">
   <meta property="og:title" content="${title}">
   <meta property="og:description" content="${safeDescription}">
-  <meta property="og:site_name" content="p2p.red">
+  <meta property="og:site_name" content="example.com">
   
   <!-- Twitter -->
   <meta property="twitter:card" content="summary">
@@ -235,7 +235,7 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(compression());
-const corsOriginEnv = (process.env.CORS_ORIGIN || 'https://p2p.red').trim();
+const corsOriginEnv = (process.env.CORS_ORIGIN || 'https://example.com').trim();
 const corsOrigin = (() => {
   if (corsOriginEnv === 'dev' || corsOriginEnv === '*') {
     return true;
@@ -400,12 +400,12 @@ const parseDateInput = (value) => {
 
 const buildStatusPayload = async () => {
   const isDev = (process.env.NODE_ENV || 'development') !== 'production';
-  const webUrl = process.env.WEB_STATUS_URL || (isDev ? 'https://dev.p2p.red' : 'https://p2p.red');
-  const signalHost = process.env.SIGNAL_STATUS_HOST || (isDev ? 'dev-signal.p2p.red' : 'signal.p2p.red');
+  const webUrl = process.env.WEB_STATUS_URL || (isDev ? 'https://dev.example.com' : 'https://example.com');
+  const signalHost = process.env.SIGNAL_STATUS_HOST || (isDev ? 'dev-signal.example.com' : 'signal.example.com');
   const signalUrl = process.env.SIGNAL_STATUS_URL || `https://${signalHost}/peerjs/id`;
-  const analyticsUrl = process.env.ANALYTICS_STATUS_URL || 'https://plausible.p2p.red/js/script.js';
-  const openBaoUrl = process.env.OPENBAO_STATUS_URL || 'https://bao.p2p.red/v1/sys/health';
-  const turnHost = process.env.TURN_STATUS_HOST || (isDev ? 'dev-turn.p2p.red' : 'turn1.p2p.red');
+  const analyticsUrl = process.env.ANALYTICS_STATUS_URL || 'https://plausible.example.com/js/script.js';
+  const openBaoUrl = process.env.OPENBAO_STATUS_URL || 'https://bao.example.com/v1/sys/health';
+  const turnHost = process.env.TURN_STATUS_HOST || (isDev ? 'dev-turn.example.com' : 'turn1.example.com');
   const turnPort = parseInt(process.env.TURN_STATUS_PORT || '3478', 10);
 
   const [webOk, signalOk, analyticsOk, openBaoOk, turnOk] = await Promise.all([
@@ -968,7 +968,7 @@ app.get('/share/:key', async (req, res) => {
         <!DOCTYPE html>
         <html>
           <head>
-            <meta http-equiv="refresh" content="0; url=https://p2p.red/#${key}">
+            <meta http-equiv="refresh" content="0; url=https://example.com/#${key}">
           </head>
           <body>
             <p>Redirecting to P2P File Share...</p>
@@ -990,7 +990,7 @@ app.get('/share/:key', async (req, res) => {
         <!DOCTYPE html>
         <html>
           <head>
-            <meta http-equiv="refresh" content="0; url=https://p2p.red/#${key}">
+            <meta http-equiv="refresh" content="0; url=https://example.com/#${key}">
           </head>
           <body>
             <p>Link not found or expired. Redirecting to P2P File Share...</p>
@@ -1024,25 +1024,25 @@ app.get('/share/:key', async (req, res) => {
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://p2p.red/#${key}" />
+    <meta property="og:url" content="https://example.com/#${key}" />
     <meta property="og:title" content="${safeFileName} - Shared via P2P" />
     <meta property="og:description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. Download directly from sender." />
-    <meta property="og:site_name" content="p2p.red" />
-    <meta property="og:image" content="https://p2p.red/logo.svg" />
+    <meta property="og:site_name" content="example.com" />
+    <meta property="og:image" content="https://example.com/logo.svg" />
     <meta property="og:image:width" content="400" />
     <meta property="og:image:height" content="400" />
     <meta property="og:image:type" content="image/svg+xml" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://p2p.red/#${key}" />
+    <meta name="twitter:url" content="https://example.com/#${key}" />
     <meta name="twitter:title" content="${safeFileName} - Shared via P2P" />
     <meta name="twitter:description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption." />
-    <meta name="twitter:image" content="https://p2p.red/logo.svg" />
+    <meta name="twitter:image" content="https://example.com/logo.svg" />
     <meta name="twitter:image:alt" content="P2P File Share Logo" />
     
     <!-- Redirect to main app after 1 second -->
-    <meta http-equiv="refresh" content="1; url=https://p2p.red/#${key}" />
+    <meta http-equiv="refresh" content="1; url=https://example.com/#${key}" />
     
   </head>
   <body>
@@ -1074,7 +1074,7 @@ app.get('/share/:key', async (req, res) => {
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta http-equiv="refresh" content="0; url=https://p2p.red/#${req.params.key}" />
+    <meta http-equiv="refresh" content="0; url=https://example.com/#${req.params.key}" />
   </head>
   <body>
     <p>Redirecting to P2P File Share...</p>
@@ -1116,7 +1116,7 @@ app.get('/api/metadata/:key', async (req, res) => {
             <!DOCTYPE html>
             <html>
               <head>
-                <meta http-equiv="refresh" content="0; url=https://p2p.red/#${key}">
+                <meta http-equiv="refresh" content="0; url=https://example.com/#${key}">
               </head>
               <body>
                 <p>Link not found or expired. Redirecting to P2P File Share...</p>
@@ -1150,25 +1150,25 @@ app.get('/api/metadata/:key', async (req, res) => {
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://p2p.red/#${key}" />
+    <meta property="og:url" content="https://example.com/#${key}" />
     <meta property="og:title" content="${safeFileName} - Shared via P2P" />
     <meta property="og:description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption. Download directly from sender." />
-    <meta property="og:site_name" content="p2p.red" />
-    <meta property="og:image" content="https://p2p.red/logo.svg" />
+    <meta property="og:site_name" content="example.com" />
+    <meta property="og:image" content="https://example.com/logo.svg" />
     <meta property="og:image:width" content="400" />
     <meta property="og:image:height" content="400" />
     <meta property="og:image:type" content="image/svg+xml" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://p2p.red/#${key}" />
+    <meta name="twitter:url" content="https://example.com/#${key}" />
     <meta name="twitter:title" content="${safeFileName} - Shared via P2P" />
     <meta name="twitter:description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption." />
-    <meta name="twitter:image" content="https://p2p.red/logo.svg" />
+    <meta name="twitter:image" content="https://example.com/logo.svg" />
     <meta name="twitter:image:alt" content="P2P File Share Logo" />
     
     <!-- Redirect to main app after 1 second -->
-    <meta http-equiv="refresh" content="1; url=https://p2p.red/#${key}" />
+    <meta http-equiv="refresh" content="1; url=https://example.com/#${key}" />
   </head>
   <body>
     <div class="container">
@@ -1199,7 +1199,7 @@ app.get('/api/metadata/:key', async (req, res) => {
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta http-equiv="refresh" content="0; url=https://p2p.red/#${key}" />
+    <meta http-equiv="refresh" content="0; url=https://example.com/#${key}" />
   </head>
   <body>
     <p>Redirecting to P2P File Share...</p>

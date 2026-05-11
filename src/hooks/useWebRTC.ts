@@ -3,10 +3,10 @@ import Peer, { DataConnection } from 'peerjs';
 import { peerJsConfig } from '../config/environments';
 import { sendTelemetry } from '../services/telemetry';
 
-const TURN_HOSTS = ['turn1.p2p.red', 'turn2.p2p.red'];
+const TURN_HOSTS = ['turn1.example.com', 'turn2.example.com'];
 const TURN_TCP_PORT = 3478;
 const TURN_TLS_PORT = 5349;
-const TURN_REALM = 'p2p.red';
+const TURN_REALM = 'example.com';
 
 const shuffleArray = <T,>(items: T[]): T[] => {
   const result = [...items];
@@ -26,7 +26,7 @@ const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
     return window.location.origin;
   }
-  return 'https://p2p.red';
+  return 'https://example.com';
 };
 
 const createTurnCredentials = async () => {

@@ -21,7 +21,7 @@ export const Changelog: React.FC<ChangelogProps> = () => {
     <div className="w-full max-w-3xl">
       <header className="mb-12">
         <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Change Log</h1>
-        <p className="text-sm text-white/50 uppercase tracking-widest">Evolution of p2p.red</p>
+        <p className="text-sm text-white/50 uppercase tracking-widest">Evolution of P2P File Share</p>
       </header>
 
       <main className="space-y-8">

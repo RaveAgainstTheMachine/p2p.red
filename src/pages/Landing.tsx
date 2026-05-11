@@ -21,7 +21,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart, onInfo }) => {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-400">WebRTC speed.</span>
             </h1>
             <p className="text-lg text-white/70">
-              p2p.red connects browsers directly with WebRTC DataChannels. When direct paths fail, we fall back to
+              P2P File Share connects browsers directly with WebRTC DataChannels. When direct paths fail, we fall back to
               TURN relays without ever touching your file contents. Short links, no accounts, no drama.
             </p>
             <div className="flex flex-wrap gap-4">

@@ -73,7 +73,7 @@ const MAX_INDEXEDDB_CACHE_BYTES = 192 * 1024 * 1024;
 const LOW_INDEXEDDB_CACHE_BYTES = 128 * 1024 * 1024;
 const ECDH_IV_BYTES = 12;
 const ECDH_TAG_BYTES = 16;
-const ECDH_INFO = new TextEncoder().encode('p2p.red/webrtc-ecdh-v1');
+const ECDH_INFO = new TextEncoder().encode('P2P File Share/webrtc-ecdh-v1');
 
 const RESUME_SESSION_KEY = 'p2p_resume_sessions_v1';
 

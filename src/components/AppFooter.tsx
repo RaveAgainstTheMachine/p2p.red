@@ -213,7 +213,7 @@ export const AppFooter: React.FC<AppFooterProps> = ({
             <Monitoring placement="footer" />
             {/* Support — same pill shape as Monitoring */}
             <a
-              href="https://buymeacoffee.com/p2p.red"
+              href="https://buymeacoffee.com/P2P File Share"
               target="_blank"
               rel="noopener noreferrer"
               className={pillBtn}

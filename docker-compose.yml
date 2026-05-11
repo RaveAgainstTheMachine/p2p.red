@@ -61,7 +61,7 @@ services:
     env_file:
       - ${PLAUSIBLE_ENV_FILE:-/run/secrets/plausible.env}
     environment:
-      BASE_URL: https://plausible.p2p.red
+      BASE_URL: https://plausible.example.com
       CLICKHOUSE_DATABASE_URL: http://plausible-events-db:8123/plausible_events
       DISABLE_AUTH_FOR_PRODUCTION: "false"
     networks:
@@ -99,11 +99,11 @@ services:
       NODE_ENV: production
       PORT: 3001
       METADATA_ENV_FILE: /run/secrets/metadata.env
-      WEB_STATUS_URL: https://p2p.red
+      WEB_STATUS_URL: https://example.com
       SIGNAL_STATUS_URL: http://p2p-peerjs:9000/peerjs/id
       ANALYTICS_STATUS_URL: http://p2p-plausible:8000/js/script.js
-      OPENBAO_STATUS_URL: https://bao.p2p.red:8200/v1/sys/health
-      OPENBAO_ADDR: https://bao.p2p.red:8200
+      OPENBAO_STATUS_URL: https://bao.example.com:8200/v1/sys/health
+      OPENBAO_ADDR: https://bao.example.com:8200
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: p2p_metadata
@@ -116,10 +116,10 @@ services:
       CLEANUP_INTERVAL_MINUTES: 60
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX_REQUESTS: 100
-      CORS_ORIGIN: https://p2p.red,https://dash.p2p.red
+      CORS_ORIGIN: https://example.com,https://dash.example.com
       METADATA_API_LOG_REQUESTS: "off"
     extra_hosts:
-      - "bao.p2p.red:10.88.0.1"
+      - "bao.example.com:127.0.0.1"
     ports:
       - "${METADATA_API_PUBLISH:-127.0.0.1:3001}:3001"
     networks:
@@ -155,7 +155,7 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - PEERJS_HOST=p2p.red
+      - PEERJS_HOST=example.com
       - PEERJS_PORT=443
       - PEERJS_PATH=/peerjs
       - VITE_HOST=0.0.0.0
@@ -173,7 +173,7 @@ services:
     restart: unless-stopped
     environment:
       - PEERJS_PORT=9000
-      - PEERJS_HOST=p2p.red
+      - PEERJS_HOST=example.com
     ports:
       - "127.0.0.1:9000:9000"
     networks:
@@ -191,7 +191,7 @@ services:
       - "127.0.0.1:9901:9901"
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
-      - /var/snap/docker/common/p2p-envoy-certs:/var/snap/docker/common/p2p-envoy-certs:ro
+      - ./certs:/etc/envoy/certs:ro
       - ${ENVOY_RUNTIME_DIR:-./envoy-runtime}:/etc/envoy/runtime:ro
     depends_on:
       - app

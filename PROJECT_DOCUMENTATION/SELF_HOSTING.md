@@ -71,6 +71,16 @@ Visit `https://your-domain.com` in your browser. Open the developer console to v
 
 ## Advanced Configuration
 
+### Secret Management (OpenBao)
+
+For production-grade security, P2P File Share utilizes **OpenBao** (a community fork of Vault) to manage administrative credentials.
+
+1.  **Initialize Bao**:
+    ```bash
+    docker compose exec bao bao operator init
+    ```
+2.  **Unseal and Configure**: Follow the OpenBao documentation to unseal the vault and enable the `userpass` auth method for the Admin Dashboard.
+
 ### NAT Traversal
 If your server is behind a NAT, ensure you configure `external-ip` in `turnserver.conf` to your public IP address.
 

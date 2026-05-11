@@ -203,6 +203,24 @@ services:
       - p2p-network
       - p2p-bluegreen-network
 
+  # OpenBao - Secret management
+  bao:
+    image: openbao/openbao:latest
+    container_name: p2p-bao
+    restart: unless-stopped
+    command: server -config=/bao/config/config.hcl
+    cap_add:
+      - IPC_LOCK
+    environment:
+      BAO_ADDR: http://0.0.0.0:8200
+    volumes:
+      - ./openbao/data:/bao/data
+      - ./openbao/config:/bao/config:ro
+    ports:
+      - "127.0.0.1:8200:8200"
+    networks:
+      - p2p-network
+
 volumes:
   postgres_data:
     driver: local

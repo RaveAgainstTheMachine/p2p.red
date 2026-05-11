@@ -43,9 +43,14 @@ const OPENBAO_USERPASS_PATH = process.env.OPENBAO_USERPASS_PATH || '/v1/auth/use
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || '';
 const ADMIN_JWT_TTL_SECONDS = parseInt(process.env.ADMIN_JWT_TTL_SECONDS || '3600', 10);
 const ADMIN_COOKIE_NAME = process.env.ADMIN_COOKIE_NAME || 'p2p_admin_session';
-const ADMIN_COOKIE_DOMAIN = process.env.ADMIN_COOKIE_DOMAIN || '.p2p.red';
+const ADMIN_COOKIE_DOMAIN = process.env.ADMIN_COOKIE_DOMAIN || (process.env.BASE_DOMAIN ? `.${process.env.BASE_DOMAIN}` : '.p2p.red');
+const BASE_URL = process.env.BASE_URL || (process.env.BASE_DOMAIN ? `https://${process.env.BASE_DOMAIN}` : 'https://p2p.red');
 const TELEMETRY_RETENTION_DAYS = parseInt(process.env.TELEMETRY_RETENTION_DAYS || '7', 10);
 const TELEMETRY_DAILY_LIMIT = parseInt(process.env.TELEMETRY_DAILY_LIMIT || '10000', 10);
+const TURN_SERVER_ADDRS = (process.env.TURN_SERVER_ADDRS || '').split(',').filter(Boolean);
+const TURN_REALM = process.env.TURN_REALM || 'localhost';
+const TURN_TCP_PORT = parseInt(process.env.TURN_TCP_PORT || '3478', 10);
+const TURN_TLS_PORT = parseInt(process.env.TURN_TLS_PORT || '5349', 10);
 
 // ============================================================================
 // Database & Cache Configuration
@@ -441,7 +446,7 @@ const buildStatusPayload = async () => {
     signal: signalOk ? 'online' : 'offline',
     api: apiStatus,
     databases: databaseStatus,
-    analytics: analyticsUrl ? (analyticsOk ? 'online' : 'offline') : 'disabled',
+    analytics: process.env.ANALYTICS_STATUS_URL ? (analyticsOk ? 'online' : 'offline') : 'disabled',
     turn: turnOk ? 'online' : 'offline',
     secrets: OPENBAO_ENABLED ? (openBaoOk ? 'online' : 'offline') : 'disabled',
   };
@@ -477,7 +482,13 @@ function buildTurnCredentials() {
     .update(username)
     .digest('base64');
 
-  return { username, credential, ttl: TURN_TTL_SECONDS };
+  const iceServers = TURN_SERVER_ADDRS.flatMap(host => [
+    { urls: `turn:${host}:${TURN_TCP_PORT}`, username, credential, realm: TURN_REALM },
+    { urls: `turn:${host}:${TURN_TCP_PORT}?transport=tcp`, username, credential, realm: TURN_REALM },
+    { urls: `turns:${host}:${TURN_TLS_PORT}`, username, credential, realm: TURN_REALM }
+  ]);
+
+  return { username, credential, ttl: TURN_TTL_SECONDS, iceServers };
 }
 
 // ============================================================================
@@ -1165,14 +1176,14 @@ app.get('/api/metadata/:key', async (req, res) => {
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://p2p.red/#${key}" />
+    <meta name="twitter:url" content="${BASE_URL}/#${key}" />
     <meta name="twitter:title" content="${safeFileName} - Shared via P2P" />
     <meta name="twitter:description" content="An ${safeFileType} file (${formatFileSize(metadata.file_size)}) shared securely with end-to-end encryption." />
-    <meta name="twitter:image" content="https://p2p.red/logo.svg" />
+    <meta name="twitter:image" content="${BASE_URL}/logo.svg" />
     <meta name="twitter:image:alt" content="P2P File Share Logo" />
     
     <!-- Redirect to main app after 1 second -->
-    <meta http-equiv="refresh" content="1; url=https://p2p.red/#${key}" />
+    <meta http-equiv="refresh" content="1; url=${BASE_URL}/#${key}" />
   </head>
   <body>
     <div class="container">
@@ -1203,7 +1214,7 @@ app.get('/api/metadata/:key', async (req, res) => {
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta http-equiv="refresh" content="0; url=https://p2p.red/#${key}" />
+    <meta http-equiv="refresh" content="0; url=${BASE_URL}/#${key}" />
   </head>
   <body>
     <p>Redirecting to P2P File Share...</p>

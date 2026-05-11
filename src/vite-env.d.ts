@@ -7,6 +7,11 @@ interface ImportMetaEnv {
   readonly DEV: boolean;
   readonly VITE_BUILD_VARIANT?: string;
   readonly VITE_BUILD_VERSION?: string;
+  readonly VITE_API_URL?: string;
+  readonly VITE_PEERJS_HOST?: string;
+  readonly VITE_PEERJS_PORT?: string;
+  readonly VITE_PEERJS_PATH?: string;
+  readonly VITE_PEERJS_SECURE?: string;
 }
 
 interface ImportMeta {

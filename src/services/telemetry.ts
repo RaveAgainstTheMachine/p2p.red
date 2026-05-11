@@ -22,7 +22,7 @@ const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
     return window.location.origin;
   }
-  return 'https://p2p.red';
+  return '';
 };
 
 const getBuildInfo = () => {

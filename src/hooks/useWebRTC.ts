@@ -3,19 +3,7 @@ import Peer, { DataConnection } from 'peerjs';
 import { peerJsConfig } from '../config/environments';
 import { sendTelemetry } from '../services/telemetry';
 
-const TURN_HOSTS = ['turn1.p2p.red', 'turn2.p2p.red'];
-const TURN_TCP_PORT = 3478;
-const TURN_TLS_PORT = 5349;
-const TURN_REALM = 'p2p.red';
-
-const shuffleArray = <T,>(items: T[]): T[] => {
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
-};
+// TURN configuration will be fetched from API
 
 const getApiBaseUrl = (): string => {
   const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env : undefined;
@@ -40,32 +28,13 @@ const createTurnCredentials = async () => {
   }
 
   const data = await response.json();
-  if (!data?.username || !data?.credential) {
-    throw new Error('TURN credentials response missing username or credential');
+  if (!data?.iceServers) {
+    throw new Error('TURN credentials response missing iceServers');
   }
 
-  return { username: data.username, credential: data.credential };
+  return { iceServers: data.iceServers };
 };
 
-const buildIceServers = (username: string, credential: string) => {
-  const turnHosts = shuffleArray(TURN_HOSTS);
-  const turnServers = turnHosts.flatMap((host) => [
-    { urls: `turn:${host}:${TURN_TCP_PORT}` },
-    { urls: `turn:${host}:${TURN_TCP_PORT}?transport=tcp` },
-    { urls: `turns:${host}:${TURN_TLS_PORT}` }
-  ]);
-
-  return [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    ...turnServers.map((server) => ({
-      ...server,
-      username,
-      credential,
-      realm: TURN_REALM
-    }))
-  ];
-};
 
 export const useWebRTC = () => {
   const [peer, setPeer] = useState<Peer | null>(null);
@@ -79,19 +48,19 @@ export const useWebRTC = () => {
   const handleConnection = useCallback((conn: DataConnection) => {
     conn.on('open', () => {
       console.log('Connection opened with:', conn.peer);
-      setConnections(prev => new Map(prev.set(conn.peer, conn)));
+      setConnections((prev: Map<string, DataConnection>) => new Map(prev.set(conn.peer, conn)));
     });
 
     conn.on('close', () => {
       console.log('Connection closed with:', conn.peer);
-      setConnections(prev => {
+      setConnections((prev: Map<string, DataConnection>) => {
         const newMap = new Map(prev);
         newMap.delete(conn.peer);
         return newMap;
       });
     });
 
-    conn.on('error', (err) => {
+    conn.on('error', (err: Error) => {
       console.error('Connection error:', err);
     });
   }, []);
@@ -106,8 +75,11 @@ export const useWebRTC = () => {
       ];
 
       try {
-        const { username, credential } = await createTurnCredentials();
-        iceServers = buildIceServers(username, credential);
+        const { iceServers: apiIceServers } = await createTurnCredentials();
+        iceServers = [
+          ...iceServers,
+          ...apiIceServers
+        ];
       } catch (error) {
         console.warn('⚠️ TURN credentials unavailable, using STUN only.', error);
       }
@@ -128,7 +100,7 @@ export const useWebRTC = () => {
         }
       });
 
-      newPeer.on('open', (id) => {
+      newPeer.on('open', (id: string) => {
         console.log('✅ Peer connected with ID:', id);
         setPeerId(id);
         setPeer(newPeer);
@@ -137,7 +109,7 @@ export const useWebRTC = () => {
         setConnectionState('connected');
       });
 
-      newPeer.on('connection', (conn) => {
+      newPeer.on('connection', (conn: DataConnection) => {
         console.log('📞 Incoming connection from:', conn.peer);
         handleConnection(conn);
       });
@@ -164,7 +136,7 @@ export const useWebRTC = () => {
         }, 1000);
       });
 
-      newPeer.on('error', (err) => {
+      newPeer.on('error', (err: any) => {
         console.error('❌ Peer error:', err.type, err.message);
         void sendTelemetry({
           eventType: 'peer_error',
@@ -242,7 +214,7 @@ export const useWebRTC = () => {
       console.log('DataChannel OPEN with:', remotePeerId);
     });
     
-    conn.on('error', (err) => {
+    conn.on('error', (err: Error) => {
       console.error('DataChannel ERROR:', err);
     });
     
@@ -268,7 +240,7 @@ export const useWebRTC = () => {
     });
     
     // Log ICE candidates
-    conn.peerConnection?.addEventListener('icecandidate', (event) => {
+    conn.peerConnection?.addEventListener('icecandidate', (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
         const candidate = event.candidate;
         console.log('🧊 ICE candidate:', {

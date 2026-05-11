@@ -9,6 +9,7 @@ services:
     environment:
       POSTGRES_DB: p2p_metadata
       POSTGRES_USER: p2p_api_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ${METADATA_API_ENV_FILE:-/run/secrets/metadata.env}:/run/secrets/metadata.env:ro
@@ -65,7 +66,7 @@ services:
     env_file:
       - ${PLAUSIBLE_ENV_FILE:-/run/secrets/plausible.env}
     environment:
-      BASE_URL: https://plausible.p2p.red
+      BASE_URL: https://plausible.${BASE_DOMAIN}
       CLICKHOUSE_DATABASE_URL: http://plausible-events-db:8123/plausible_events
       DISABLE_AUTH_FOR_PRODUCTION: "false"
     profiles:
@@ -78,7 +79,7 @@ services:
     image: redis:7-alpine
     container_name: p2p-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -105,11 +106,11 @@ services:
       NODE_ENV: production
       PORT: 3001
       METADATA_ENV_FILE: /run/secrets/metadata.env
-      WEB_STATUS_URL: https://p2p.red
+      WEB_STATUS_URL: https://${BASE_DOMAIN}
       SIGNAL_STATUS_URL: http://p2p-peerjs:9000/peerjs/id
       ANALYTICS_STATUS_URL: http://p2p-plausible:8000/js/script.js
-      OPENBAO_STATUS_URL: https://bao.p2p.red:8200/v1/sys/health
-      OPENBAO_ADDR: https://bao.p2p.red:8200
+      OPENBAO_STATUS_URL: https://bao.${BASE_DOMAIN}:8200/v1/sys/health
+      OPENBAO_ADDR: https://bao.${BASE_DOMAIN}:8200
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: p2p_metadata
@@ -122,10 +123,10 @@ services:
       CLEANUP_INTERVAL_MINUTES: 60
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX_REQUESTS: 100
-      CORS_ORIGIN: https://p2p.red,https://dash.p2p.red
+      CORS_ORIGIN: https://${BASE_DOMAIN},https://dash.${BASE_DOMAIN}
       METADATA_API_LOG_REQUESTS: "off"
     extra_hosts:
-      - "bao.p2p.red:10.88.0.1"
+      - "bao.${BASE_DOMAIN}:10.88.0.1"
     ports:
       - "${METADATA_API_PUBLISH:-127.0.0.1:3001}:3001"
     networks:
@@ -161,7 +162,7 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - PEERJS_HOST=p2p.red
+      - PEERJS_HOST=${BASE_DOMAIN}
       - PEERJS_PORT=443
       - PEERJS_PATH=/peerjs
       - VITE_HOST=0.0.0.0
@@ -179,7 +180,7 @@ services:
     restart: unless-stopped
     environment:
       - PEERJS_PORT=9000
-      - PEERJS_HOST=p2p.red
+      - PEERJS_HOST=${BASE_DOMAIN}
     ports:
       - "127.0.0.1:9000:9000"
     networks:

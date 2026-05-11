@@ -73,7 +73,7 @@ const MAX_INDEXEDDB_CACHE_BYTES = 192 * 1024 * 1024;
 const LOW_INDEXEDDB_CACHE_BYTES = 128 * 1024 * 1024;
 const ECDH_IV_BYTES = 12;
 const ECDH_TAG_BYTES = 16;
-const ECDH_INFO = new TextEncoder().encode('p2p.red/webrtc-ecdh-v1');
+const ECDH_INFO = new TextEncoder().encode(`${window.location.host}/webrtc-ecdh-v1`);
 
 const RESUME_SESSION_KEY = 'p2p_resume_sessions_v1';
 
@@ -1179,7 +1179,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
           console.log(`📊 Shard distribution: ${channels.length} channels handling ${shards.length} shards`);
 
-          const sendPromises = channels.map(async (channel, channelId) => {
+          const sendPromises = channels.map(async (channel: RTCDataChannel, channelId: number) => {
             const assignedShards = shards.filter(s => s.channelId === channelId);
 
             for (const shard of assignedShards) {
@@ -1484,7 +1484,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
         
         // Wait for buffers to drain (silent)
         while (true) {
-          const totalBuffered = channels.reduce((sum, ch) => sum + ch.bufferedAmount, 0);
+          const totalBuffered = channels.reduce((sum: number, ch: RTCDataChannel) => sum + ch.bufferedAmount, 0);
           if (totalBuffered === 0) break;
           await new Promise(resolve => setTimeout(resolve, 100));
         }
@@ -1537,7 +1537,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
 
         conn.off('data', receiverBackpressureHandler);
 
-        channels.forEach(ch => ch.close());
+        channels.forEach((ch: RTCDataChannel) => ch.close());
         clearInterval(perfInterval);
         logPerf('sender-final');
         cryptoWorker?.terminate();
@@ -1722,7 +1722,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
       let encryptionEnabled = false;
       let encryptionIvBytes = 0;
       const handshakePromise = performEcdhHandshake(conn, 'receiver')
-        .then((result) => {
+        .then((result: { state: EncryptionState; transferId: string }) => {
           encryptionState = result.state;
           encryptionEnabled = result.state.enabled;
           encryptionIvBytes = result.state.ivBytes;
@@ -1730,7 +1730,7 @@ export const useAdaptiveMultiStreamTransfer = () => {
             transferId = result.transferId;
           }
         })
-        .catch((error) => {
+        .catch((error: Error) => {
           console.error('❌ ECDH handshake failed (receiver):', error);
           setIsTransferring(false);
           reject(error instanceof Error ? error : new Error('ECDH handshake failed'));

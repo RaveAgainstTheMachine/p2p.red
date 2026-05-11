@@ -4,7 +4,7 @@
  */
 
 const API_BASE_URL = import.meta.env.PROD
-  ? 'https://p2p.red/api'
+  ? `${window.location.origin}/api`
   : 'http://localhost:3001/api';
 
 export interface TransferMetadata {

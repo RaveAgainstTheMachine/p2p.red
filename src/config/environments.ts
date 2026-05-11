@@ -42,9 +42,9 @@ export const environments: Record<string, EnvironmentConfig> = {
     connectionTimeout: 30000 // 30 seconds
   },
   production: {
-    apiUrl: import.meta.env.VITE_API_URL ?? (typeof window !== 'undefined' ? window.location.origin : 'https://p2p.red'),
+    apiUrl: import.meta.env.VITE_API_URL ?? (typeof window !== 'undefined' ? window.location.origin : ''),
     peerJsConfig: {
-      host: import.meta.env.VITE_PEERJS_HOST ?? (typeof window !== 'undefined' ? window.location.hostname : 'p2p.red'),
+      host: import.meta.env.VITE_PEERJS_HOST ?? (typeof window !== 'undefined' ? window.location.hostname : ''),
       port: Number(
         import.meta.env.VITE_PEERJS_PORT ??
           (typeof window !== 'undefined'

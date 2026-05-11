@@ -1,0 +1,31 @@
+Business Source License 1.1
+
+Parameters
+
+Licensor: Steven Frost
+Licensed Work: p2p.red (including all packages, metadata-api, and associated code)
+Change Date: January 1, 2030
+Change License: Apache License, Version 2.0
+
+The Business Source License 1.1 (this "License") is a license that allows 
+you to use the Licensed Work for any purpose, except for a "Production 
+Use" of the Licensed Work.
+
+"Production Use" means any use of the Licensed Work in a production 
+environment for any reason. Use of the Licensed Work in a non-production 
+environment, such as for development, testing, or internal evaluation 
+purposes, is not Production Use.
+
+On the Change Date, this License will automatically convert to the Change 
+License. After the Change Date, your use of the Licensed Work will be 
+governed by the Change License.
+
+The Licensor may also grant you additional rights to use the Licensed 
+Work. These additional rights, if any, will be specified in the 
+Additional Use Grants section below.
+
+Additional Use Grants:
+Non-commercial use by individuals for personal, non-production file sharing 
+is permitted.
+
+(c) 2024-2026 Steven Frost. All rights reserved.

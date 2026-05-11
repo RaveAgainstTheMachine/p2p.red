@@ -1,6 +1,4 @@
 {
-  "author": "Steven Frost",
-  "license": "BSL-1.1",
   "name": "p2p-metadata-api",
   "version": "1.0.0",
   "description": "High-performance metadata API for P2P file sharing short links",

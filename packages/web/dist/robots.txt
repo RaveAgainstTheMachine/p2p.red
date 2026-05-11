@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://p2p.red/sitemap.xml
-Host: https://p2p.red

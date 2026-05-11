@@ -82,6 +82,9 @@ This project prioritizes security through simplicity:
 
 This project is licensed under the **Business Source License 1.1** (BSL).
 
+> [!IMPORTANT]
+> **Free for everyone**, including production use, as long as your (or your organization's) annual revenue is **less than $5,000,000 USD**.
+
 - **Licensor**: Steven Frost
 - **Change Date**: January 1, 2030
 - **Change License**: Apache License, Version 2.0

@@ -2,9 +2,30 @@
 
 Thank you for your interest in contributing to P2P File Share! This project is built on the principles of privacy, security, and decentralized data transfer.
 
-## Code of Conduct
+## Development Workflow
 
-Please be respectful and professional in all interactions. We aim to foster a welcoming and inclusive community.
+### Dependency Management
+This project uses **pnpm 11** with a strict security model for build scripts.
+
+If you add a dependency that requires a build script (e.g., native modules like `sharp`, `sqlite3`, or build tools like `esbuild`), you must explicitly add it to the `pnpm.onlyBuiltDependencies` list in the root `package.json`.
+
+```json
+"pnpm": {
+  "onlyBuiltDependencies": [
+    "esbuild",
+    "your-new-dependency"
+  ]
+}
+```
+
+Failure to do so will cause the CI build to fail.
+
+### CI/CD Pipeline
+Every pull request is automatically vetted for:
+- Linting and Type-checking
+- Unit Tests (Vitest & Jest)
+- Docker Image Build verification
+- End-to-End Tests (Playwright)
 
 ## How Can I Contribute?
 

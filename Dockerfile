@@ -4,7 +4,6 @@ WORKDIR /app
 
 # Install dependencies
 RUN corepack enable
-RUN pnpm config set only-allow-trusted-dependencies false
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 

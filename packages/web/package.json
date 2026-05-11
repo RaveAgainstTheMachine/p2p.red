@@ -1,6 +1,6 @@
 {
   "author": "Steven Frost",
-  "license": "Business Source License 1.1",
+  "license": "BSL-1.1",
   "name": "p2p-file-share",
   "version": "1.0.0",
   "description": "Privacy-first P2P file sharing using WebRTC DataChannels",

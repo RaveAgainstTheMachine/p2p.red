@@ -25,7 +25,8 @@ export default [
       '**/*.config.js',
       '**/eslint.config.js',
       '**/sw.js',
-      '**/*.js'
+      '**/*.js',
+      '**/*.cjs'
     ],
   },
   js.configs.recommended,

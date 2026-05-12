@@ -1,5 +1,9 @@
 import webConfig from './packages/web/eslint.config.js';
 import desktopConfig from './packages/desktop/eslint.config.js';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default [
   {
@@ -13,8 +17,23 @@ export default [
       'packages/shared/**'
     ],
   },
-  ...webConfig,
-  ...desktopConfig,
+  // Apply web config ONLY to web package files
+  ...webConfig.map(config => ({
+    ...config,
+    files: config.files || ['packages/web/src/**/*.{ts,tsx}'],
+    languageOptions: {
+      ...config.languageOptions,
+      parserOptions: {
+        ...(config.languageOptions?.parserOptions || {}),
+        tsconfigRootDir: path.join(__dirname, 'packages/web'),
+      }
+    }
+  })),
+  // Apply desktop config ONLY to desktop package files
+  ...desktopConfig.map(config => ({
+    ...config,
+    files: config.files || ['packages/desktop/src/**/*.{ts,tsx}'],
+  })),
   {
     files: ['packages/web/src/**/*.{ts,tsx}'],
     rules: {

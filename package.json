@@ -26,6 +26,7 @@
     "client-zip": "^2.5.0",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.1",
     "framer-motion": "^12.38.0",

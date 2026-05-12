@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { TransferProgress } from '@p2p-file-share/shared';
+import { TransferProgress } from '../shared';
 
 interface EnhancedProgressBarProps {
   progress: TransferProgress & {

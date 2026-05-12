@@ -59,7 +59,8 @@ export default [
       'prefer-const': 'off',
       'no-constant-condition': 'off',
       'no-case-declarations': 'off',
-      'no-empty': 'off'
+      'no-empty': 'off',
+      'no-async-promise-executor': 'off'
     }
   }
 ];

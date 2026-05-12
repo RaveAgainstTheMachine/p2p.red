@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { performanceMonitor } from '@p2p-file-share/shared';
+import { performanceMonitor } from '../shared';
 
 interface PerformanceDebugProps {
   isVisible: boolean;

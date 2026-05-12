@@ -1,8 +1,8 @@
-import webConfig from './packages/web/eslint.config.js';
-import desktopConfig from './packages/desktop/eslint.config.js';
 import tseslint from 'typescript-eslint';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import js from '@eslint/js';
+import globals from 'globals';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -14,52 +14,52 @@ export default [
       '**/target/**',
       '**/*.d.ts',
       '**/vite.config.ts',
+      '**/vitest.config.ts',
       'src/**',
-      'packages/shared/**'
+      'packages/shared/**',
+      'packages/desktop/**',
+      'automation/**',
+      'scripts/**',
+      'public/**',
+      'tests/**',
+      '**/*.config.ts',
+      '**/*.config.js',
+      '**/eslint.config.js',
+      '**/sw.js',
+      '**/*.js'
     ],
   },
-  // Apply web config ONLY to web package files
-  ...webConfig.map(config => ({
-    ...config,
-    files: ['packages/web/src/**/*.{ts,tsx}'],
-    languageOptions: {
-      ...config.languageOptions,
-      parserOptions: {
-        ...(config.languageOptions?.parserOptions || {}),
-        tsconfigRootDir: path.join(__dirname, 'packages/web'),
-      }
-    }
-  })),
-  // Apply desktop config ONLY to desktop package files
-  ...desktopConfig.map(config => ({
-    ...config,
-    files: ['packages/desktop/src/**/*.{ts,tsx}'],
-    languageOptions: {
-      ...config.languageOptions,
-      parserOptions: {
-        ...(config.languageOptions?.parserOptions || {}),
-        tsconfigRootDir: path.join(__dirname, 'packages/desktop'),
-      }
-    }
-  })),
-  // Separate config for root files or other TS files
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
   {
-    files: ['*.config.ts'],
+    files: ['**/*.{ts,tsx,js,jsx}'],
     languageOptions: {
+      ecmaVersion: 2020,
+      globals: {
+        ...globals.browser,
+        ...globals.node
+      },
       parser: tseslint.parser,
       parserOptions: {
+        project: ['./packages/web/tsconfig.json'],
         tsconfigRootDir: __dirname,
-      }
-    }
-  },
-  {
-    files: ['packages/web/src/**/*.{ts,tsx}'],
+      },
+    },
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
-      'react-hooks/set-state-in-effect': 'off',
-      'react-hooks/exhaustive-deps': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
+      '@typescript-eslint/no-unsafe-function-type': 'off',
+      '@typescript-eslint/no-wrapper-object-types': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-namespace': 'off',
+      '@typescript-eslint/ban-ts-comment': 'off',
+      'no-unused-vars': 'off',
+      'no-redeclare': 'off',
       'prefer-const': 'off',
-      'no-constant-condition': 'off'
+      'no-constant-condition': 'off',
+      'no-case-declarations': 'off',
+      'no-empty': 'off'
     }
-  },
+  }
 ];

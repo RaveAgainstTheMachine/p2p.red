@@ -3,10 +3,12 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json package-lock.json ./
+
+RUN ls -la package*.json
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm install --only=production
 
 # Install express and axios for metadata server
 RUN npm install express axios

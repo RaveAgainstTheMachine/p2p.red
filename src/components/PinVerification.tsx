@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, createRef } from 'react';
 import { Lock, AlertCircle } from 'lucide-react';
 
 interface PinVerificationProps {
@@ -6,32 +6,26 @@ interface PinVerificationProps {
   error?: string;
   remainingAttempts?: number;
   isVerifying?: boolean;
-  modeOverride?: 'pin' | 'passphrase' | null;
 }
 
 export const PinVerification: React.FC<PinVerificationProps> = ({ 
   onVerify, 
   error, 
   remainingAttempts,
-  isVerifying = false,
-  modeOverride = null,
+  isVerifying = false 
 }) => {
-  const [mode, setMode] = useState<'pin' | 'passphrase'>(modeOverride || 'pin');
+  const [mode, setMode] = useState<'pin' | 'passphrase'>('pin');
   const [digits, setDigits] = useState(['', '', '', '']);
   const [passphrase, setPassphrase] = useState('');
-  const passphraseRef = useRef<HTMLInputElement>(null);
-  const inputRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-  ];
-
-  useEffect(() => {
-    if (modeOverride && modeOverride !== mode) {
-      setMode(modeOverride);
-    }
-  }, [modeOverride, mode]);
+  const passphraseRef = createRef<HTMLInputElement>();
+  const inputRefs = useMemo(() => (
+    [
+      createRef<HTMLInputElement>(),
+      createRef<HTMLInputElement>(),
+      createRef<HTMLInputElement>(),
+      createRef<HTMLInputElement>()
+    ]
+  ), []);
 
   useEffect(() => {
     if (mode === 'pin') {
@@ -39,7 +33,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
     } else {
       passphraseRef.current?.focus();
     }
-  }, [mode]);
+  }, [inputRefs, mode, passphraseRef]);
 
   useEffect(() => {
     if (error) {
@@ -53,10 +47,9 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
         }
       }, 100);
     }
-  }, [error, mode]);
+  }, [error, inputRefs, mode, passphraseRef]);
 
   const handleModeChange = (nextMode: 'pin' | 'passphrase') => {
-    if (modeOverride) return;
     setMode(nextMode);
     if (nextMode === 'pin') {
       setTimeout(() => inputRefs[0].current?.focus(), 100);
@@ -122,42 +115,38 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
   return (
     <div className="flex flex-col items-center gap-6 p-8">
       <div className="flex items-center gap-3 text-white">
-        <Lock size={24} className="text-[var(--theme-primary)]" />
+        <Lock size={24} className="text-blue-400" />
         <h3 className="text-xl font-semibold">Locked link</h3>
       </div>
 
       <p className="text-white/60 text-center">
-        {mode === 'passphrase'
-          ? 'Enter the passphrase to continue.'
-          : 'Enter the 4-digit PIN to continue.'}
+        Enter the PIN or passphrase to continue.
       </p>
 
-      {!modeOverride && (
-        <div className="flex items-center gap-2 text-xs text-white/60">
-          <button
-            type="button"
-            onClick={() => handleModeChange('pin')}
-            className={`px-3 py-1 rounded-full border transition-colors ${
-              mode === 'pin'
-                ? 'border-[var(--theme-primary)] text-white bg-[var(--theme-primary)]/10'
-                : 'border-white/20 text-white/50 hover:text-white'
-            }`}
-          >
-            4-digit PIN
-          </button>
-          <button
-            type="button"
-            onClick={() => handleModeChange('passphrase')}
-            className={`px-3 py-1 rounded-full border transition-colors ${
-              mode === 'passphrase'
-                ? 'border-[var(--theme-primary)] text-white bg-[var(--theme-primary)]/10'
-                : 'border-white/20 text-white/50 hover:text-white'
-            }`}
-          >
-            Passphrase
-          </button>
-        </div>
-      )}
+      <div className="flex items-center gap-2 text-xs text-white/60">
+        <button
+          type="button"
+          onClick={() => handleModeChange('pin')}
+          className={`px-3 py-1 rounded-full border transition-colors ${
+            mode === 'pin'
+              ? 'border-blue-400 text-white'
+              : 'border-white/20 text-white/50 hover:text-white'
+          }`}
+        >
+          4-digit PIN
+        </button>
+        <button
+          type="button"
+          onClick={() => handleModeChange('passphrase')}
+          className={`px-3 py-1 rounded-full border transition-colors ${
+            mode === 'passphrase'
+              ? 'border-blue-400 text-white'
+              : 'border-white/20 text-white/50 hover:text-white'
+          }`}
+        >
+          Passphrase
+        </button>
+      </div>
 
       {mode === 'pin' ? (
         <div className="flex gap-3">
@@ -175,7 +164,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
               disabled={isVerifying}
               className={`w-14 h-16 text-center text-2xl font-bold bg-white/5 border-2 rounded-lg 
                          text-white focus:outline-none transition-colors
-                         ${error ? 'border-red-400 animate-shake' : 'border-white/20 focus:border-[var(--theme-primary)]'}
+                         ${error ? 'border-red-400 animate-shake' : 'border-white/20 focus:border-blue-400'}
                          ${isVerifying ? 'opacity-50 cursor-not-allowed' : ''}`}
             />
           ))}
@@ -191,7 +180,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
             onChange={(event) => setPassphrase(event.target.value)}
             disabled={isVerifying}
             className={`w-full px-4 py-3 bg-white/5 border-2 rounded-lg text-white focus:outline-none transition-colors
-                       ${error ? 'border-red-400' : 'border-white/20 focus:border-[var(--theme-primary)]'}
+                       ${error ? 'border-red-400' : 'border-white/20 focus:border-blue-400'}
                        ${isVerifying ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
           <p className="text-white/40 text-xs text-center">Up to 128 characters</p>
@@ -212,7 +201,7 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
             <p className="text-red-400 text-sm font-medium">{error}</p>
             {remainingAttempts !== undefined && remainingAttempts > 0 && (
               <p className="text-red-300 text-xs mt-1">
-                {remainingAttempts} {remainingAttempts === 1 ? 'try' : 'tries'} remaining
+                {remainingAttempts} {remainingAttempts === 1 ? 'attempt' : 'attempts'} remaining
               </p>
             )}
           </div>
@@ -221,8 +210,8 @@ export const PinVerification: React.FC<PinVerificationProps> = ({
 
       {isVerifying && (
         <div className="flex items-center gap-2 text-white/60">
-          <div className="w-4 h-4 border-2 border-[var(--theme-primary)] border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm">Checking the PIN...</span>
+          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm">Verifying...</span>
         </div>
       )}
     </div>

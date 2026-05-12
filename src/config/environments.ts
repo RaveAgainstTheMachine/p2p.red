@@ -6,7 +6,7 @@ interface EnvironmentConfig {
     path: string;
     secure: boolean;
     config?: {
-      iceServers: any[];
+      iceServers: RTCIceServer[];
       sdpSemantics: string;
     };
   };
@@ -23,8 +23,8 @@ export const environments: Record<string, EnvironmentConfig> = {
     apiUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:5173',
     peerJsConfig: {
       host: import.meta.env.VITE_PEERJS_HOST ?? 'localhost',
-      port: Number(import.meta.env.VITE_PEERJS_PORT ?? 3002),
-      path: import.meta.env.VITE_PEERJS_PATH ?? '/',
+      port: Number(import.meta.env.VITE_PEERJS_PORT ?? 9000),
+      path: import.meta.env.VITE_PEERJS_PATH ?? '/peerjs',
       secure: String(import.meta.env.VITE_PEERJS_SECURE ?? 'false') === 'true',
       config: {
         iceServers: [
@@ -42,9 +42,9 @@ export const environments: Record<string, EnvironmentConfig> = {
     connectionTimeout: 30000 // 30 seconds
   },
   production: {
-    apiUrl: import.meta.env.VITE_API_URL ?? (typeof window !== 'undefined' ? window.location.origin : ''),
+    apiUrl: import.meta.env.VITE_API_URL ?? (typeof window !== 'undefined' ? window.location.origin : 'https://p2p.red'),
     peerJsConfig: {
-      host: import.meta.env.VITE_PEERJS_HOST ?? (typeof window !== 'undefined' ? window.location.hostname : ''),
+      host: import.meta.env.VITE_PEERJS_HOST ?? (typeof window !== 'undefined' ? window.location.hostname : 'p2p.red'),
       port: Number(
         import.meta.env.VITE_PEERJS_PORT ??
           (typeof window !== 'undefined'

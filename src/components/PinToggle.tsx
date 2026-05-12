@@ -113,7 +113,7 @@ export const PinToggle: React.FC<PinToggleProps> = ({ onPinChange }) => {
           }`} />
         </div>
         <Lock size={16} />
-        <span className="text-sm">Add a PIN, just in case</span>
+        <span className="text-sm">Add PIN protection</span>
       </button>
 
       {enabled && (
@@ -162,7 +162,7 @@ export const PinToggle: React.FC<PinToggleProps> = ({ onPinChange }) => {
                   />
                 ))}
               </div>
-              <p className="text-white/40 text-xs">Type a 4‑digit PIN</p>
+              <p className="text-white/40 text-xs">Enter 4-digit PIN</p>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2 w-full max-w-sm">

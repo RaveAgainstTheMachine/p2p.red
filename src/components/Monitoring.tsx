@@ -20,7 +20,7 @@ interface MonitoringProps {
 export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) => {
   const statusUrl = import.meta.env.PROD
     ? `${window.location.origin}/api/status`
-    : '/api/status';
+    : 'http://localhost:3001/api/status';
   const [overallStatus, setOverallStatus] = useState<DisplayStatus>('degraded');
   const [serviceStatuses, setServiceStatuses] = useState<Record<string, ServiceStatus>>({});
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
@@ -101,17 +101,14 @@ export const Monitoring: React.FC<MonitoringProps> = ({ placement = 'fixed' }) =
         }
         title="Service Status"
       >
-        <Activity
-          size={placement === 'footer' ? 18 : 20}
-          className={`${getStatusColor(overallStatus)} ${overallStatus === 'healthy' ? 'animate-pulse' : ''} transition-colors duration-500`}
-        />
+        <Activity size={20} className={placement === 'footer' ? 'text-white/70' : 'text-white/60'} />
       </button>
       {isVisible && (
         <div
           className={
             placement === 'footer'
-              ? 'fixed sm:absolute bottom-20 sm:bottom-full left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 mb-2 z-[200] w-[90vw] sm:w-64 bg-black/95 border border-white/10 rounded-xl p-4 shadow-2xl backdrop-blur-md'
-              : 'fixed bottom-1 right-4 z-[200] bg-black/95 border border-white/10 rounded-xl p-4 shadow-2xl backdrop-blur-md'
+              ? 'absolute bottom-full right-0 mb-2 z-40 w-64 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg'
+              : 'fixed bottom-1 right-4 z-50 bg-gray-900/95 backdrop-blur-sm border border-white/10 rounded-lg p-4 shadow-lg'
           }
         >
           <div className="flex items-center justify-between mb-3">

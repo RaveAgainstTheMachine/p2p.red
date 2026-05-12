@@ -53,7 +53,7 @@ export const FileStructure: React.FC<FileStructureProps> = ({ files, maxFiles = 
   };
 
   const filesArray = useMemo(() => {
-    return Array.isArray(files) ? files : Array.from(files as any as File[]);
+    return Array.isArray(files) ? files : Array.from(files);
   }, [files]);
   const totalFiles = filesArray.length;
   const totalSize = filesArray.reduce((sum, file) => sum + file.size, 0);

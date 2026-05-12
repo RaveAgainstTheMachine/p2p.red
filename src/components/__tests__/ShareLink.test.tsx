@@ -20,7 +20,10 @@ describe('ShareLink', () => {
   });
 
   it('shows native share button when available', () => {
-    Object.assign(navigator, { share: vi.fn() });
+    Object.defineProperty(navigator, 'share', {
+      value: vi.fn(),
+      configurable: true,
+    });
 
     render(<ShareLink shareLink="https://p2p.red/#abc" />);
 

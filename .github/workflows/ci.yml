@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
   lint-and-test:
@@ -106,4 +106,3 @@ jobs:
         run: npm run test:e2e
         env:
           NODE_ENV: test
-.github/workflows/ci.yml merge=ours

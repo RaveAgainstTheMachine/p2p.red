@@ -1,5 +1,6 @@
 import webConfig from './packages/web/eslint.config.js';
 import desktopConfig from './packages/desktop/eslint.config.js';
+import tseslint from 'typescript-eslint';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -20,7 +21,7 @@ export default [
   // Apply web config ONLY to web package files
   ...webConfig.map(config => ({
     ...config,
-    files: config.files || ['packages/web/src/**/*.{ts,tsx}'],
+    files: ['packages/web/src/**/*.{ts,tsx}'],
     languageOptions: {
       ...config.languageOptions,
       parserOptions: {
@@ -32,8 +33,25 @@ export default [
   // Apply desktop config ONLY to desktop package files
   ...desktopConfig.map(config => ({
     ...config,
-    files: config.files || ['packages/desktop/src/**/*.{ts,tsx}'],
+    files: ['packages/desktop/src/**/*.{ts,tsx}'],
+    languageOptions: {
+      ...config.languageOptions,
+      parserOptions: {
+        ...(config.languageOptions?.parserOptions || {}),
+        tsconfigRootDir: path.join(__dirname, 'packages/desktop'),
+      }
+    }
   })),
+  // Separate config for root files or other TS files
+  {
+    files: ['*.config.ts'],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        tsconfigRootDir: __dirname,
+      }
+    }
+  },
   {
     files: ['packages/web/src/**/*.{ts,tsx}'],
     rules: {

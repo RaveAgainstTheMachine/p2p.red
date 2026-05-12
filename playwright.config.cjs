@@ -25,10 +25,10 @@ module.exports = defineConfig({
     }
   ],
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 5180',
+    command: './automation/start-e2e-env.sh',
     url: 'http://127.0.0.1:5180',
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 180_000,
     env: {
       ...process.env,
       VITE_API_URL: 'http://127.0.0.1:3001',

@@ -1,0 +1,48 @@
+# P2P.RED Merge Shield Attributes
+# Author: Steven Frost
+
+# Ensure these files are never merged/overwritten from master to public
+PROJECT_DOCUMENTATION/INFRASTRUCTURE.md merge=ours
+PROJECT_DOCUMENTATION/WG_SSH_BASTION_SETUP.md merge=ours
+PROJECT_DOCUMENTATION/OPENBAO_SETUP.md merge=ours
+PROJECT_DOCUMENTATION/VPS_DEPLOYMENT_GUIDE.md merge=ours
+PROJECT_DOCUMENTATION/INFRA_SETUP_TEMPLATE.md merge=ours
+
+# Prevent environment leaks during merges
+.env* merge=ours
+github_deploy_key* merge=ours
+
+# Force consistent line endings for cross-platform releases
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+.github/dependabot.yml merge=ours
+.github/workflows/ci.yml merge=ours
+GEMINI.md merge=ours
+.cursorrules merge=ours
+skills/ merge=ours
+.gemini/ merge=ours
+PROJECT_DOCUMENTATION/WEBRTC_P2P_PROMPT.md merge=ours
+PROJECT_DOCUMENTATION/WEBRTC_P2P_RULES.md merge=ours
+PROJECT_DOCUMENTATION/STYLING_PHILOSOPHY.md merge=ours
+PROJECT_DOCUMENTATION/UI_IMPLEMENTATION_GUIDE.md merge=ours
+PROJECT_DOCUMENTATION/LESSONS_DEP_UPGRADE.md merge=ours
+PROJECT_DOCUMENTATION/LOAD_BALANCER_MIGRATION.md merge=ours
+PROJECT_DOCUMENTATION/ANALYTICS.md merge=ours
+PROJECT_DOCUMENTATION/TELEMETRY.md merge=ours
+PROJECT_DOCUMENTATION/ADMIN_DASHBOARD.md merge=ours
+PROJECT_DOCUMENTATION/INCIDENT_REPORTS merge=ours
+.windsurf/ merge=ours
+images/ merge=ours
+.windsurf merge=ours
+INCIDENT_REPORT_TLS_503.md merge=ours
+deploy.sh merge=ours
+deploy-metadata-api.sh merge=ours
+debug.py merge=ours
+test-results merge=ours
+tests merge=ours
+envoy-runtime merge=ours

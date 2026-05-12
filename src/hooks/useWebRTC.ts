@@ -1,0 +1,284 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
+import Peer, { DataConnection } from 'peerjs';
+import { peerJsConfig } from '../config/environments';
+import { sendTelemetry } from '../services/telemetry';
+
+// TURN configuration will be fetched from API
+
+const getApiBaseUrl = (): string => {
+  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env : undefined;
+  const metaUrl = metaEnv?.VITE_API_URL;
+  if (metaUrl) {
+    return metaUrl;
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return 'https://p2p.red';
+};
+
+const createTurnCredentials = async () => {
+  const baseUrl = getApiBaseUrl().replace(/\/$/, '');
+  const response = await fetch(`${baseUrl}/api/turn-credentials`, {
+    credentials: 'omit'
+  });
+
+  if (!response.ok) {
+    throw new Error(`TURN credentials request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data?.iceServers) {
+    throw new Error('TURN credentials response missing iceServers');
+  }
+
+  return { iceServers: data.iceServers };
+};
+
+
+export const useWebRTC = () => {
+  const [peer, setPeer] = useState<Peer | null>(null);
+  const [peerId, setPeerId] = useState<string>('');
+  const [connections, setConnections] = useState<Map<string, DataConnection>>(new Map());
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionState, setConnectionState] = useState<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const peerRef = useRef<Peer | null>(null);
+
+  const handleConnection = useCallback((conn: DataConnection) => {
+    conn.on('open', () => {
+      console.log('Connection opened with:', conn.peer);
+      setConnections((prev: Map<string, DataConnection>) => new Map(prev.set(conn.peer, conn)));
+    });
+
+    conn.on('close', () => {
+      console.log('Connection closed with:', conn.peer);
+      setConnections((prev: Map<string, DataConnection>) => {
+        const newMap = new Map(prev);
+        newMap.delete(conn.peer);
+        return newMap;
+      });
+    });
+
+    conn.on('error', (err: Error) => {
+      console.error('Connection error:', err);
+    });
+  }, []);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+
+    const setupPeer = async () => {
+      let iceServers = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ];
+
+      try {
+        const { iceServers: apiIceServers } = await createTurnCredentials();
+        iceServers = [
+          ...iceServers,
+          ...apiIceServers
+        ];
+      } catch (error) {
+        console.warn('⚠️ TURN credentials unavailable, using STUN only.', error);
+      }
+
+      if (peerRef.current) return; // Already initialized
+
+      const newPeer = new Peer({
+        host: peerJsConfig.host,
+        port: peerJsConfig.port,
+        path: peerJsConfig.path,
+        secure: peerJsConfig.secure,
+        config: {
+          iceServers,
+          iceCandidatePoolSize: 10,
+          iceTransportPolicy: 'all',
+          bundlePolicy: 'max-bundle',
+          rtcpMuxPolicy: 'require'
+        }
+      });
+
+      newPeer.on('open', (id: string) => {
+        console.log('✅ Peer connected with ID:', id);
+        setPeerId(id);
+        setPeer(newPeer);
+        peerRef.current = newPeer;
+        setIsConnected(true);
+        setConnectionState('connected');
+      });
+
+      newPeer.on('connection', (conn: DataConnection) => {
+        console.log('📞 Incoming connection from:', conn.peer);
+        handleConnection(conn);
+      });
+
+      newPeer.on('disconnected', () => {
+        console.warn('⚠️ Peer disconnected from signaling server');
+        setIsConnected(false);
+        setConnectionState('disconnected');
+
+        void sendTelemetry({
+          eventType: 'peer_disconnected',
+          role: 'client',
+          stage: 'signal',
+          connectionType: 'signaling'
+        });
+        
+        // Attempt reconnection
+        console.log('🔄 Attempting to reconnect...');
+        setConnectionState('reconnecting');
+        setTimeout(() => {
+          if (newPeer && !newPeer.destroyed) {
+            newPeer.reconnect();
+          }
+        }, 1000);
+      });
+
+      newPeer.on('error', (err: any) => {
+        console.error('❌ Peer error:', err.type, err.message);
+        void sendTelemetry({
+          eventType: 'peer_error',
+          role: 'client',
+          stage: 'signal',
+          errorCode: err.type,
+          errorMessage: err.message
+        });
+        if (err.type === 'network' || err.type === 'server-error') {
+          setIsConnected(false);
+          setConnectionState('failed');
+        } else if (err.type === 'peer-unavailable') {
+          console.warn('⚠️ Remote peer unavailable');
+          setConnectionState('failed');
+        } else if (err.type === 'disconnected') {
+          setConnectionState('disconnected');
+        }
+      });
+
+      // Monitor network connectivity
+      const handleOnline = () => {
+        console.log('🌐 Network connection restored');
+        setIsOnline(true);
+        if (newPeer && !newPeer.destroyed && !newPeer.disconnected) {
+          setConnectionState('reconnecting');
+          newPeer.reconnect();
+        }
+      };
+
+      const handleOffline = () => {
+        console.warn('📡 Network connection lost');
+        setIsOnline(false);
+        setConnectionState('disconnected');
+      };
+
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
+      // Cleanup
+      cleanup = () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
+    };
+
+    void setupPeer();
+
+    return () => {
+      cleanup?.();
+      if (peerRef.current) {
+        peerRef.current.destroy();
+        peerRef.current = null;
+      }
+    };
+  }, [handleConnection]);
+
+  const connectToPeer = useCallback((remotePeerId: string) => {
+    if (!peerRef.current) {
+      console.error('Peer not initialized');
+      return null;
+    }
+
+    console.log('Attempting to connect to peer:', remotePeerId);
+    console.log('My peer ref:', peerRef.current.id);
+    
+    const conn = peerRef.current.connect(remotePeerId, {
+      reliable: true,
+      serialization: 'binary',
+      metadata: { timestamp: Date.now() }
+    });
+
+    console.log('Connection object created:', conn);
+    
+    conn.on('open', () => {
+      console.log('DataChannel OPEN with:', remotePeerId);
+    });
+    
+    conn.on('error', (err: Error) => {
+      console.error('DataChannel ERROR:', err);
+    });
+    
+    conn.on('close', () => {
+      console.log('DataChannel CLOSED with:', remotePeerId);
+    });
+    
+    // Log ICE connection state changes
+    conn.peerConnection?.addEventListener('iceconnectionstatechange', () => {
+      const state = conn.peerConnection?.iceConnectionState;
+      console.log('🧊 ICE connection state:', state);
+      if (state === 'failed' || state === 'disconnected') {
+        console.error('❌ ICE connection failed - TURN server may not be working');
+      }
+    });
+    
+    conn.peerConnection?.addEventListener('icegatheringstatechange', () => {
+      console.log('🧊 ICE gathering state:', conn.peerConnection?.iceGatheringState);
+    });
+    
+    conn.peerConnection?.addEventListener('connectionstatechange', () => {
+      console.log('🔌 Connection state:', conn.peerConnection?.connectionState);
+    });
+    
+    // Log ICE candidates
+    conn.peerConnection?.addEventListener('icecandidate', (event: RTCPeerConnectionIceEvent) => {
+      if (event.candidate) {
+        const candidate = event.candidate;
+        console.log('🧊 ICE candidate:', {
+          type: candidate.type,
+          protocol: candidate.protocol,
+          address: candidate.address,
+          port: candidate.port,
+          relatedAddress: candidate.relatedAddress,
+          relatedPort: candidate.relatedPort
+        });
+      } else {
+        console.log('🧊 ICE gathering complete');
+      }
+    });
+
+    handleConnection(conn);
+    return conn;
+  }, []);
+
+  const disconnect = useCallback(() => {
+    if (peerRef.current) {
+      peerRef.current.destroy();
+      peerRef.current = null;
+      setPeer(null);
+      setPeerId('');
+      setConnections(new Map());
+      setIsConnected(false);
+    }
+  }, []);
+
+  return {
+    peer,
+    peerId,
+    connections,
+    isConnected,
+    connectionState,
+    isOnline,
+    connectToPeer,
+    disconnect
+  };
+};

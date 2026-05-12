@@ -6,13 +6,13 @@ echo "🚀 Starting E2E test environment..."
 
 # 1. Start Metadata API (Background)
 echo "📦 Starting Metadata API on port 3001..."
-node metadata-server.js &
+node metadata-server.cjs &
 METADATA_PID=$!
 
 # 2. Start PeerJS Server (Background)
-# We use npx peerjs to run a local signaling server for tests
+# We use pnpm dlx peerjs to run a local signaling server for tests
 echo "📡 Starting PeerJS Server on port 9000..."
-npx peerjs --port 9000 --path /peerjs &
+pnpm dlx peerjs --port 9000 --path /peerjs &
 PEERJS_PID=$!
 
 # 3. Start Vite Dev Server (Background)

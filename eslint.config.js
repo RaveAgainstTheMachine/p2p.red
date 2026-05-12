@@ -15,7 +15,6 @@ export default [
       '**/*.d.ts',
       '**/vite.config.ts',
       '**/vitest.config.ts',
-      'src/**',
       'packages/shared/**',
       'packages/desktop/**',
       'automation/**',
@@ -41,7 +40,7 @@ export default [
       },
       parser: tseslint.parser,
       parserOptions: {
-        project: ['./packages/web/tsconfig.json'],
+        project: ['./tsconfig.json'],
         tsconfigRootDir: __dirname,
       },
     },

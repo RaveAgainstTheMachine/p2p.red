@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: p2p-e2e-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: p2p_metadata
+      POSTGRES_USER: p2p_api_user
+      POSTGRES_PASSWORD: p2p_test_password
+    ports:
+      - "<ip>:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U p2p_api_user -d p2p_metadata"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - e2e_postgres_data:/var/lib/postgresql/data
+      - ./metadata-api/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - e2e-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: p2p-e2e-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "<ip>:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - e2e_redis_data:/data
+    networks:
+      - e2e-network
+
+  metadata-api:
+    build:
+      context: ./metadata-api
+      dockerfile: Dockerfile
+    container_name: p2p-e2e-metadata-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: p2p_metadata
+      POSTGRES_USER: p2p_api_user
+      POSTGRES_PASSWORD: p2p_test_password
+      POSTGRES_MAX_CONNECTIONS: 10
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      LINK_EXPIRY_HOURS: 24
+      CLEANUP_INTERVAL_MINUTES: 60
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX_REQUESTS: 200
+      CORS_ORIGIN: dev
+      TURN_SECRET: e2e-turn-secret
+      TURN_TTL_SECONDS: 3600
+    ports:
+      - "<ip>:3001:3001"
+    networks:
+      - e2e-network
+
+  anubis:
+    image: ghcr.io/techarohq/anubis:latest
+    container_name: p2p-e2e-anubis
+    restart: unless-stopped
+    depends_on:
+      - metadata-api
+    environment:
+      BIND: ":8923"
+      TARGET: "http://p2p-e2e-metadata-api:3001"
+      DIFFICULTY: "4"
+      SERVE_ROBOTS_TXT: "true"
+      USE_REMOTE_ADDRESS: "true"
+    ports:
+      - "<ip>:8923:8923"
+    networks:
+      - e2e-network
+
+  peerjs-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.peerjs
+    container_name: p2p-e2e-peerjs
+    restart: unless-stopped
+    command: ["npx", "peerjs", "--port", "9000", "--key", "peerjs", "--path", "/peerjs", "--allow_discovery", "--cors", "*"]
+    ports:
+      - "<ip>:9000:9000"
+    networks:
+      - e2e-network
+
+volumes:
+  e2e_postgres_data:
+    driver: local
+  e2e_redis_data:
+    driver: local
+
+networks:
+  e2e-network:
+    driver: bridge

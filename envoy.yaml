@@ -1,0 +1,551 @@
+admin:
+  access_log_path: /tmp/admin_access.log
+  address:
+    socket_address:
+      address: <ip>
+      port_value: 9901
+
+layered_runtime:
+  layers:
+    - name: disk
+      disk_layer:
+        symlink_root: /etc/envoy/runtime/current
+    - name: admin
+      admin_layer: {}
+
+static_resources:
+  listeners:
+    - name: listener_http
+      address:
+        socket_address:
+          address: <ip>
+          port_value: 80
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: http_redirect
+                  virtual_hosts:
+                    - name: redirect_p2p
+                      domains:
+                        - <domain>
+                        - www.<domain>
+                      routes:
+                        - match:
+                            prefix: "/"
+                          redirect:
+                            https_redirect: true
+                    - name: redirect_signal
+                      domains:
+                        - <signal-domain>
+                      routes:
+                        - match:
+                            prefix: "/"
+                          redirect:
+                            https_redirect: true
+                    - name: redirect_plausible
+                      domains:
+                        - plausible.<domain>
+                      routes:
+                        - match:
+                            prefix: "/"
+                          redirect:
+                            https_redirect: true
+                    - name: redirect_dash
+                      domains:
+                        - dash.<domain>
+                      routes:
+                        - match:
+                            prefix: "/"
+                          redirect:
+                            https_redirect: true
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+    - name: listener_https
+      address:
+        socket_address:
+          address: <ip>
+          port_value: 443
+      listener_filters:
+        - name: envoy.filters.listener.tls_inspector
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector
+      filter_chains:
+        - filter_chain_match:
+            server_names:
+              - <domain>
+              - www.<domain>
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - pkcs12:
+                      filename: /var/snap/docker/common/p2p-envoy-certs/<domain>.p12
+                    password:
+                      inline_string: "p2pred"
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_2
+                  tls_maximum_protocol_version: TLSv1_3
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_https
+                use_remote_address: true
+                xff_num_trusted_hops: 0
+                upgrade_configs:
+                  - upgrade_type: websocket
+                route_config:
+                  name: p2p_routes
+                  virtual_hosts:
+                    - name: p2p
+                      domains:
+                        - <domain>
+                        - www.<domain>
+                      response_headers_to_add:
+                        - header:
+                            key: X-Content-Type-Options
+                            value: "nosniff"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: X-XSS-Protection
+                            value: "1; mode=block"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: Content-Security-Policy
+                            value: "default-src 'self'; script-src 'self' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; style-src 'self' 'unsafe-inline'; connect-src 'self' wss://<domain> https://<signal-domain> wss://<signal-domain>; font-src 'self'; object-src 'none';"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: X-Frame-Options
+                            value: "SAMEORIGIN"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                      routes:
+                        - match:
+                            path: "/googleb9d45c29b0969207.html"
+                          direct_response:
+                            status: 200
+                            body:
+                              inline_string: "google-site-verification: googleb9d45c29b0969207.html"
+                          response_headers_to_add:
+                            - header:
+                                key: Content-Type
+                                value: "text/plain"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            path: "/googleb9d45c29b0969207"
+                          direct_response:
+                            status: 200
+                            body:
+                              inline_string: "google-site-verification: googleb9d45c29b0969207.html"
+                          response_headers_to_add:
+                            - header:
+                                key: Content-Type
+                                value: "text/plain"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            safe_regex:
+                              regex: "^/share/(.*)"
+                          route:
+                            cluster: metadata_api
+                            regex_rewrite:
+                              pattern:
+                                regex: "^/share/(.*)"
+                              substitution: "/api/metadata/\\1?html=true"
+                        - match:
+                            prefix: "/.within.website/"
+                          route:
+                            cluster: anubis
+                          response_headers_to_remove:
+                            - content-security-policy
+                            - x-frame-options
+                          response_headers_to_add:
+                            - header:
+                                key: Content-Security-Policy
+                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; style-src-elem 'self' 'unsafe-inline'; style-src-attr 'unsafe-inline' 'unsafe-hashes'; img-src 'self' data:; connect-src 'self' https://<signal-domain> wss://<signal-domain> wss://<domain>; font-src 'self'; object-src 'none';"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: X-Frame-Options
+                                value: "SAMEORIGIN"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            path: "/api/metadata"
+                          route:
+                            cluster: anubis
+                          response_headers_to_remove:
+                            - content-security-policy
+                            - x-frame-options
+                          response_headers_to_add:
+                            - header:
+                                key: Content-Security-Policy
+                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://<domain>; font-src 'self'; object-src 'none';"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: X-Frame-Options
+                                value: "SAMEORIGIN"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            prefix: "/api/metadata/"
+                          route:
+                            cluster: anubis
+                          response_headers_to_remove:
+                            - content-security-policy
+                            - x-frame-options
+                          response_headers_to_add:
+                            - header:
+                                key: Content-Security-Policy
+                                value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://<domain>; font-src 'self'; object-src 'none';"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: X-Frame-Options
+                                value: "SAMEORIGIN"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            path: "/js/script.js"
+                          route:
+                            cluster: plausible
+                            host_rewrite_literal: plausible.<domain>
+                        - match:
+                            path: "/api/event"
+                          route:
+                            cluster: plausible
+                            host_rewrite_literal: plausible.<domain>
+                        - match:
+                            prefix: "/api/"
+                          route:
+                            cluster: metadata_api
+                        - match:
+                            prefix: "/download-bridge/"
+                          route:
+                            weighted_clusters:
+                              clusters:
+                                - name: app_blue
+                                  weight: 0
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 100
+                              runtime_key_prefix: traffic_split
+                        - match:
+                            prefix: "/peerjs"
+                          route:
+                            cluster: peerjs
+                            timeout: 0s
+                        - match:
+                            prefix: "/streamsaver/"
+                          route:
+                            weighted_clusters:
+                              clusters:
+                                - name: app_blue
+                                  weight: 0
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 100
+                              runtime_key_prefix: traffic_split
+                          response_headers_to_remove:
+                            - x-frame-options
+                          response_headers_to_add:
+                            - header:
+                                key: X-Frame-Options
+                                value: "SAMEORIGIN"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: Cache-Control
+                                value: "no-cache, no-store, must-revalidate, max-age=0"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: Pragma
+                                value: "no-cache"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: Expires
+                                value: "0"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            prefix: "/assets/"
+                          route:
+                            weighted_clusters:
+                              clusters:
+                                - name: app_blue
+                                  weight: 0
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 100
+                              runtime_key_prefix: traffic_split
+                          response_headers_to_add:
+                            - header:
+                                key: Cache-Control
+                                value: "no-cache, no-store, must-revalidate, max-age=0"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: Pragma
+                                value: "no-cache"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                            - header:
+                                key: Expires
+                                value: "0"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            prefix: "/"
+                          route:
+                            weighted_clusters:
+                              clusters:
+                                - name: app_blue
+                                  weight: 0
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 100
+                              runtime_key_prefix: traffic_split
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        - filter_chain_match:
+            server_names:
+              - dash.<domain>
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - pkcs12:
+                      filename: /var/snap/docker/common/p2p-envoy-certs/dash.<domain>.p12
+                    password:
+                      inline_string: "p2pred"
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_2
+                  tls_maximum_protocol_version: TLSv1_3
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_https_dash
+                use_remote_address: true
+                xff_num_trusted_hops: 0
+                route_config:
+                  name: dash_routes
+                  virtual_hosts:
+                    - name: dash
+                      domains:
+                        - dash.<domain>
+                      response_headers_to_add:
+                        - header:
+                            key: X-Content-Type-Options
+                            value: "nosniff"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: X-XSS-Protection
+                            value: "1; mode=block"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: Content-Security-Policy
+                            value: "default-src 'self'; script-src 'self' 'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://dash.<domain>; font-src 'self'; object-src 'none';"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: X-Frame-Options
+                            value: "SAMEORIGIN"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                      routes:
+                        - match:
+                            path: "/js/script.js"
+                          direct_response:
+                            status: 200
+                            body:
+                              inline_string: "/* plausible disabled on dash */"
+                          response_headers_to_add:
+                            - header:
+                                key: Content-Type
+                                value: "application/javascript"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - match:
+                            prefix: "/api/"
+                          route:
+                            cluster: metadata_api
+                        - match:
+                            prefix: "/"
+                          route:
+                            weighted_clusters:
+                              clusters:
+                                - name: app_blue
+                                  weight: 0
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 100
+                              runtime_key_prefix: traffic_split
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+
+        - filter_chain_match:
+            server_names:
+              - plausible.<domain>
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - pkcs12:
+                      filename: /var/snap/docker/common/p2p-envoy-certs/plausible.<domain>.p12
+                    password:
+                      inline_string: "p2pred"
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_2
+                  tls_maximum_protocol_version: TLSv1_3
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: plausible_https
+                use_remote_address: true
+                xff_num_trusted_hops: 0
+                route_config:
+                  name: plausible_routes
+                  virtual_hosts:
+                    - name: plausible
+                      domains:
+                        - plausible.<domain>
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: plausible
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+        - filter_chain_match:
+            server_names:
+              - <signal-domain>
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - pkcs12:
+                      filename: /var/snap/docker/common/p2p-envoy-certs/<signal-domain>.p12
+                    password:
+                      inline_string: "p2pred"
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_2
+                  tls_maximum_protocol_version: TLSv1_3
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: signal_https
+                use_remote_address: true
+                xff_num_trusted_hops: 0
+                upgrade_configs:
+                  - upgrade_type: websocket
+                route_config:
+                  name: signal_routes
+                  virtual_hosts:
+                    - name: signal
+                      domains:
+                        - <signal-domain>
+                      routes:
+                        - match:
+                            prefix: "/peerjs"
+                          route:
+                            cluster: peerjs
+                            timeout: 0s
+                        - match:
+                            prefix: "/"
+                          direct_response:
+                            status: 404
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    - name: app_blue
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: app_blue
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-app-blue
+                      port_value: 3000
+    - name: app_green
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: app_green
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-app-green
+                      port_value: 3000
+    - name: peerjs
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: peerjs
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-peerjs
+                      port_value: 9000
+    - name: metadata_api
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: metadata_api
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-metadata-api
+                      port_value: 3001
+    - name: anubis
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: anubis
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-anubis
+                      port_value: 8923
+    - name: plausible
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: plausible
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-plausible
+                      port_value: 8000

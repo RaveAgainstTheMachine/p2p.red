@@ -1,0 +1,20 @@
+[Unit]
+Description=p2p.red Docker Compose Stack
+Documentation=https://github.com/RaveAgainstTheMachine/p2p.red
+After=snap.docker.dockerd.service run-secrets.mount network-online.target
+Requires=snap.docker.dockerd.service run-secrets.mount
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/p2p-file-share
+ExecStart=/opt/p2p-file-share/automation/p2p-stack-start.sh
+ExecStop=/usr/bin/docker compose -f /opt/p2p-file-share/docker-compose.yml -f /opt/p2p-file-share/docker-compose.blue-green.yml down
+TimeoutStartSec=300
+TimeoutStopSec=60
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

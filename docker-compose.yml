@@ -1,0 +1,221 @@
+services:
+  # PostgreSQL - Metadata storage
+  postgres:
+    image: postgres:16-alpine
+    container_name: p2p-postgres
+    restart: unless-stopped
+    env_file:
+      - ${METADATA_API_ENV_FILE:-/run/secrets/metadata.env}
+    environment:
+      POSTGRES_DB: p2p_metadata
+      POSTGRES_USER: p2p_api_user
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ${METADATA_API_ENV_FILE:-/run/secrets/metadata.env}:/run/secrets/metadata.env:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U p2p_api_user -d p2p_metadata"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - p2p-network
+
+  # Plausible Analytics - Postgres
+  plausible-db:
+    image: postgres:16-alpine
+    container_name: p2p-plausible-db
+    restart: unless-stopped
+    env_file:
+      - ${PLAUSIBLE_ENV_FILE:-/run/secrets/plausible.env}
+    environment:
+      POSTGRES_DB: plausible
+      POSTGRES_USER: plausible
+    volumes:
+      - plausible_db_data:/var/lib/postgresql/data
+      - ${PLAUSIBLE_ENV_FILE:-/run/secrets/plausible.env}:/run/secrets/plausible.env:ro
+    networks:
+      - p2p-network
+
+  # Plausible Analytics - ClickHouse
+  plausible-events-db:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    container_name: p2p-plausible-events-db
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - plausible_events_data:/var/lib/clickhouse
+    networks:
+      - p2p-network
+
+  # Plausible Analytics - App
+  plausible:
+    image: plausible/analytics:latest
+    container_name: p2p-plausible
+    restart: unless-stopped
+    depends_on:
+      - plausible-db
+      - plausible-events-db
+    env_file:
+      - ${PLAUSIBLE_ENV_FILE:-/run/secrets/plausible.env}
+    environment:
+      BASE_URL: https://plausible.<domain>
+      CLICKHOUSE_DATABASE_URL: http://plausible-events-db:8123/plausible_events
+      DISABLE_AUTH_FOR_PRODUCTION: "false"
+    networks:
+      - p2p-network
+
+  # Redis - Metadata cache
+  redis:
+    image: redis:7-alpine
+    container_name: p2p-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - p2p-network
+
+  # Metadata API - Short link generation
+  metadata-api:
+    image: ${METADATA_API_IMAGE:-p2p-metadata-api:latest}
+    container_name: p2p-metadata-api
+    restart: unless-stopped
+    env_file:
+      - ${METADATA_API_ENV_FILE:-/run/secrets/metadata.env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      METADATA_ENV_FILE: /run/secrets/metadata.env
+      WEB_STATUS_URL: https://<domain>
+      SIGNAL_STATUS_URL: http://p2p-peerjs:9000/peerjs/id
+      ANALYTICS_STATUS_URL: http://p2p-plausible:8000/js/script.js
+      OPENBAO_STATUS_URL: https://<bao-domain>:8200/v1/sys/health
+      OPENBAO_ADDR: https://<bao-domain>:8200
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: p2p_metadata
+      POSTGRES_USER: p2p_api_user
+      POSTGRES_MAX_CONNECTIONS: 20
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      LINK_EXPIRY_HOURS: 24
+      CLEANUP_INTERVAL_MINUTES: 60
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX_REQUESTS: 100
+      CORS_ORIGIN: https://<domain>,https://dash.<domain>
+      METADATA_API_LOG_REQUESTS: "off"
+    extra_hosts:
+      - "<bao-domain>:<ip>"
+    ports:
+      - "${METADATA_API_PUBLISH:-<ip>:3001}:3001"
+    networks:
+      - p2p-network
+      - p2p-bluegreen-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - ${METADATA_API_ENV_FILE:-/run/secrets/metadata.env}:/run/secrets/metadata.env:ro
+  # Anubis PoW filter for metadata API
+  anubis:
+    image: ghcr.io/techarohq/anubis:latest
+    container_name: p2p-anubis
+    restart: unless-stopped
+    depends_on:
+      - metadata-api
+    environment:
+      BIND: ":8923"
+      TARGET: "http://p2p-metadata-api:3001"
+      DIFFICULTY: "4"
+      SERVE_ROBOTS_TXT: "true"
+    networks:
+      - p2p-network
+
+  # Frontend app (React)
+  app:
+    image: ${APP_IMAGE:-p2p-app:latest}
+    container_name: p2p-app
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PEERJS_HOST=<domain>
+      - PEERJS_PORT=443
+      - PEERJS_PATH=/peerjs
+      - VITE_HOST=<ip>
+      - HOST_CHECK_DISABLED=true
+    depends_on:
+      - peerjs-server
+      - metadata-api
+    networks:
+      - p2p-network
+
+  # PeerJS signaling server
+  peerjs-server:
+    image: ${PEERJS_IMAGE:-p2p-peerjs:latest}
+    container_name: p2p-peerjs
+    restart: unless-stopped
+    environment:
+      - PEERJS_PORT=9000
+      - PEERJS_HOST=<domain>
+    ports:
+      - "<ip>:9000:9000"
+    networks:
+      - p2p-network
+
+  # Envoy edge proxy
+  envoy:
+    image: ${ENVOY_IMAGE:-p2p-envoy:latest}
+    container_name: p2p-envoy
+    restart: unless-stopped
+    user: "0:0"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "<ip>:9901:9901"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/snap/docker/common/p2p-envoy-certs:/var/snap/docker/common/p2p-envoy-certs:ro
+      - /var/snap/docker/common/p2p-file-share/envoy-runtime:/etc/envoy/runtime:ro
+    depends_on:
+      - app
+      - peerjs-server
+      - metadata-api
+      - anubis
+      - plausible
+    networks:
+      - p2p-network
+      - p2p-bluegreen-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  plausible_db_data:
+    driver: local
+  plausible_events_data:
+    driver: local
+
+networks:
+  p2p-network:
+    driver: bridge
+  p2p-bluegreen-network:
+    external: true
+    name: p2p-bluegreen_p2p-network

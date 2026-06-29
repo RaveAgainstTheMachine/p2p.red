@@ -1,0 +1,10 @@
+[Unit]
+Description=Run P2P Site Health Sentinel every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+Unit=p2p-health-sentinel.service
+
+[Install]
+WantedBy=timers.target

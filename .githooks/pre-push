@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# pre-push hook
+# Prevents direct pushes of the dev repository to the public GitHub repository
+# to avoid leaking private Git history or secrets.
+
+set -euo pipefail
+
+REMOTE_NAME="$1"
+REMOTE_URL="$2"
+
+# Block direct pushes to any remote named 'public' or containing github.com/public-repo keywords.
+if [[ "$REMOTE_NAME" == "public" || "$REMOTE_URL" == *"github.com"* ]]; then
+  echo "❌ Error: Direct push of the dev repository to public GitHub is forbidden!"
+  echo "   This repository contains private Git history and private files."
+  echo "   To publish to the public repository, you must use the publishing pipeline:"
+  echo "   make publish-github PUBLIC_REPO=/path/to/public-repo"
+  exit 1
+fi

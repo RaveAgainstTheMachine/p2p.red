@@ -1,0 +1,20 @@
+6fa434d feat: UI modernization v1.3.7 - night palette & ruby accents
+540ba27 v1.3.6: Add folder count reporting for large file sets in recipient view
+b5fc214 v1.3.5: Fix 'Preparing Tunnel' hang and optimize large folder processing
+ca58893 feat: optimize folder traversal and add 'Analyzing' UI feedback (v1.3.4)
+91eab2e style: redesign E2EE badge to match P2P.RED vibe
+c269bc6 feat: add generative art to transfer screens (v1.3.3)
+04ae53c fix: restore original colored animated background
+a9d5612 chore: bump version to 1.3.1 for performance fix
+1ad3636 refactor: remove animated backgrounds to improve performance during transfers
+140035b fix: add serve to dependencies to fix production start script
+cd71e6c chore: update pnpm lockfile
+3dbab14 chore: bump version to 1.3.0 for WebRTC preview and UI modernization
+08bd363 feat: modernize UI and add WebRTC file preview
+05cc6f1 Document new git origins
+20acc1f Fix dash admin auth + OpenBao secret wiring
+5f6d096 release: v1.2.3 dash admin fixes
+ea3b93c Add admin auth + telemetry admin endpoints
+af24a8b Fix passphrase receiver unlock UI
+fc50e41 Document ZIP-only release in build guide
+9607864 Enforce ZIP-only shares

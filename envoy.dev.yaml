@@ -1,0 +1,206 @@
+admin:
+  access_log_path: /tmp/admin_access.log
+  address:
+    socket_address:
+      address: <ip>
+      port_value: 9901
+
+static_resources:
+  listeners:
+    - name: listener_http
+      address:
+        socket_address:
+          address: <ip>
+          port_value: 80
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                use_remote_address: true
+                xff_num_trusted_hops: 0
+                upgrade_configs:
+                  - upgrade_type: websocket
+                route_config:
+                  name: dev_routes
+                  virtual_hosts:
+                    - name: dev
+                      domains:
+                        - "*"
+                      response_headers_to_add:
+                        - header:
+                            key: X-Content-Type-Options
+                            value: "nosniff"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
+                            key: X-Frame-Options
+                            value: "DENY"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                      routes:
+                        - match:
+                            safe_regex:
+                              regex: "^/share/(.*)"
+                          route:
+                            cluster: metadata_api
+                            regex_rewrite:
+                              pattern:
+                                regex: "^/share/(.*)"
+                              substitution: "/api/metadata/\\1?html=true"
+                        - match:
+                            path: "/api/metadata"
+                          route:
+                            cluster: anubis
+                          typed_per_filter_config:
+                            envoy.filters.http.buffer:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.BufferPerRoute
+                              buffer:
+                                max_request_bytes: 102400
+                        - match:
+                            prefix: "/api/metadata/"
+                          route:
+                            cluster: anubis
+                          typed_per_filter_config:
+                            envoy.filters.http.buffer:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.BufferPerRoute
+                              buffer:
+                                max_request_bytes: 102400
+                        - match:
+                            prefix: "/api/"
+                          route:
+                            cluster: metadata_api
+                          typed_per_filter_config:
+                            envoy.filters.http.buffer:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.BufferPerRoute
+                              buffer:
+                                max_request_bytes: 102400
+                        - match:
+                            path: "/js/script.js"
+                          route:
+                            cluster: plausible
+                            host_rewrite_literal: plausible.<domain>
+                        - match:
+                            path: "/api/event"
+                          route:
+                            cluster: plausible
+                            host_rewrite_literal: plausible.<domain>
+                          typed_per_filter_config:
+                            envoy.filters.http.buffer:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.BufferPerRoute
+                              buffer:
+                                max_request_bytes: 16384
+                        - match:
+                            prefix: "/peerjs/"
+                          route:
+                            cluster: peerjs
+                            timeout: 0s
+                        - match:
+                            prefix: "/streamsaver/"
+                          route:
+                            weighted_clusters:
+                              clusters:
+                                - name: app_blue
+                                  weight: 0
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 100
+                              runtime_key_prefix: traffic_split
+                        - match:
+                            prefix: "/"
+                          route:
+                            weighted_clusters:
+                              clusters:
+                                - name: app_blue
+                                  weight: 0
+                                - name: app_green
+                                  weight: 100
+                              total_weight: 100
+                              runtime_key_prefix: traffic_split
+                http_filters:
+                  - name: envoy.filters.http.buffer
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
+                      max_request_bytes: 1048576
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    - name: app_blue
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: app_blue
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-app-blue
+                      port_value: 3000
+    - name: app_green
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: app_green
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-app-green
+                      port_value: 3000
+    - name: peerjs
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: peerjs
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-peerjs
+                      port_value: 9000
+    - name: metadata_api
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: metadata_api
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-metadata-api
+                      port_value: 3001
+    - name: anubis
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: anubis
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-anubis
+                      port_value: 8923
+    - name: plausible
+      connect_timeout: 2s
+      type: strict_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: plausible
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: p2p-plausible
+                      port_value: 8000

@@ -1,0 +1,224 @@
+version: '3.8'
+
+services:
+  # Caddy web server (automatic HTTPS proxying)
+  caddy:
+    image: caddy:2-alpine
+    container_name: p2p-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+      - metadata-api
+      - peerjs-server
+
+  # Frontend app (React client served statically via Node/serve)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_SITE_NAME=${SITE_NAME:-P2P File Share}
+        - VITE_SITE_DOMAIN=${SITE_DOMAIN:-localhost}
+        - VITE_SITE_CANONICAL_URL=https://${SITE_DOMAIN:-localhost}
+        - VITE_API_URL=https://${SITE_DOMAIN:-localhost}
+        - VITE_PEERJS_HOST=${SITE_DOMAIN:-localhost}
+        - VITE_PEERJS_PORT=443
+        - VITE_PEERJS_SECURE=true
+        - VITE_PEERJS_PATH=/peerjs
+    container_name: p2p-app
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    networks:
+      - p2p-network
+
+  # Metadata API - Short link creation database broker
+  metadata-api:
+    build:
+      context: ./metadata-api
+      dockerfile: Dockerfile
+    container_name: p2p-metadata-api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=p2p_metadata
+      - POSTGRES_USER=p2p_api_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LINK_EXPIRY_HOURS=24
+      - CLEANUP_INTERVAL_MINUTES=60
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX_REQUESTS=100
+      - CORS_ORIGIN=https://${SITE_DOMAIN:-localhost}
+      - ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET}
+      - TURN_SECRET=${TURN_SECRET}
+      - TURN_TTL_SECONDS=3600
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - p2p-network
+
+  # PeerJS signaling server
+  peerjs-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.peerjs
+    container_name: p2p-peerjs
+    restart: unless-stopped
+    command: ["npx", "peerjs", "--port", "9000", "--key", "peerjs", "--path", "/peerjs", "--allow_discovery", "--cors", "*"]
+    networks:
+      - p2p-network
+
+  # PostgreSQL - Metadata storage
+  postgres:
+    image: postgres:16-alpine
+    container_name: p2p-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=p2p_metadata
+      - POSTGRES_USER=p2p_api_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./metadata-api/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U p2p_api_user -d p2p_metadata"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - p2p-network
+
+  # Redis - Metadata cache
+  redis:
+    image: redis:7-alpine
+    container_name: p2p-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - p2p-network
+
+  # ==========================================
+  # Optional Features (Controlled by Profiles)
+  # ==========================================
+
+  # Plausible Analytics - Database
+  plausible-db:
+    image: postgres:16-alpine
+    container_name: p2p-plausible-db
+    restart: unless-stopped
+    profiles:
+      - plausible
+    environment:
+      - POSTGRES_DB=plausible
+      - POSTGRES_USER=plausible
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - plausible_db_data:/var/lib/postgresql/data
+    networks:
+      - p2p-network
+
+  # Plausible Analytics - ClickHouse events
+  plausible-events-db:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    container_name: p2p-plausible-events-db
+    restart: unless-stopped
+    profiles:
+      - plausible
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - plausible_events_data:/var/lib/clickhouse
+    networks:
+      - p2p-network
+
+  # Plausible Analytics - Application
+  plausible:
+    image: plausible/analytics:latest
+    container_name: p2p-plausible
+    restart: unless-stopped
+    profiles:
+      - plausible
+    depends_on:
+      - plausible-db
+      - plausible-events-db
+    environment:
+      - BASE_URL=https://plausible.${SITE_DOMAIN}
+      - CLICKHOUSE_DATABASE_URL=http://plausible-events-db:8123/plausible_events
+      - DISABLE_AUTH_FOR_PRODUCTION=false
+      - SECRET_KEY_BASE=${ADMIN_JWT_SECRET}
+    networks:
+      - p2p-network
+
+  # Anubis Bot Challenge PoW Filter
+  anubis:
+    image: ghcr.io/techarohq/anubis:latest
+    container_name: p2p-anubis
+    restart: unless-stopped
+    profiles:
+      - anubis
+    depends_on:
+      - metadata-api
+    environment:
+      - BIND=:8923
+      - TARGET=http://p2p-metadata-api:3001
+      - DIFFICULTY=4
+      - SERVE_ROBOTS_TXT=true
+      - USE_REMOTE_ADDRESS=true
+    networks:
+      - p2p-network
+
+  # Coturn TURN server container
+  coturn:
+    image: coturn/coturn:latest
+    container_name: p2p-coturn
+    restart: unless-stopped
+    profiles:
+      - turn
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/udp"
+      - "5349:5349/tcp"
+    environment:
+      - DETECT_EXTERNAL_IP=yes
+      - TURN_REST_API_SECRET=${TURN_SECRET}
+      - TURN_REALM=${SITE_DOMAIN}
+    networks:
+      - p2p-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+  plausible_db_data:
+  plausible_events_data:
+
+networks:
+  p2p-network:
+    driver: bridge

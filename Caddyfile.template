@@ -1,0 +1,31 @@
+{$SITE_DOMAIN} {
+    # Compress all responses
+    encode gzip zstd
+
+    # Route Metadata API requests (or Anubis proxy if enabled)
+    @api {
+        path /api/*
+        path /health
+    }
+    handle @api {
+        # Check if Anubis container is running and route through it if enabled,
+        # otherwise route directly to metadata-api. Setup script manages this rule.
+        #ANUBIS_REPLACE_START
+        reverse_proxy metadata-api:3001
+        #ANUBIS_REPLACE_END
+    }
+
+    # Route PeerJS signaling socket connections
+    handle /peerjs/* {
+        reverse_proxy peerjs-server:9000
+    }
+
+    # Route Plausible Analytics if enabled
+    #PLAUSIBLE_REPLACE_START
+    #PLAUSIBLE_REPLACE_END
+
+    # Route static frontend application
+    handle {
+        reverse_proxy app:3000
+    }
+}

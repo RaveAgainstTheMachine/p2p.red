@@ -1,0 +1,38 @@
+{
+  "name": "p2p-file-share",
+  "version": "1.6.18",
+  "description": "Privacy-first P2P file sharing using WebRTC DataChannels",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "./scripts/check-db-version.sh",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "npx serve -s dist -l 3000 -c /app/serve.json",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "client-zip": "^2.5.0",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^0.562.0",
+    "peerjs": "^1.5.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "serve": "^14.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^5.1.2",
+    "autoprefixer": "^10.5.2",
+    "eslint": "^9.10.0",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^3.4.19",
+    "ts-morph": "^28.0.0",
+    "typescript": "^5.2.2",
+    "vite": "^7.3.1"
+  }
+}

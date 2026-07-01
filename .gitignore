@@ -1,0 +1,83 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+
+# Environment files
+.env.local
+.env.*.local
+.env.dev
+.env.prod
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Cloud Build
+cloudbuild.yaml
+
+# Docker
+.dockerignore
+images/
+
+# Envoy runtime (mutable state)
+envoy-runtime/traffic_split/
+
+# Local prod parity
+local-certs/
+local-secrets/
+
+# Google Cloud
+.gcloudignore
+
+# Documentation (private/sensitive)
+PROJECT_DOCUMENTATION/INFRA_SETUP_PRIVATE.md
+PROJECT_DOCUMENTATION/PRIVATE/
+PROJECT_DOCUMENTATION/*_PRIVATE.md
+PROJECT_DOCUMENTATION/*_SENSITIVE.md
+PROJECT_DOCUMENTATION/INTERNAL_*.md
+**/MONETIZATION_STRATEGIES.md
+**/ADVERTISING_PLAN.md
+
+# Temporary files
+tmp/
+temp/
+
+# Sensitive configs/keys
+metadata-api/.env
+turnserver.conf
+p2p.red_ecdsa.pub
+
+# Local test dirs
+vacuum-test/
+
+# dev scripts
+.automation/
+
+# Local proxy and env
+.env
+Caddyfile
